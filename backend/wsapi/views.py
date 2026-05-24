@@ -12,7 +12,6 @@ supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 ID_PATTERN = re.compile(r'^\d{2}-\d{4}-\d{3}$')
 EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9._%+-]+@cit\.edu$')
 
-# --- AUTH VIEWS ---
 
 class RegisterUserView(APIView):
     def post(self, request):
@@ -34,16 +33,64 @@ class LoginView(APIView):
             return Response({"session": {"access_token": response.session.access_token, "role": role, "email": response.user.email}}, status=status.HTTP_200_OK)
         except Exception: return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
 
-# --- PET & INVENTORY LOGISTICS VIEWS ---
+
 
 class PetListAPIView(APIView):
+    # MODIFIED: Added form parser configurations to capture multi-part stream blocks
+    parser_classes = (MultiPartParser, FormParser)
+
     def get(self, request):
         try: return Response(supabase.table("pets").select("*").order("created_at", desc=True).execute().data, status=status.HTTP_200_OK)
         except Exception as e: return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request):
-        try: return Response(supabase.table("pets").insert(request.data).execute().data[0], status=status.HTTP_201_CREATED)
-        except Exception as e: return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            d = request.data
+            image_file = request.FILES.get('image', None)
+            image_url = "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba" # Default fallback token string
+
+            # If a file is attached, upload it to the newly initialized petpictures bucket
+            if image_file:
+                file_ext = image_file.name.split('.')[-1]
+                storage_filename = f"pet_{uuid.uuid4()}.{file_ext}"
+                file_binary_data = image_file.read()
+                
+                supabase.storage.from_("petpictures").upload(
+                    path=storage_filename,
+                    file=file_binary_data,
+                    file_options={"content-type": image_file.content_type}
+                )
+                
+                image_url = supabase.storage.from_("petpictures").get_public_url(storage_filename)
+
+            # FormData turns native booleans into strings ("true"/"false"), convert it back for SQL integrity
+            is_sterilized = str(d.get("spayed_neutered")).lower() == 'true'
+
+            insert_payload = {
+                "pet_id": d.get("pet_id"),
+                "name": d.get("name"),
+                "species": d.get("species"),
+                "pet_type": d.get("pet_type"),
+                "breed": d.get("breed"),
+                "gender": d.get("gender"),
+                "age": d.get("age"),
+                "weight": d.get("weight"),
+                "size": d.get("size"),
+                "vaccination_status": d.get("vaccination_status"),
+                "spayed_neutered": is_sterilized,
+                "adoption_status": d.get("adoption_status"),
+                "found_near": d.get("found_near"),
+                "rescue_date": d.get("rescue_date"),
+                "current_conditions": d.get("current_conditions"),
+                "behavior_notes": d.get("behavior_notes"),
+                "about_text": d.get("about_text"),
+                "primary_image": image_url
+            }
+            
+            res = supabase.table("pets").insert(insert_payload).execute()
+            return Response(res.data[0], status=status.HTTP_201_CREATED)
+        except Exception as e: 
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class PetDetailAPIView(APIView):
     def get(self, request, pet_id):
@@ -52,7 +99,7 @@ class PetDetailAPIView(APIView):
             if not pet_query.data: return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
             pet_data = pet_query.data[0]
             img = supabase.table("pet_images").select("image_url").eq("pet_id", pet_id).eq("is_primary", True).execute()
-            pet_data["primary_image"] = img.data[0]["image_url"] if img.data else None
+            pet_data["primary_image"] = img.data[0]["image_url"] if img.data else pet_data.get("primary_image")
             return Response(pet_data, status=status.HTTP_200_OK)
         except Exception as e: return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -95,7 +142,7 @@ class VaccinationLogsAPIView(APIView):
             return Response(supabase.table("vaccination_logs").insert(p).execute().data[0], status=status.HTTP_201_CREATED)
         except Exception as e: return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-# --- INVENTORY VIEWS ---
+
 
 class InventoryAPIView(APIView):
     def get(self, request):
@@ -133,14 +180,14 @@ class InventoryTransactionAPIView(APIView):
             return Response(tx.data[0], status=status.HTTP_201_CREATED)
         except Exception as e: return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-# --- ADOPTION APPLICATION VIEWS ---
+
 
 class AdoptionApplicationAPIView(APIView):
     def get(self, request):
         try:
             email = request.query_params.get('email', None)
             q = supabase.table("adoption_applications").select("*")
-            if email: q = q.eq("email", email) # Fixed mapping to scan the email attribute column
+            if email: q = q.eq("full_name", email)
             return Response(q.order("submitted_at", desc=True).execute().data, status=status.HTTP_200_OK)
         except Exception as e: return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -148,18 +195,10 @@ class AdoptionApplicationAPIView(APIView):
         try:
             d = request.data
             ins = {
-                "pet_id": d.get("pet_id"), 
-                "full_name": d.get("full_name"), 
-                "email": d.get("email"), # Integrated tracking node value link
-                "contact_number": d.get("contact_number"),
-                "address": d.get("address"), 
-                "experience_level": d.get("experience_level"), 
-                "housing_type": d.get("housing_type"),
-                "has_secure_fence": bool(d.get("has_secure_fence")), 
-                "household_agreement": bool(d.get("household_agreement")),
-                "pet_care_budget": d.get("pet_care_budget"), 
-                "plan_if_moving": d.get("plan_if_moving"), 
-                "application_status": "Pending"
+                "pet_id": d.get("pet_id"), "full_name": d.get("full_name"), "contact_number": d.get("contact_number"),
+                "address": d.get("address"), "experience_level": d.get("experience_level"), "housing_type": d.get("housing_type"),
+                "has_secure_fence": bool(d.get("has_secure_fence")), "household_agreement": bool(d.get("household_agreement")),
+                "pet_care_budget": d.get("pet_care_budget"), "plan_if_moving": d.get("plan_if_moving"), "application_status": "Pending"
             }
             return Response(supabase.table("adoption_applications").insert(ins).execute().data[0], status=status.HTTP_201_CREATED)
         except Exception as e: return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -174,8 +213,7 @@ class AdoptionApplicationDetailAPIView(APIView):
                 supabase.table("pets").update({"adoption_status": "Adopted"}).eq("pet_id", pet_id).execute()
             return Response(res.data[0], status=status.HTTP_200_OK)
         except Exception as e: return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
-# --- ANIMAL SIGHTINGS VIEWS ---
+
 
 class AnimalSightingAPIView(APIView):
     parser_classes = (MultiPartParser, FormParser)
