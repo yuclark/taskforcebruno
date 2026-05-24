@@ -20,7 +20,8 @@ export default function AdoptionGallery({ session }) {
   const [errorMessage, setErrorMessage] = useState('');
 
   const [applicationForm, setApplicationForm] = useState({
-    fullName: session?.email || '', // Links form directly to session identities automatically
+    fullName: '', // Clear field for full user name entry tracking
+    email: session?.email || '', // Locked auto-fill validation map
     contactNum: '',
     address: '',
     experience: 'Beginner',
@@ -101,7 +102,8 @@ export default function AdoptionGallery({ session }) {
 
     const payload = {
       pet_id: filteredPets[currentIndex].pet_id,
-      full_name: session.email, // Bind submission tracking to validated institutional account keys
+      full_name: applicationForm.fullName.trim(), // Send manual legal identity entry values
+      email: applicationForm.email, // Send locked institutional account tracking parameters
       contact_number: applicationForm.contactNum.trim(),
       address: applicationForm.address.trim(),
       experience_level: applicationForm.experience,
@@ -125,7 +127,9 @@ export default function AdoptionGallery({ session }) {
           setSuccessMessage('');
           setShowApplyForm(false);
           setApplicationForm({
-            fullName: session?.email || '', contactNum: '', address: '', experience: 'Beginner',
+            fullName: '', 
+            email: session?.email || '', 
+            contactNum: '', address: '', experience: 'Beginner',
             housingType: 'Owned House', hasSecureFence: false, householdAgreement: false,
             petCareBudget: 'Moderate', planIfMoving: ''
           });
@@ -316,22 +320,28 @@ export default function AdoptionGallery({ session }) {
             {!successMessage && (
               <form onSubmit={handleApplySubmit} className="space-y-3 text-[11px]">
                 
-                {/* Section 1 */}
+                {/* Section 1: Updated Layout split for Full Legal Name and Institutional Auto-fill Email */}
                 <div className="bg-slate-50/70 p-3 rounded-2xl border border-slate-200/50 space-y-2">
                   <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block tracking-wider">Section 1: Applicant Metrics</span>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Account Identity</label>
-                      <div className="w-full px-3 py-1.5 bg-slate-200/60 border rounded-lg font-sans font-semibold text-slate-700 truncate select-none">{session.email}</div>
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Full Legal Name *</label>
+                      <input type="text" name="fullName" required value={applicationForm.fullName} onChange={handleInputChange} placeholder="Vince Clark Bajenting" className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl focus:outline-none" />
                     </div>
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Registered Email Address</label>
+                      <input type="email" name="email" readOnly value={applicationForm.email} className="w-full px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl font-mono text-slate-500 cursor-not-allowed select-none focus:outline-none" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Secure Contact Line *</label>
                       <input type="text" name="contactNum" required value={applicationForm.contactNum} onChange={handleInputChange} placeholder="09---------" className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-mono focus:outline-none" />
                     </div>
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Residential Address Block *</label>
-                    <input type="text" name="address" required value={applicationForm.address} onChange={handleInputChange} placeholder="Mandaue City, Cebu" className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl focus:outline-none" />
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Residential Address Block *</label>
+                      <input type="text" name="address" required value={applicationForm.address} onChange={handleInputChange} placeholder="Mandaue City, Cebu" className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl focus:outline-none" />
+                    </div>
                   </div>
                 </div>
 
