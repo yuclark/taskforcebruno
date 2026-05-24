@@ -5,7 +5,7 @@ export default function AddNewPet({ onRefresh }) {
     pet_id: '',
     name: '',
     species: 'Cat',
-    pet_type: 'Campus Pet', // New data consistency metric variable field
+    pet_type: 'Campus Pet', 
     breed: '',
     gender: 'Male',
     age: '',
@@ -18,9 +18,11 @@ export default function AddNewPet({ onRefresh }) {
     rescue_date: new Date().toISOString().split('T')[0],
     current_conditions: 'None',
     behavior_notes: '',
-    about_text: '',
-    primary_image: ''
+    about_text: ''
   });
+  
+  // File state node for handling direct binary upload attachments
+  const [imageFile, setImageFile] = useState(null);
   const [formMessage, setFormMessage] = useState({ type: '', text: '' });
 
   const handleCreateChange = (e) => {
@@ -28,36 +30,62 @@ export default function AddNewPet({ onRefresh }) {
     setNewPetForm({ ...newPetForm, [name]: type === 'checkbox' ? checked : value });
   };
 
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setImageFile(e.target.files[0]);
+    }
+  };
+
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
     setFormMessage({ type: '', text: '' });
 
-    const completeSanitizedPayload = {
-      ...newPetForm,
-      pet_id: newPetForm.pet_id.trim().toUpperCase(),
-      name: newPetForm.name.trim(),
-      breed: newPetForm.breed.trim() || 'Mix',
-      found_near: newPetForm.found_near.trim(),
-      current_conditions: newPetForm.current_conditions.trim() || 'None',
-      behavior_notes: newPetForm.behavior_notes.trim() || 'Stable baseline parameters.',
-      about_text: newPetForm.about_text.trim(),
-      primary_image: newPetForm.primary_image.trim() || 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba'
-    };
+    // Pack metrics inside FormData instance to allow multi-part binary stream routing
+    const multiPartFormPayload = new FormData();
+    
+    multiPartFormPayload.append('pet_id', newPetForm.pet_id.trim().toUpperCase());
+    multiPartFormPayload.append('name', newPetForm.name.trim());
+    multiPartFormPayload.append('species', newPetForm.species);
+    multiPartFormPayload.append('pet_type', newPetForm.pet_type);
+    multiPartFormPayload.append('breed', newPetForm.breed.trim() || 'Mix');
+    multiPartFormPayload.append('gender', newPetForm.gender);
+    multiPartFormPayload.append('age', newPetForm.age.trim() || 'Unknown');
+    multiPartFormPayload.append('weight', newPetForm.weight.trim() || 'Unknown');
+    multiPartFormPayload.append('size', newPetForm.size);
+    multiPartFormPayload.append('vaccination_status', newPetForm.vaccination_status);
+    multiPartFormPayload.append('spayed_neutered', newPetForm.spayed_neutered);
+    multiPartFormPayload.append('adoption_status', newPetForm.adoption_status);
+    multiPartFormPayload.append('found_near', newPetForm.found_near.trim());
+    multiPartFormPayload.append('rescue_date', newPetForm.rescue_date);
+    multiPartFormPayload.append('current_conditions', newPetForm.current_conditions.trim() || 'None');
+    multiPartFormPayload.append('behavior_notes', newPetForm.behavior_notes.trim() || 'Stable baseline parameters.');
+    multiPartFormPayload.append('about_text', newPetForm.about_text.trim());
+
+    // Append file structure chunk if populated
+    if (imageFile) {
+      multiPartFormPayload.append('image', imageFile);
+    }
 
     try {
       const res = await fetch('http://localhost:8000/api/pets/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(completeSanitizedPayload)
+        // NOTE: Content-Type headers are left blank intentionally here so the 
+        // browser automatically configures custom multi-part form boundaries.
+        body: multiPartFormPayload
       });
+      
       if (res.ok) {
-        setFormMessage({ type: 'success', text: `Profile successfully generated for ${completeSanitizedPayload.name}!` });
+        setFormMessage({ type: 'success', text: `Profile successfully generated for ${newPetForm.name.trim()}!` });
         setNewPetForm({
           pet_id: '', name: '', species: 'Cat', pet_type: 'Campus Pet', breed: '', gender: 'Male', age: '', weight: '', size: 'Small',
           vaccination_status: 'Fully Vaccinated', spayed_neutered: true, adoption_status: 'Available',
           found_near: '', rescue_date: new Date().toISOString().split('T')[0], current_conditions: 'None',
-          behavior_notes: '', about_text: '', primary_image: ''
+          behavior_notes: '', about_text: ''
         });
+        setImageFile(null);
+        
+        // Reset raw HTML form file selection elements safely
+        if (e.target) e.target.reset();
         onRefresh();
       } else {
         const errorData = await res.json();
@@ -124,10 +152,16 @@ export default function AddNewPet({ onRefresh }) {
           <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Behavioral Assessment Analytics</label><input type="text" name="behavior_notes" value={newPetForm.behavior_notes} onChange={handleCreateChange} placeholder="Friendly, timid around foot traffic" className="w-full px-3 py-2 border rounded-xl focus:outline-none" /></div>
         </div>
 
-        {/* Photo Asset URL Input */}
+        {/* MODIFIED: Direct File Input Component instead of URL string */}
         <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Profile Photo Asset URL *</label>
-          <input type="url" name="primary_image" value={newPetForm.primary_image} onChange={handleCreateChange} placeholder="https://images.unsplash.com/photo-..." className="w-full px-3 py-2 border rounded-xl focus:outline-none font-mono text-slate-600 text-[11px]" />
+          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Upload Profile Picture Asset *</label>
+          <input 
+            type="file" 
+            accept="image/*" 
+            required
+            onChange={handleFileChange} 
+            className="w-full px-3 py-1.5 bg-slate-50 border rounded-xl focus:outline-none font-mono text-slate-600 text-[11px] file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-[10px] file:font-mono file:font-bold file:bg-[#5C0612] file:text-white hover:file:opacity-90 file:cursor-pointer" 
+          />
         </div>
 
         {/* Narrative Description Background Summary */}
