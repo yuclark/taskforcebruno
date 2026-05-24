@@ -4,6 +4,7 @@ import PetListings from './PetListings';
 import AddNewPet from './AddNewPet';
 import MedicalLogs from './MedicalLogs';
 import InventoryControl from './InventoryControl';
+import SightingTriage from './SightingTriage'; // Core sighting matrix integration
 
 export default function StaffDashboard({ session, onLogout }) {
   const [activeMenu, setActiveMenu] = useState('Pet Listings');
@@ -67,7 +68,8 @@ export default function StaffDashboard({ session, onLogout }) {
             </div>
           </div>
           <nav className="space-y-1.5">
-            {['Pending Applications', 'Pet Listings', 'Add New Pet', 'Medical Logs', 'Inventory Control'].map((menu) => (
+            {/* Added 'Sighting Reports' cleanly directly to your sidebar loop matrix */}
+            {['Pending Applications', 'Pet Listings', 'Add New Pet', 'Medical Logs', 'Inventory Control', 'Sighting Reports'].map((menu) => (
               <button key={menu} onClick={() => setActiveMenu(menu)} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${activeMenu === menu ? 'bg-white text-[#5C0612] shadow-md font-semibold' : 'text-stone-200 hover:bg-white/5'}`}>
                 <span>{menu}</span>
               </button>
@@ -77,7 +79,7 @@ export default function StaffDashboard({ session, onLogout }) {
         <div className="border-t border-white/10 pt-4 flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-[#D4AF37] text-[#5C0612] font-bold flex items-center justify-center text-xs shrink-0">AS</div>
-            <div className="truncate flex-1"><p className="text-xs font-semibold text-white leading-none truncate">Admin Staff</p><span className="text-[9px] text-stone-300 font-mono mt-1 block truncate">{session.email}</span></div>
+            <div className="truncate flex-1"><p className="text-xs font-semibold text-white leading-none truncate">Admin Staff</p><span className="text-[9px] text-stone-300 font-mono mt-1 block truncate">{session?.email || 'Loading context...'}</span></div>
           </div>
           <button onClick={onLogout} className="w-full py-2 bg-white/5 hover:bg-rose-950/40 text-stone-300 hover:text-rose-200 rounded-xl text-[11px] font-medium border border-white/10 transition-all">DISCONNECT NODE</button>
         </div>
@@ -114,6 +116,11 @@ export default function StaffDashboard({ session, onLogout }) {
             loadingInventory={loadingInventory}
             onRefresh={fetchInventory}
           />
+        )}
+
+        {/* Dynamic secure staff routing window connection */}
+        {activeMenu === 'Sighting Reports' && (
+          <SightingTriage session={session} />
         )}
       </main>
 

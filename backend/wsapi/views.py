@@ -1,7 +1,9 @@
 import re
+import uuid
 from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import status
 from supabase import create_client, Client
 
@@ -138,7 +140,7 @@ class AdoptionApplicationAPIView(APIView):
         try:
             email = request.query_params.get('email', None)
             q = supabase.table("adoption_applications").select("*")
-            if email: q = q.eq("full_name", email)
+            if email: q = q.eq("email", email) # Fixed mapping to scan the email attribute column
             return Response(q.order("submitted_at", desc=True).execute().data, status=status.HTTP_200_OK)
         except Exception as e: return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -146,10 +148,18 @@ class AdoptionApplicationAPIView(APIView):
         try:
             d = request.data
             ins = {
-                "pet_id": d.get("pet_id"), "full_name": d.get("full_name"), "contact_number": d.get("contact_number"),
-                "address": d.get("address"), "experience_level": d.get("experience_level"), "housing_type": d.get("housing_type"),
-                "has_secure_fence": bool(d.get("has_secure_fence")), "household_agreement": bool(d.get("household_agreement")),
-                "pet_care_budget": d.get("pet_care_budget"), "plan_if_moving": d.get("plan_if_moving"), "application_status": "Pending"
+                "pet_id": d.get("pet_id"), 
+                "full_name": d.get("full_name"), 
+                "email": d.get("email"), # Integrated tracking node value link
+                "contact_number": d.get("contact_number"),
+                "address": d.get("address"), 
+                "experience_level": d.get("experience_level"), 
+                "housing_type": d.get("housing_type"),
+                "has_secure_fence": bool(d.get("has_secure_fence")), 
+                "household_agreement": bool(d.get("household_agreement")),
+                "pet_care_budget": d.get("pet_care_budget"), 
+                "plan_if_moving": d.get("plan_if_moving"), 
+                "application_status": "Pending"
             }
             return Response(supabase.table("adoption_applications").insert(ins).execute().data[0], status=status.HTTP_201_CREATED)
         except Exception as e: return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -164,3 +174,60 @@ class AdoptionApplicationDetailAPIView(APIView):
                 supabase.table("pets").update({"adoption_status": "Adopted"}).eq("pet_id", pet_id).execute()
             return Response(res.data[0], status=status.HTTP_200_OK)
         except Exception as e: return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+# --- ANIMAL SIGHTINGS VIEWS ---
+
+class AnimalSightingAPIView(APIView):
+    parser_classes = (MultiPartParser, FormParser)
+
+    def get(self, request):
+        try:
+            email = request.query_params.get('email', None)
+            query = supabase.table("animal_sightings").select("*")
+            if email: 
+                query = query.eq("reporter_email", email)
+            res = query.order("logged_at", desc=True).execute()
+            return Response(res.data, status=status.HTTP_200_OK)
+        except Exception as e: 
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def post(self, request):
+        try:
+            d = request.data
+            image_file = request.FILES.get('image', None)
+            image_url = None
+
+            if image_file:
+                file_ext = image_file.name.split('.')[-1]
+                storage_filename = f"sighting_{uuid.uuid4()}.{file_ext}"
+                file_binary_data = image_file.read()
+                
+                supabase.storage.from_("sightings").upload(
+                    path=storage_filename,
+                    file=file_binary_data,
+                    file_options={"content-type": image_file.content_type}
+                )
+                
+                image_url = supabase.storage.from_("sightings").get_public_url(storage_filename)
+
+            insert_payload = {
+                "reporter_email": d.get("reporter_email"),
+                "animal_type": d.get("animal_type"),
+                "distinct_features": d.get("distinct_features"),
+                "location_details": d.get("location_details"),
+                "image_url": image_url,
+                "status": "Pending"
+            }
+            res = supabase.table("animal_sightings").insert(insert_payload).execute()
+            return Response(res.data[0], status=status.HTTP_201_CREATED)
+        except Exception as e: 
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class AnimalSightingDetailAPIView(APIView):
+    def put(self, request, sighting_id):
+        try:
+            status_val = request.data.get("status")
+            res = supabase.table("animal_sightings").update({"status": status_val}).eq("sighting_id", sighting_id).execute()
+            return Response(res.data[0], status=status.HTTP_200_OK)
+        except Exception as e: 
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

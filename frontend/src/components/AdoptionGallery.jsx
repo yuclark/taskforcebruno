@@ -55,11 +55,13 @@ export default function AdoptionGallery({ session }) {
     fetch(`http://localhost:8000/api/pets/applications/?email=${encodeURIComponent(session.email)}`)
       .then((res) => res.json())
       .then((data) => {
-        setMyApplications(data);
+        // FIXED: Checks if data payload structure is an array type to stop objects from breaking map runtime states
+        setMyApplications(Array.isArray(data) ? data : []);
         setLoadingTracking(false);
       })
       .catch((err) => {
         console.error('Tracking log error:', err);
+        setMyApplications([]); // Fallback to safe array literal structure boundary
         setLoadingTracking(false);
       });
   };
@@ -259,13 +261,14 @@ export default function AdoptionGallery({ session }) {
 
           {loadingTracking ? (
             <div className="p-12 text-center font-mono text-slate-400 animate-pulse">Syncing tracking array parameters...</div>
-          ) : myApplications.length === 0 ? (
+          ) : !Array.isArray(myApplications) || myApplications.length === 0 ? (
             <div className="text-center text-slate-400 border border-dashed rounded-2xl p-12 mt-12">
               <p className="font-medium text-slate-400 text-[11px]">No adoption requests submitted under your institutional email signature profile yet.</p>
             </div>
           ) : (
             <div className="space-y-3 overflow-y-auto max-h-[420px] pr-1">
-              {myApplications.map((app) => {
+              {/* FIXED BOUNDARY: wrapped maps execution directly to check structure arrays */}
+              {Array.isArray(myApplications) && myApplications.map((app) => {
                 const isPending = app.application_status === 'Pending';
                 const isApproved = app.application_status === 'Approved';
                 
@@ -320,7 +323,7 @@ export default function AdoptionGallery({ session }) {
             {!successMessage && (
               <form onSubmit={handleApplySubmit} className="space-y-3 text-[11px]">
                 
-                {/* Section 1: Updated Layout split for Full Legal Name and Institutional Auto-fill Email */}
+                {/* Section 1 */}
                 <div className="bg-slate-50/70 p-3 rounded-2xl border border-slate-200/50 space-y-2">
                   <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block tracking-wider">Section 1: Applicant Metrics</span>
                   <div className="grid grid-cols-2 gap-2">
