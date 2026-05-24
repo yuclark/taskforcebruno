@@ -1,0 +1,27 @@
+# === FRONTEND (React / Node) ===
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+frontend/.production
+
+# === BACKEND (Django / Python) ===
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.env
+.env
+venv/
+env/
+.venv/
+ENV/
+db.sqlite3
+.pytest_cache/
+
+# === GLOBAL/EDITOR DIRECTORIES ===
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.sw?

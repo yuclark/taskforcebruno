@@ -1,0 +1,17 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+@theme {
+  --font-sans: 'Poppins', 'Inter', sans-serif;
+}
+
+@layer base {
+  body {
+    @apply font-sans bg-slate-50 text-slate-900 antialiased m-0 p-0;
+  }
+}
+
+/* Smooth active state scaling for form controls */
+input, button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
