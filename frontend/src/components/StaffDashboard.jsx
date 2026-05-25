@@ -28,7 +28,7 @@ export default function StaffDashboard({ session, onLogout }) {
     } catch (err) {
       console.error(err);
     } finally {
-      leadingPets(false);
+      setLoadingPets(false); 
     }
   };
 
