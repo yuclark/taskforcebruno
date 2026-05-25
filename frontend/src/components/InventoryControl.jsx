@@ -43,7 +43,7 @@ export default function InventoryControl({
     };
 
     try {
-      const res = await fetch('http://localhost:8000/api/inventory/', {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/inventory/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sanitizedPayload)
@@ -72,7 +72,7 @@ export default function InventoryControl({
     }
 
     try {
-      const res = await fetch('http://localhost:8000/api/inventory/transactions/', {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/inventory/transactions/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -94,7 +94,7 @@ export default function InventoryControl({
   const executeInventoryItemPurge = async (itemId) => {
     if (!window.confirm('Scrub this product configuration completely out of active systems?')) return;
     try {
-      const res = await fetch(`http://localhost:8000/api/inventory/${itemId}/`, { method: 'DELETE' });
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/inventory/${itemId}/`, { method: 'DELETE' });
       if (res.ok) onRefresh();
     } catch (err) {
       console.error(err);

@@ -26,8 +26,8 @@ export default function MedicalLogs({ pets }) {
   const fetchMedicalLogsForTarget = async (id) => {
     if (!id) return;
     try {
-      const medRes = await fetch(`http://localhost:8000/api/medical/${id}/`);
-      const vacRes = await fetch(`http://localhost:8000/api/vaccinations/${id}/`);
+      const medRes = await fetch(`https://taskforcebruno.onrender.com/api/medical/${id}/`);
+      const vacRes = await fetch(`https://taskforcebruno.onrender.com/api/vaccinations/${id}/`);
       if (medRes.ok) setMedicalLogs(await medRes.json());
       if (vacRes.ok) setVaccineLogs(await vacRes.json());
     } catch (err) {
@@ -64,7 +64,7 @@ export default function MedicalLogs({ pets }) {
     };
 
     try {
-      const res = await fetch(`http://localhost:8000/api/medical/${selectedMedicalPetId}/`, {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/medical/${selectedMedicalPetId}/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -98,7 +98,7 @@ export default function MedicalLogs({ pets }) {
     };
 
     try {
-      const res = await fetch(`http://localhost:8000/api/vaccinations/${selectedMedicalPetId}/`, {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/vaccinations/${selectedMedicalPetId}/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

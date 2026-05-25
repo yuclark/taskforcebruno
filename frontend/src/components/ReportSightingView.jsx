@@ -38,7 +38,7 @@ export default function ReportSightingView({ session }) {
     }
 
     try {
-      const res = await fetch('http://localhost:8000/api/sightings/', {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/sightings/', {
         method: 'POST',
         body: formData 
       });

@@ -10,7 +10,7 @@ export default function PetProfileView({ petId, onBackToScanner }) {
   useEffect(() => {
     if (!petId) return;
     setLoading(true);
-    fetch(`http://localhost:8000/api/pets/${petId}/`)
+    fetch(`https://taskforcebruno.onrender.com/api/pets/${petId}/`)
       .then((res) => res.json())
       .then((data) => {
         setPetData(data);

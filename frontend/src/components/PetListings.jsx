@@ -22,7 +22,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     setExpandedPetData(null);
     setLoadingDetails(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/pets/${petId}/`);
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${petId}/`);
       if (res.ok) setExpandedPetData(await res.json());
     } catch (err) {
       console.error(err);
@@ -45,7 +45,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     e.preventDefault();
     setErrorMessage('');
     try {
-      const res = await fetch(`http://localhost:8000/api/pets/${isEditingId}/`, {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${isEditingId}/`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editFormData)
@@ -69,7 +69,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     setErrorMessage('');
     
     try {
-      const res = await fetch(`http://localhost:8000/api/pets/${petIdToPurge}/`, { 
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${petIdToPurge}/`, { 
         method: 'DELETE' 
       });
       if (res.ok) {
