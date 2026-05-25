@@ -20,7 +20,6 @@ export default function MedicalLogs({ pets }) {
   const [vacLot, setVacLot] = useState('');
   const [vacWeight, setVacWeight] = useState('');
   const [vacAdminBy, setVacAdminBy] = useState('');
-
   const [formMessage, setFormMessage] = useState({ target: '', type: '', text: '' });
 
   const fetchMedicalLogsForTarget = async (id) => {
@@ -118,12 +117,12 @@ export default function MedicalLogs({ pets }) {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto animate-fade-in text-xs">
+    <div className="space-y-6 max-w-5xl mx-auto animate-fade-in text-xs px-1 sm:px-4">
       
       {/* Top Banner Target Selection Bar */}
-      <div className="bg-white p-4 border border-slate-200 rounded-2xl flex justify-between items-center shadow-sm">
+      <div className="bg-white p-4 border border-slate-200 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-sm">
         <span className="font-semibold text-[#5C0612] font-mono text-[11px] uppercase tracking-wider">Active Patient Context Node:</span>
-        <select value={selectedMedicalPetId} onChange={(e) => setSelectedMedicalPetId(e.target.value)} className="px-4 py-2 bg-slate-50 border rounded-xl font-mono text-xs focus:outline-none font-semibold text-slate-900 shadow-inner">
+        <select value={selectedMedicalPetId} onChange={(e) => setSelectedMedicalPetId(e.target.value)} className="w-full sm:w-auto px-4 py-2 bg-slate-50 border rounded-xl font-mono text-xs focus:outline-none font-semibold text-slate-900 shadow-inner">
           {pets.map(p => <option key={p.pet_id} value={p.pet_id}>{p.name} ({p.pet_id})</option>)}
         </select>
       </div>
@@ -133,7 +132,7 @@ export default function MedicalLogs({ pets }) {
         {/* ==========================================
             LEFT SPLIT VIEW: VACCINATION LOG MODULE
            ========================================== */}
-        <div className="bg-white border rounded-2xl p-5 shadow-sm space-y-4 flex flex-col justify-between">
+        <div className="bg-white border rounded-2xl p-4 sm:p-5 shadow-sm space-y-4 flex flex-col justify-between">
           <div className="space-y-4">
             <h3 className="font-bold font-mono tracking-wider text-[#5C0612] border-b pb-2 uppercase text-[11px]">Immunization History Registry</h3>
             
@@ -141,8 +140,8 @@ export default function MedicalLogs({ pets }) {
               <div className={`p-2.5 border text-[11px] rounded-xl ${formMessage.type === 'success' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-rose-50 text-rose-900 border-rose-200'}`}>{formMessage.text}</div>
             )}
 
-            <form onSubmit={handleAddVaccine} className="space-y-3 bg-slate-50/60 p-3.5 border rounded-xl">
-              <div className="grid grid-cols-2 gap-2">
+            <form onSubmit={handleAddVaccine} className="space-y-3 bg-slate-50/60 p-3 sm:p-3.5 border rounded-xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Serum Name *</label>
                   <input type="text" required value={vacName} onChange={(e) => setVacName(e.target.value)} placeholder="Ex: DHPP 5-in-1, Anti-Rabies" className="w-full px-2.5 py-1.5 bg-white border rounded-lg focus:outline-none" />
@@ -153,7 +152,7 @@ export default function MedicalLogs({ pets }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div>
                   <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Batch / Lot #</label>
                   <input type="text" placeholder="Lot B204-X" value={vacLot} onChange={(e) => setVacLot(e.target.value)} className="w-full px-2 py-1.5 bg-white border rounded-lg focus:outline-none font-mono" />
@@ -168,14 +167,14 @@ export default function MedicalLogs({ pets }) {
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                <input type="text" placeholder="Administered by (Attendant or Vet Clinician)" value={vacAdminBy} onChange={(e) => setVacAdminBy(e.target.value)} className="flex-1 px-3 py-1.5 bg-white border rounded-lg focus:outline-none" />
-                <button type="submit" className="px-4 py-1.5 bg-[#5C0612] text-white rounded-lg font-bold border-b-2 border-[#D4AF37] hover:bg-[#42040B] transition-all shrink-0">LOG DOSAGE</button>
+              {/* MODIFIED: Re-arranged text fields to stack vertically on phone screens */}
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <input type="text" placeholder="Administered by (Attendant or Vet Clinician)" value={vacAdminBy} onChange={(e) => setVacAdminBy(e.target.value)} className="w-full sm:flex-1 px-3 py-1.5 bg-white border rounded-lg focus:outline-none text-xs" />
+                <button type="submit" className="w-full sm:w-auto px-4 py-2 bg-[#5C0612] text-white rounded-lg font-bold border-b-2 border-[#D4AF37] hover:bg-[#42040B] transition-all shrink-0 text-center whitespace-nowrap">LOG DOSAGE</button>
               </div>
             </form>
           </div>
 
-          {/* Render Timeline Container for Vaccinations */}
           <div className="divide-y divide-slate-100 font-mono text-[11px] max-h-[320px] overflow-y-auto pt-2">
             {vaccineLogs.length === 0 ? (
               <p className="text-slate-400 text-center italic py-12 font-sans">No verifiable immunization profiles found for this record.</p>
@@ -186,12 +185,12 @@ export default function MedicalLogs({ pets }) {
                     <span className="font-bold text-slate-900 text-xs font-sans">{v.vaccine_name}</span>
                     <span className="text-slate-500 font-bold text-[10px]">{v.administered_date}</span>
                   </div>
-                  <div className="grid grid-cols-2 text-[10px] text-slate-400 leading-normal font-sans">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 text-[10px] text-slate-400 leading-normal font-sans gap-y-0.5">
                     <span>Batch Code: <strong className="font-mono text-slate-600">{v.batch_lot_number || 'N/A'}</strong></span>
                     <span>Patient Mass: <strong className="text-slate-600">{v.weight_at_vaccination || 'N/A'}</strong></span>
-                    <span>Attendant: <strong className="text-slate-600">{v.administered_by}</strong></span>
+                    <span className="sm:col-span-2">Attendant: <strong className="text-slate-600">{v.administered_by}</strong></span>
                     {v.next_due_date && (
-                      <span className="col-span-2 mt-0.5 font-mono text-amber-700 font-bold bg-amber-50 border border-amber-200/50 px-1.5 py-0.5 rounded w-fit text-[9px]">
+                      <span className="sm:col-span-2 mt-0.5 font-mono text-amber-700 font-bold bg-amber-50 border border-amber-200/50 px-1.5 py-0.5 rounded w-fit text-[9px]">
                         NEXT RE-VACCINATION DUE: {v.next_due_date}
                       </span>
                     )}
@@ -205,7 +204,7 @@ export default function MedicalLogs({ pets }) {
         {/* ==========================================
             RIGHT SPLIT VIEW: CLINICAL CASE RECORDS
            ========================================== */}
-        <div className="bg-white border rounded-2xl p-5 shadow-sm space-y-4 flex flex-col justify-between">
+        <div className="bg-white border rounded-2xl p-4 sm:p-5 shadow-sm space-y-4 flex flex-col justify-between">
           <div className="space-y-4">
             <h3 className="font-bold font-mono tracking-wider text-[#5C0612] border-b pb-2 uppercase text-[11px]">Clinical Procedures & Care Logs</h3>
             
@@ -213,8 +212,8 @@ export default function MedicalLogs({ pets }) {
               <div className={`p-2.5 border text-[11px] rounded-xl ${formMessage.type === 'success' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-rose-50 text-rose-900 border-rose-200'}`}>{formMessage.text}</div>
             )}
 
-            <form onSubmit={handleAddMedicalRecord} className="space-y-3 bg-slate-50/60 p-3.5 border rounded-xl">
-              <div className="grid grid-cols-3 gap-2">
+            <form onSubmit={handleAddMedicalRecord} className="space-y-3 bg-slate-50/60 p-3 sm:p-3.5 border rounded-xl">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div>
                   <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Case Type</label>
                   <select value={medType} onChange={(e) => setMedType(e.target.value)} className="w-full p-1.5 bg-white border rounded-lg focus:outline-none font-medium"><option value="Check-up">Routine Check-up</option><option value="Incident log">Incident Log</option><option value="Clinical Treatment">Clinical Treatment</option></select>
@@ -231,10 +230,10 @@ export default function MedicalLogs({ pets }) {
 
               <div>
                 <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Symptom Findings & Procedural Notes *</label>
-                <input type="text" required value={medNotes} onChange={(e) => setMedNotes(e.target.value)} placeholder="Describe physical findings, trauma context, or status notes..." className="w-full px-3 py-2 bg-white border rounded-lg focus:outline-none" />
+                <input type="text" required value={medNotes} onChange={(e) => setMedNotes(e.target.value)} placeholder="Describe physical findings, trauma context, or status notes..." className="w-full px-3 py-2 bg-white border rounded-lg focus:outline-none text-xs" />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Prescribed Pharmacotherapy Treatment</label>
                   <input type="text" placeholder="Ex: Amoxicillin 250mg 2x/day" value={medPrescription} onChange={(e) => setMedPrescription(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border rounded-lg focus:outline-none" />
@@ -245,21 +244,21 @@ export default function MedicalLogs({ pets }) {
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                <input type="text" placeholder="Executing Medical Officer / Veterinarian" value={medVet} onChange={(e) => setMedVet(e.target.value)} className="flex-1 px-3 py-1.5 bg-white border rounded-lg focus:outline-none" />
-                <button type="submit" className="w-full py-1.5 bg-[#5C0612] text-white rounded-lg font-bold border-b-2 border-[#D4AF37] hover:bg-[#42040B] transition-all max-w-[150px]">COMMIT ENTIRE BLOCK</button>
+              {/* MODIFIED: Stack signature block field and buttons horizontally on desktop, vertically on phone viewport sizes */}
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <input type="text" placeholder="Executing Medical Officer / Veterinarian" value={medVet} onChange={(e) => setMedVet(e.target.value)} className="w-full sm:flex-1 px-3 py-1.5 bg-white border rounded-lg focus:outline-none text-xs" />
+                <button type="submit" className="w-full sm:w-auto px-4 py-2 bg-[#5C0612] text-white rounded-lg font-bold border-b-2 border-[#D4AF37] hover:bg-[#42040B] transition-all text-center whitespace-nowrap">COMMIT ENTIRE BLOCK</button>
               </div>
             </form>
           </div>
 
-          {/* Render Timeline Container for Clinical Medical Logs */}
           <div className="space-y-2.5 max-h-[290px] overflow-y-auto pt-2">
             {medicalLogs.length === 0 ? (
               <p className="text-slate-400 text-center italic py-12 font-sans">No clinical procedures currently indexed inside database lines.</p>
             ) : (
               medicalLogs.map(m => (
                 <div key={m.record_id} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 space-y-2 shadow-inner hover:bg-white transition-colors">
-                  <div className="flex justify-between font-mono text-[10px]">
+                  <div className="flex justify-between items-start font-mono text-[10px] gap-2">
                     <span className={`px-2 py-0.5 rounded font-bold text-[8px] uppercase tracking-wider border ${
                       m.record_type === 'Incident log' 
                         ? 'bg-rose-50 border-rose-200 text-rose-700 animate-pulse' 
@@ -269,17 +268,17 @@ export default function MedicalLogs({ pets }) {
                     }`}>
                       {m.record_type}
                     </span>
-                    <span className="text-slate-400 font-bold">{m.log_date}</span>
+                    <span className="text-slate-400 font-bold shrink-0">{m.log_date}</span>
                   </div>
                   
-                  <p className="text-slate-800 text-xs font-medium leading-relaxed font-sans">{m.notes}</p>
+                  <p className="text-slate-800 text-xs font-medium leading-relaxed font-sans break-words">{m.notes}</p>
                   
-                  <div className="grid grid-cols-2 gap-1.5 pt-1.5 border-t border-slate-100 text-[10px] font-sans text-slate-500">
-                    <div>Medication: <strong className="text-slate-700">{m.medication_prescribed || 'None'}</strong></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1.5 border-t border-slate-100 text-[10px] font-sans text-slate-500">
+                    <div className="break-words">Medication: <strong className="text-slate-700">{m.medication_prescribed || 'None'}</strong></div>
                     <div>Vitals Weight: <strong className="font-mono text-slate-700">{m.weight_at_log || 'N/A'}</strong></div>
-                    <div className="col-span-2">Clinician Signature: <strong className="text-slate-600 font-mono text-[9px] uppercase">{m.veterinarian}</strong></div>
+                    <div className="sm:col-span-2 break-words">Clinician Signature: <strong className="text-slate-600 font-mono text-[9px] uppercase">{m.veterinarian}</strong></div>
                     {m.next_followup_date && (
-                      <div className="col-span-2 mt-1 font-mono text-blue-800 bg-blue-50/60 border border-blue-200/40 px-2 py-0.5 rounded w-fit text-[9px] font-bold">
+                      <div className="sm:col-span-2 mt-1 font-mono text-blue-800 bg-blue-50/60 border border-blue-200/40 px-2 py-0.5 rounded w-fit text-[9px] font-bold">
                         REQUIRED RE-CHECKUP MONITORING: {m.next_followup_date}
                       </div>
                     )}
