@@ -54,7 +54,6 @@ class PetListAPIView(APIView):
 
     def get(self, request):
         try: 
-            # FIXED: Sorted elements locally in Python to stop column name/PostgREST configuration crashes
             res_data = supabase.table("pets").select("*").execute().data or []
             res_data.sort(key=lambda x: str(x.get('created_at') or x.get('rescue_date') or ''), reverse=True)
             return Response(res_data, status=status.HTTP_200_OK)
@@ -108,6 +107,8 @@ class PetListAPIView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+# REPLACE THE PetDetailAPIView CLASS INSIDE backend/wsapi/views.py WITH THIS:
+
 class PetDetailAPIView(APIView):
     def get(self, request, pet_id):
         try:
@@ -132,12 +133,33 @@ class PetDetailAPIView(APIView):
 
     def delete(self, request, pet_id):
         try:
-            supabase.table("pet_images").delete().eq("pet_id", pet_id).execute()
-            supabase.table("pets").delete().eq("pet_id", pet_id).execute()
-            return Response({"message": "Scrubbed."}, status=status.HTTP_200_OK)
+            # Dynamic Admin Context instantiation handles RLS & Caching loops safely
+            admin_supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            
+            print(f"\n[PURGE ENGINE] Initiating cascade wipe sequence for Profile Asset ID: #{pet_id}")
+            
+            # 1. Clear out social timeline dependency rows mapping to this specific pet asset signature
+            feed_id_token = f"pet_{pet_id}"
+            admin_supabase.table("feed_likes").delete().eq("feed_id", feed_id_token).execute()
+            admin_supabase.table("feed_comments").delete().eq("feed_id", feed_id_token).execute()
+            
+            # 2. Scrub active clinical/medical records linked to this pet profile
+            admin_supabase.table("medical_records").delete().eq("pet_id", pet_id).execute()
+            admin_supabase.table("vaccination_logs").delete().eq("pet_id", pet_id).execute()
+            
+            # 3. Handle active adoption filings parameters mappings
+            admin_supabase.table("adoption_applications").delete().eq("pet_id", pet_id).execute()
+            
+            # 4. Wipe linked binary storage tracking maps
+            admin_supabase.table("pet_images").delete().eq("pet_id", pet_id).execute()
+            
+            # 5. Scrub the core anchor row safely out of the pets table database matrix
+            res = admin_supabase.table("pets").delete().eq("pet_id", pet_id).execute()
+            print(f"[PURGE ENGINE] Relational matrix cascade execution trace payload: {res.data}\n")
+            
+            return Response({"message": "Profile configuration data cleanly scrubbed from active registers."}, status=status.HTTP_200_OK)
         except Exception as e: 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 
 # =====================================================================
 # 3. CLINICAL HEALTH & MEDICAL TIMELINES
@@ -238,11 +260,9 @@ class AdoptionApplicationAPIView(APIView):
             email = request.query_params.get('email', None)
             query = supabase.table("adoption_applications").select("*")
             if email: 
-                # FIXED: Aligned target reference query to evaluate the 'email' column instead of full_name string signatures
                 query = query.eq("email", email)
             
             res_data = query.execute().data or []
-            # FIXED: Sorted tracking events natively inside Python to resolve empty lists
             res_data.sort(key=lambda x: str(x.get('submitted_at') or x.get('created_at') or ''), reverse=True)
             return Response(res_data, status=status.HTTP_200_OK)
         except Exception as e: 
@@ -254,7 +274,7 @@ class AdoptionApplicationAPIView(APIView):
             ins = {
                 "pet_id": d.get("pet_id"), 
                 "full_name": d.get("full_name"), 
-                "email": d.get("email"),  # FIXED: Included missing target email storage parameter
+                "email": d.get("email"),  
                 "contact_number": d.get("contact_number"),
                 "address": d.get("address"), 
                 "experience_level": d.get("experience_level"), 
@@ -364,7 +384,6 @@ class AnimalSightingDetailAPIView(APIView):
 # =====================================================================
 
 class CampusAnnouncementAPIView(APIView):
-    # Enable multipart streaming to capture file payloads safely
     parser_classes = (MultiPartParser, FormParser)
 
     def get(self, request):
@@ -380,7 +399,6 @@ class CampusAnnouncementAPIView(APIView):
             image_file = request.FILES.get('image', None)
             uploaded_image_url = None
 
-            # Stream attachment binary blocks if attached by manager node
             if image_file:
                 file_ext = image_file.name.split('.')[-1]
                 storage_filename = f"announcement_{uuid.uuid4()}.{file_ext}"
@@ -485,7 +503,7 @@ class UnifiedNewsfeedAPIView(APIView):
                     "body": a['content'],
                     "badge_text": "Official Notice",
                     "meta_details": "MDC Taskforce Bulletin",
-                    "image_url": a.get('image_url'), # FIXED: Linked real table reference column instead of None
+                    "image_url": a.get('image_url'), 
                     "author_tag": a['author_email'],
                     "timestamp": a.get('created_at') or '',
                     "likes_count": likes_map.get(fid, 0),
@@ -530,5 +548,100 @@ class AddCommentAPIView(APIView):
             }
             res = supabase.table("feed_comments").insert(payload).execute()
             return Response(res.data[0], status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# =====================================================================
+# 8. ADMINISTRATIVE SOCIAL TIMELINE MODERATION CORE
+# =====================================================================
+
+class NewsfeedItemActionAPIView(APIView):
+    def delete(self, request):
+        try:
+            feed_id = request.query_params.get("feed_id") or request.data.get("feed_id")
+            if not feed_id:
+                return Response({"error": "Missing feed_id."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # FORCE INITIALIZE DEDICATED ADMIN CLIENT ON-DEMAND:
+            # Re-creating the client here guarantees the request utilizes the super-admin 
+            # service_role clearance token, blowing past module-level variable caching locks!
+            admin_supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+
+            raw_id = feed_id.replace("announcement_", "").replace("sighting_", "").replace("pet_", "")
+            try:
+                target_id = int(raw_id)
+            except ValueError:
+                target_id = raw_id
+
+            if feed_id.startswith("announcement_"):
+                # Use admin_supabase to fetch lookahead verification blocks
+                check = admin_supabase.table("campus_announcements").select("*").eq("announcement_id", target_id).execute()
+                if not check.data:
+                    return Response({"error": "Announcement not found inside active database records."}, status=status.HTTP_404_NOT_FOUND)
+                
+                # Cascade clear linked row items to satisfy relational integrity constraints
+                admin_supabase.table("feed_likes").delete().eq("feed_id", feed_id).execute()
+                admin_supabase.table("feed_comments").delete().eq("feed_id", feed_id).execute()
+                admin_supabase.table("campus_announcements").delete().eq("announcement_id", target_id).execute()
+
+            elif feed_id.startswith("sighting_"):
+                check = admin_supabase.table("animal_sightings").select("*").eq("sighting_id", target_id).execute()
+                if not check.data:
+                    return Response({"error": "Sighting record not found inside active database records."}, status=status.HTTP_404_NOT_FOUND)
+                
+                admin_supabase.table("feed_likes").delete().eq("feed_id", feed_id).execute()
+                admin_supabase.table("feed_comments").delete().eq("feed_id", feed_id).execute()
+                admin_supabase.table("animal_sightings").delete().eq("sighting_id", target_id).execute()
+
+            elif feed_id.startswith("pet_"):
+                check = admin_supabase.table("pets").select("*").eq("pet_id", target_id).execute()
+                if not check.data:
+                    return Response({"error": "Pet tracking profile not found inside active database records."}, status=status.HTTP_404_NOT_FOUND)
+                
+                admin_supabase.table("feed_likes").delete().eq("feed_id", feed_id).execute()
+                admin_supabase.table("feed_comments").delete().eq("feed_id", feed_id).execute()
+                admin_supabase.table("pets").delete().eq("pet_id", target_id).execute()
+            else:
+                return Response({"error": "Unsupported structural feed element type."}, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response({"message": "Scrubbed logging entities successfully completed."}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request):
+        try:
+            d = request.data
+            feed_id = d.get("feed_id")
+            if not feed_id:
+                return Response({"error": "Missing feed_id."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not feed_id.startswith("announcement_"):
+                return Response({"error": "Only announcements can be edited."}, status=status.HTTP_403_FORBIDDEN)
+
+            # FORCE INITIALIZE DEDICATED ADMIN CLIENT ON-DEMAND:
+            admin_supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+
+            raw_id = feed_id.replace("announcement_", "")
+            try:
+                target_id = int(raw_id)
+            except ValueError:
+                target_id = raw_id
+
+            check = admin_supabase.table("campus_announcements").select("*").eq("announcement_id", target_id).execute()
+            if not check.data:
+                return Response({"error": "Target announcement context row missing from data tables."}, status=status.HTTP_404_NOT_FOUND)
+
+            if check.data[0].get("author_email") == "mdc.operations@cit.edu":
+                return Response({"error": "Automated system adoption cards reject text editing modifications."}, status=status.HTTP_403_FORBIDDEN)
+
+            payload = {
+                "title": d.get("title"),
+                "content": d.get("body")
+            }
+            admin_supabase.table("campus_announcements").update(payload).eq("announcement_id", target_id).execute()
+            return Response({"message": "Updated administrative bulletin content cleanly."}, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

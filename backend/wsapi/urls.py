@@ -6,7 +6,8 @@ from .views import (
     AdoptionApplicationAPIView, AdoptionApplicationDetailAPIView,
     AnimalSightingAPIView, AnimalSightingDetailAPIView,
     CampusAnnouncementAPIView, UnifiedNewsfeedAPIView,
-    ToggleLikeAPIView, AddCommentAPIView
+    ToggleLikeAPIView, AddCommentAPIView,
+    NewsfeedItemActionAPIView  
 )
 
 urlpatterns = [
@@ -33,4 +34,6 @@ urlpatterns = [
 
     path('newsfeed/like/', ToggleLikeAPIView.as_view(), name='feed-toggle-like'),
     path('newsfeed/comment/', AddCommentAPIView.as_view(), name='feed-add-comment'),
+    
+    path('newsfeed/action/', NewsfeedItemActionAPIView.as_view(), name='newsfeed-item-action'),
 ]
