@@ -2,20 +2,26 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# CRITICAL PATH FIX: Forces Python to check the parent folder layout to locate your root .env file
+ENV_PATH = BASE_DIR.parent / '.env'
+if ENV_PATH.exists():
+    load_dotenv(dotenv_path=ENV_PATH)
+else:
+    load_dotenv()
+
 # SECURITY WARNING: keep the secret key used in production secret!
-# RESTORED: Standard local Django development signature hash token
-SECRET_KEY = 'django-insecure-task-force-bruno-local-development-node-hash-key'
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-task-force-bruno-local-development-node-hash-key")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = []
+# PRODUCTION ALLOWED HOSTS GATEWAY
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", ".onrender.com"]
+if os.getenv("RENDER_EXTERNAL_HOSTNAME"):
+    ALLOWED_HOSTS.append(os.getenv("RENDER_EXTERNAL_HOSTNAME"))
 
 # Application definition
 INSTALLED_APPS = [
@@ -74,14 +80,17 @@ DATABASES = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
 ]
+FRONTEND_URL = os.getenv("FRONTEND_VERCEL_URL")
+if FRONTEND_URL:
+    CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
+else:
+    # Fallback allowance lets your project staging preview branches talk to the backend engine
+    CORS_ALLOW_ALL_ORIGINS = True
 
 # Supabase Credentials Configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-
-# CRITICAL MASTER BYPASS FIX:
-# Your .env file contains your restricted public 'anon' key which blocks row deletions.
-# Hardcoding your 'service_role' super-admin key here overrides the RLS lock entirely.
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 STATIC_URL = 'static/'
