@@ -4,7 +4,9 @@ import PetListings from './PetListings';
 import AddNewPet from './AddNewPet';
 import MedicalLogs from './MedicalLogs';
 import InventoryControl from './InventoryControl';
-import SightingTriage from './SightingTriage'; // Core sighting matrix integration
+import SightingTriage from './SightingTriage'; 
+import PostAnnouncement from './PostAnnouncement'; 
+import NewsfeedView from './NewsfeedView'; // Core interactive feed module injected
 
 export default function StaffDashboard({ session, onLogout }) {
   const [activeMenu, setActiveMenu] = useState('Pet Listings');
@@ -68,8 +70,8 @@ export default function StaffDashboard({ session, onLogout }) {
             </div>
           </div>
           <nav className="space-y-1.5">
-            {/* Added 'Sighting Reports' cleanly directly to your sidebar loop matrix */}
-            {['Pending Applications', 'Pet Listings', 'Add New Pet', 'Medical Logs', 'Inventory Control', 'Sighting Reports'].map((menu) => (
+            {/* ADDED: 'Community Newsfeed' added right at the top of the mapping array */}
+            {['Community Newsfeed', 'Pending Applications', 'Pet Listings', 'Add New Pet', 'Medical Logs', 'Inventory Control', 'Sighting Reports', 'Broadcast Bulletin'].map((menu) => (
               <button key={menu} onClick={() => setActiveMenu(menu)} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${activeMenu === menu ? 'bg-white text-[#5C0612] shadow-md font-semibold' : 'text-stone-200 hover:bg-white/5'}`}>
                 <span>{menu}</span>
               </button>
@@ -99,6 +101,8 @@ export default function StaffDashboard({ session, onLogout }) {
         </div>
 
         {/* COMPONENT CONDITIONAL ROUTING MODULE DECK */}
+        {activeMenu === 'Community Newsfeed' && <NewsfeedView session={session} />}
+
         {activeMenu === 'Pending Applications' && <PendingApplications />}
         
         {activeMenu === 'Pet Listings' && (
@@ -118,9 +122,12 @@ export default function StaffDashboard({ session, onLogout }) {
           />
         )}
 
-        {/* Dynamic secure staff routing window connection */}
         {activeMenu === 'Sighting Reports' && (
           <SightingTriage session={session} />
+        )}
+
+        {activeMenu === 'Broadcast Bulletin' && (
+          <PostAnnouncement session={session} />
         )}
       </main>
 

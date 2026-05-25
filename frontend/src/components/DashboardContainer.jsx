@@ -4,6 +4,7 @@ import PetProfileView from './PetProfileView';
 import SupplyLogistics from './SupplyLogistics';
 import AdoptionGallery from './AdoptionGallery'; 
 import ReportSightingView from './ReportSightingView';
+import NewsfeedView from './NewsfeedView'; // Integrated activity tracker engine
 
 export default function DashboardContainer({ session, onLogout }) {
   const [currentTab, setCurrentTab] = useState('newsfeed');
@@ -46,7 +47,7 @@ export default function DashboardContainer({ session, onLogout }) {
               Supply Logistics Hub
             </button>
 
-            {/* MOVED: Sighting tab is now neatly resting right here at the bottom */}
+            {/* Sighting tab stays sitting cleanly right here at the bottom */}
             <button onClick={() => { setCurrentTab('report'); setActivePetId(null); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${currentTab === 'report' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'}`}>
               Report Animal Sighting
             </button>
@@ -93,7 +94,8 @@ export default function DashboardContainer({ session, onLogout }) {
           </div>
 
           <div className="relative z-10 w-full h-full flex justify-center items-center">
-            {currentTab === 'newsfeed' && <div className="bg-white p-6 rounded-2xl border text-center text-xs max-w-sm mx-auto">Feed active. Streams are currently blank.</div>}
+            {/* MODIFIED COMPONENT SLOT: Renders the active layout list engine dynamically */}
+            {currentTab === 'newsfeed' && <NewsfeedView session={session} />}
             {currentTab === 'report' && <ReportSightingView session={session} />}
             {currentTab === 'adoption' && <AdoptionGallery session={session} />}
             {currentTab === 'resources' && <SupplyLogistics />}

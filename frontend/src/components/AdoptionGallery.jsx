@@ -20,8 +20,8 @@ export default function AdoptionGallery({ session }) {
   const [errorMessage, setErrorMessage] = useState('');
 
   const [applicationForm, setApplicationForm] = useState({
-    fullName: '', // Clear field for full user name entry tracking
-    email: session?.email || '', // Locked auto-fill validation map
+    fullName: '', 
+    email: session?.email || '', 
     contactNum: '',
     address: '',
     experience: 'Beginner',
@@ -48,20 +48,18 @@ export default function AdoptionGallery({ session }) {
       });
   };
 
-  // Live tracker query script function
   const fetchMyTrackingLogs = () => {
     if (!session?.email) return;
     setLoadingTracking(true);
     fetch(`http://localhost:8000/api/pets/applications/?email=${encodeURIComponent(session.email)}`)
       .then((res) => res.json())
       .then((data) => {
-        // FIXED: Checks if data payload structure is an array type to stop objects from breaking map runtime states
         setMyApplications(Array.isArray(data) ? data : []);
         setLoadingTracking(false);
       })
       .catch((err) => {
         console.error('Tracking log error:', err);
-        setMyApplications([]); // Fallback to safe array literal structure boundary
+        setMyApplications([]); 
         setLoadingTracking(false);
       });
   };
@@ -104,8 +102,8 @@ export default function AdoptionGallery({ session }) {
 
     const payload = {
       pet_id: filteredPets[currentIndex].pet_id,
-      full_name: applicationForm.fullName.trim(), // Send manual legal identity entry values
-      email: applicationForm.email, // Send locked institutional account tracking parameters
+      full_name: applicationForm.fullName.trim(), 
+      email: applicationForm.email, 
       contact_number: applicationForm.contactNum.trim(),
       address: applicationForm.address.trim(),
       experience_level: applicationForm.experience,
@@ -136,7 +134,7 @@ export default function AdoptionGallery({ session }) {
             petCareBudget: 'Moderate', planIfMoving: ''
           });
           fetchAvailablePlacements();
-          fetchMyTrackingLogs(); // Instantly pushes case mapping into tracking deck list
+          fetchMyTrackingLogs(); 
         }, 2500);
       } else {
         setErrorMessage('Database gateway rejected payload data structure validation.');
@@ -163,8 +161,6 @@ export default function AdoptionGallery({ session }) {
       
       {/* LEFT SECTION: FILTERS & PLACEMENT SWIPER CARD PLATFORM */}
       <div className="space-y-6 flex flex-col items-center w-full">
-        
-        {/* Dynamic Filter Element */}
         <div className="w-full bg-white border border-slate-200/60 p-4 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.01)] flex flex-col items-center gap-3">
           <div className="text-center">
             <h3 className="font-black text-slate-900 tracking-tight text-sm">Adoption Placement Portal</h3>
@@ -190,7 +186,6 @@ export default function AdoptionGallery({ session }) {
           </div>
         </div>
 
-        {/* Dynamic Card Body element */}
         {filteredPets.length === 0 ? (
           <div className="h-[440px] w-full bg-white border border-dashed border-slate-200 rounded-[32px] p-8 text-center text-slate-400 flex flex-col items-center justify-center shadow-sm">
             <p className="font-medium">No companion files match active configuration tags.</p>
@@ -233,7 +228,6 @@ export default function AdoptionGallery({ session }) {
           </div>
         )}
 
-        {/* Carousel Flow Navigation Bar Tracker */}
         {filteredPets.length > 0 && (
           <div className="w-full space-y-3 shrink-0 select-none">
             <div className="flex justify-between items-center px-1">
@@ -248,7 +242,7 @@ export default function AdoptionGallery({ session }) {
         )}
       </div>
 
-      {/* RIGHT SECTION: REAL-TIME STUDENT APPLICATION TRACKING LEAD MATRIX */}
+      {/* RIGHT SECTION: REAL-TIME TRACKING LEAD MATRIX */}
       <div className="w-full bg-white border border-slate-200 rounded-[28px] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.01)] min-h-[520px] flex flex-col justify-between">
         <div className="space-y-4 w-full">
           <div className="border-b pb-3 flex justify-between items-center">
@@ -267,32 +261,41 @@ export default function AdoptionGallery({ session }) {
             </div>
           ) : (
             <div className="space-y-3 overflow-y-auto max-h-[420px] pr-1">
-              {/* FIXED BOUNDARY: wrapped maps execution directly to check structure arrays */}
-              {Array.isArray(myApplications) && myApplications.map((app) => {
+              {myApplications.map((app) => {
                 const isPending = app.application_status === 'Pending';
                 const isApproved = app.application_status === 'Approved';
                 
                 return (
-                  <div key={app.application_id} className="p-3 border rounded-xl bg-slate-50/60 flex items-center justify-between shadow-sm hover:bg-slate-50 transition-colors">
-                    <div className="space-y-1 max-w-[65%]">
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-slate-900 text-xs font-mono">Case #{app.application_id}</span>
-                        <span className="font-mono text-[9px] bg-slate-200 px-1.5 py-0.2 rounded text-slate-500 font-bold tracking-wide uppercase">{app.pet_id}</span>
+                  /* MODIFIED: Remodeled box element container to support clean vertical sub-sections */
+                  <div key={app.application_id} className="p-4 border rounded-xl bg-slate-50/60 flex flex-col gap-3 shadow-sm hover:bg-slate-50 transition-colors text-left">
+                    <div className="flex items-center justify-between w-full">
+                      <div className="space-y-1 max-w-[65%]">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-slate-900 text-xs font-mono">Case #{app.application_id}</span>
+                          <span className="font-mono text-[9px] bg-slate-200 px-1.5 py-0.2 rounded text-slate-500 font-bold tracking-wide uppercase">{app.pet_id}</span>
+                        </div>
+                        <p className="text-slate-400 text-[10px] font-mono leading-none">Submitted: {new Date(app.submitted_at).toLocaleDateString()}</p>
+                        <p className="text-slate-500 truncate text-[11px] font-medium block pt-0.5">Registered Address: <span className="text-slate-800">{app.address}</span></p>
                       </div>
-                      <p className="text-slate-400 text-[10px] font-mono leading-none">Submitted: {new Date(app.submitted_at).toLocaleDateString()}</p>
-                      <p className="text-slate-500 truncate text-[11px] font-medium block pt-0.5">Registered Address: <span className="text-slate-800">{app.address}</span></p>
+
+                      <div className="shrink-0 text-right">
+                        <span className={`inline-block px-3 py-1 text-[9px] font-black tracking-widest uppercase rounded-lg border shadow-sm ${
+                          isApproved ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                          isPending ? 'bg-amber-50 border-amber-200 text-amber-700 animate-pulse' :
+                          'bg-rose-50 border-rose-200 text-rose-700'
+                        }`}>
+                          {app.application_status}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* DYNAMIC TIMELINE STATUS TOKEN CHIP VALUE */}
-                    <div className="shrink-0 text-right">
-                      <span className={`inline-block px-3 py-1 text-[9px] font-black tracking-widest uppercase rounded-lg border shadow-sm ${
-                        isApproved ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
-                        isPending ? 'bg-amber-50 border-amber-200 text-amber-700 animate-pulse' :
-                        'bg-rose-50 border-rose-200 text-rose-700'
-                      }`}>
-                        {app.application_status}
-                      </span>
-                    </div>
+                    {/* MODIFIED: Added instruction box layer for 'Approved' cases */}
+                    {isApproved && (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200/60 text-emerald-900 rounded-xl text-[11.5px] leading-relaxed font-normal animate-fade-in">
+                        <span className="font-black text-emerald-800 block mb-1">🚀 NEXT STEPS PROTOCOL REQUIRED:</span>
+                        Please wait for an official text confirmation from our triage coordinators, or visit the **Task Force Bruno Head Office** directly to claim your companion and settle paperwork hand-off details!
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -305,7 +308,7 @@ export default function AdoptionGallery({ session }) {
         </div>
       </div>
 
-      {/* MULTI-SECTION VETTING POPUP MATRIX MODAL */}
+      {/* MULTI-SECTION MODAL OVERLAY */}
       {showApplyForm && filteredPets.length > 0 && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in text-left">
           <div className="bg-white rounded-[28px] max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-scale-up max-h-[85vh] overflow-y-auto">
@@ -322,8 +325,6 @@ export default function AdoptionGallery({ session }) {
 
             {!successMessage && (
               <form onSubmit={handleApplySubmit} className="space-y-3 text-[11px]">
-                
-                {/* Section 1 */}
                 <div className="bg-slate-50/70 p-3 rounded-2xl border border-slate-200/50 space-y-2">
                   <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block tracking-wider">Section 1: Applicant Metrics</span>
                   <div className="grid grid-cols-2 gap-2">
@@ -348,7 +349,6 @@ export default function AdoptionGallery({ session }) {
                   </div>
                 </div>
 
-                {/* Section 2 */}
                 <div className="bg-slate-50/70 p-3 rounded-2xl border border-slate-200/50 space-y-2">
                   <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block tracking-wider">Section 2: Habitat Feasibility Checks</span>
                   <div className="grid grid-cols-2 gap-2">
@@ -381,7 +381,6 @@ export default function AdoptionGallery({ session }) {
                   </div>
                 </div>
 
-                {/* Section 3 */}
                 <div className="bg-slate-50/70 p-3 rounded-2xl border border-slate-200/50 space-y-2">
                   <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block tracking-wider">Section 3: Financial Clearance & Strategy</span>
                   <div>

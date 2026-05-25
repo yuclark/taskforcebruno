@@ -4,7 +4,9 @@ from .views import (
     MedicalRecordsAPIView, VaccinationLogsAPIView, InventoryAPIView, 
     InventoryDetailAPIView, InventoryTransactionAPIView,
     AdoptionApplicationAPIView, AdoptionApplicationDetailAPIView,
-    AnimalSightingAPIView, AnimalSightingDetailAPIView
+    AnimalSightingAPIView, AnimalSightingDetailAPIView,
+    CampusAnnouncementAPIView, UnifiedNewsfeedAPIView,
+    ToggleLikeAPIView, AddCommentAPIView
 )
 
 urlpatterns = [
@@ -26,4 +28,9 @@ urlpatterns = [
     
     path('sightings/', AnimalSightingAPIView.as_view(), name='sightings-list-create'),
     path('sightings/<int:sighting_id>/', AnimalSightingDetailAPIView.as_view(), name='sighting-triage-mutate'),
+    path('announcements/', CampusAnnouncementAPIView.as_view(), name='announcements-list-create'),
+    path('newsfeed/', UnifiedNewsfeedAPIView.as_view(), name='unified-newsfeed-stream'),
+
+    path('newsfeed/like/', ToggleLikeAPIView.as_view(), name='feed-toggle-like'),
+    path('newsfeed/comment/', AddCommentAPIView.as_view(), name='feed-add-comment'),
 ]

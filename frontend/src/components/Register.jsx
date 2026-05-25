@@ -68,7 +68,7 @@ export default function Register({ togglePage }) {
         </div>
 
         <div className="relative z-10 text-[11px] text-stone-400 font-mono tracking-wider text-right">
-          CIT-U WILDCAT WELFARE INFRASTRUCTURE NODE
+          CIT-U TASK FORCE BRUNO INFRASTRUCTURE NODE
         </div>
       </div>
 
