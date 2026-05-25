@@ -10,6 +10,9 @@ export default function NewsfeedView({ session }) {
   const [editTitle, setEditTitle] = useState('');
   const [editBody, setEditBody] = useState('');
 
+  // Dropdown manager state for the 3-dot buttons
+  const [activeDropdownId, setActiveDropdownId] = useState(null);
+
   // Custom UI Modals & Error Notification states
   const [itemToDelete, setItemToDelete] = useState(null);
   const [moderationError, setModerationError] = useState('');
@@ -30,6 +33,13 @@ export default function NewsfeedView({ session }) {
 
   useEffect(() => {
     fetchStreamData();
+  }, []);
+
+  // Closes dropdown when clicking anywhere else on the screen
+  useEffect(() => {
+    const handleOutsideClick = () => setActiveDropdownId(null);
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
   }, []);
 
   const handleLikeToggle = async (feedId) => {
@@ -75,49 +85,49 @@ export default function NewsfeedView({ session }) {
   };
 
   const handleExecuteDelete = async () => {
-  if (!itemToDelete) return;
+    if (!itemToDelete) return;
 
-  try {
-    const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/action/?feed_id=${encodeURIComponent(itemToDelete)}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-    });
+    try {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/action/?feed_id=${encodeURIComponent(itemToDelete)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-    if (res.ok) {
-      setItemToDelete(null);
-      fetchStreamData();
-    } else {
-      const data = await res.json();
-      setModerationError(data.error || 'Delete failed.');
+      if (res.ok) {
+        setItemToDelete(null);
+        fetchStreamData();
+      } else {
+        const data = await res.json();
+        setModerationError(data.error || 'Delete failed.');
+      }
+    } catch (err) {
+      setModerationError('Network error during delete.');
     }
-  } catch (err) {
-    setModerationError('Network error during delete.');
-  }
-};
+  };
 
-const handleSaveEditChanges = async (feedId) => {
-  try {
-    const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/action/', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        feed_id: feedId,
-        title: editTitle.trim(),
-        body: editBody.trim(),
-      }),
-    });
+  const handleSaveEditChanges = async (feedId) => {
+    try {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/action/', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feed_id: feedId,
+          title: editTitle.trim(),
+          body: editBody.trim(),
+        }),
+      });
 
-    if (res.ok) {
-      setEditingItemId(null);
-      fetchStreamData();
-    } else {
-      const data = await res.json();
-      setModerationError(data.error || 'Edit failed.');
+      if (res.ok) {
+        setEditingItemId(null);
+        fetchStreamData();
+      } else {
+        const data = await res.json();
+        setModerationError(data.error || 'Edit failed.');
+      }
+    } catch (err) {
+      setModerationError('Network error during edit.');
     }
-  } catch (err) {
-    setModerationError('Network error during edit.');
-  }
-};
+  };
 
   const startEditingWorkflow = (item) => {
     setModerationError('');
@@ -134,7 +144,7 @@ const handleSaveEditChanges = async (feedId) => {
   const recentRescuesCount = feedItems.filter(i => i.item_type === 'pet').length;
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-2 font-sans antialiased h-full flex flex-col">
+    <div className="w-full max-w-5xl mx-auto px-1 sm:px-4 font-sans antialiased h-full flex flex-col overflow-hidden">
       
       {/* INJECTED CSS SCROLLBAR MASK UTILITY LAYER */}
       <style>{`
@@ -144,22 +154,22 @@ const handleSaveEditChanges = async (feedId) => {
 
       {/* Inline Moderation Error Feedback Banner if updates fail */}
       {moderationError && (
-        <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-900 font-medium text-center rounded-xl animate-fade-in relative flex items-center justify-between">
-          <span className="flex-1 truncate">{moderationError}</span>
+        <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-900 font-medium text-center rounded-xl animate-fade-in relative flex items-center justify-between z-50 shrink-0">
+          <span className="flex-1 truncate text-xs sm:text-sm">{moderationError}</span>
           <button onClick={() => setModerationError('')} className="text-rose-400 hover:text-rose-700 font-mono font-bold text-xs ml-2 px-1">✕</button>
         </div>
       )}
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-hidden h-full">
 
         {/* ================= LEFT PANELS: PRIMARY SOCIAL TIMELINE STREAM ================= */}
-        <div className="lg:col-span-7 space-y-4 w-full overflow-y-auto py-4 pr-1 no-scrollbar">
+        <div className="lg:col-span-7 space-y-4 w-full overflow-y-auto pb-24 lg:pb-6 pr-1 no-scrollbar h-full">
 
           <div className="flex justify-between items-center bg-white px-4 py-3 rounded-xl border border-slate-200/80 shadow-sm select-none">
-            <span className="font-mono text-[9px] font-black text-slate-400 uppercase tracking-widest">
+            <span className="font-mono text-[9px] font-black text-slate-400 uppercase tracking-widest truncate mr-2">
               Live Activity Node &bull; {feedItems.length} Feeds Cataloged
             </span>
-            <button onClick={fetchStreamData} className="px-3 py-1 border text-[9px] font-mono font-bold bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg shadow-sm transition-all">REFRESH MATRIX</button>
+            <button onClick={fetchStreamData} className="px-3 py-1 border text-[9px] font-mono font-bold bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg shadow-sm transition-all shrink-0">REFRESH MATRIX</button>
           </div>
 
           {feedItems.map((item) => {
@@ -174,49 +184,67 @@ const handleSaveEditChanges = async (feedId) => {
               <div key={item.feed_id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden text-left w-full animate-fade-in">
 
                 {/* Header Configuration Row */}
-                <div className="p-4 flex items-center justify-between border-b border-slate-50">
-                  <div className="flex items-center gap-2.5">
+                <div className="p-4 flex items-start justify-between border-b border-slate-50 gap-3 relative">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm select-none shadow-inner border border-black/5 text-white shrink-0 ${isAnnouncement ? 'bg-gradient-to-br from-[#5C0612] to-red-800' : 'bg-slate-500'}`}>
                       {initials}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
+                    
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap max-w-full">
                         {!isCurrentlyEditingThisItem ? (
-                          <h4 className="font-bold text-slate-900 text-[14px] tracking-tight leading-tight hover:underline cursor-pointer">{item.title}</h4>
+                          <h4 className="font-bold text-slate-900 text-sm sm:text-[14px] tracking-tight leading-tight break-words pr-1">{item.title}</h4>
                         ) : (
-                          <span className="text-[10px] font-mono bg-amber-100 text-amber-900 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Modifying Record Payload</span>
+                          <span className="text-[9px] font-mono bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Modifying Record Payload</span>
                         )}
                         <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border shrink-0 ${isAnnouncement ? 'bg-rose-50 text-[#5C0612] border-rose-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'}`}>
                           {item.badge_text}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1 text-[11px] text-slate-500 font-normal mt-0.5">
-                        <span className="hover:underline cursor-pointer truncate max-w-[180px]">{item.author_tag}</span>
+                      <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-slate-500 font-normal mt-0.5 flex-wrap min-w-0">
+                        <span className="hover:underline cursor-pointer truncate max-w-[120px] sm:max-w-[180px]">{item.author_tag}</span>
                         <span>&bull;</span>
-                        <span>{HongKongDate}</span>
+                        <span className="shrink-0">{HongKongDate}</span>
                         <span>&bull;</span>
                         <svg className="w-3 h-3 text-slate-400 shrink-0" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0M2.04 4.326c.325.132.658.258.994.377.58.205 1.193.367 1.835.485.409.075.82.125 1.233.148.327.017.65.03.972.036v1.073c-.287.006-.57.016-.847.031a15.5 15.5 0 0 0-3.37.527c-.276.07-.542.155-.798.254a1 1 0 0 0-.378.317 3.2 3.2 0 0 0-.247.436c-.05.105-.102.215-.155.33A7 7 0 0 1 2.04 4.327M8 15a7 7 0 0 1-5.166-2.284c.053-.105.108-.213.165-.32.161-.3.342-.596.544-.888A3 3 0 0 1 4 10.5a2.5 2.5 0 0 1 2.5-2.5h.793c.143 0 .285.01.426.03.435.063.854.16 1.253.29.218.07.426.154.625.25a3.5 3.5 0 0 1 1.25 1.25c.162.279.28.583.35.9a4.5 4.5 0 0 1 .04.606c0 .114.004.226.012.337A7 7 0 0 1 8 15" /></svg>
                       </div>
                     </div>
                   </div>
 
-                  {/* Staff Moderation Controls Panel buttons */}
+                  {/* ── MODIFIED: 3-Dot Dropdown Panel Replacing Raw Rows ── */}
                   {isStaffClearance && !isCurrentlyEditingThisItem && (
-                    <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200 shrink-0">
-                      {!isSystemAutomatedFeed && (
-                        <button
-                          onClick={() => startEditingWorkflow(item)}
-                          className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-white hover:bg-amber-50 text-amber-700 rounded-lg border shadow-sm transition-all"
-                        >
-                          ✏️ Edit
-                        </button>
-                      )}
+                    <div className="shrink-0 relative" onClick={(e) => e.stopPropagation()}>
                       <button
-                        onClick={() => setItemToDelete(item.feed_id)}
-                        className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-white hover:bg-rose-50 text-rose-700 rounded-lg border border-rose-100 shadow-sm transition-all"
+                        type="button"
+                        onClick={() => setActiveDropdownId(activeDropdownId === item.feed_id ? null : item.feed_id)}
+                        className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors focus:outline-none border border-transparent hover:border-slate-200"
                       >
-                        🗑️ Delete
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 16 16">
+                          <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                        </svg>
                       </button>
+
+                      {/* Dropdown Floating Absolute Drawer */}
+                      {activeDropdownId === item.feed_id && (
+                        <div className="absolute right-0 mt-1 w-36 bg-white border border-slate-200 rounded-xl shadow-lg py-1 z-30 animate-fade-in">
+                          {!isSystemAutomatedFeed && (
+                            <button
+                              type="button"
+                              onClick={() => { startEditingWorkflow(item); setActiveDropdownId(null); }}
+                              className="w-full text-left px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50/60 transition-colors flex items-center gap-2"
+                            >
+                              <span>✏️</span> Edit Post
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => { setItemToDelete(item.feed_id); setActiveDropdownId(null); }}
+                            className="w-full text-left px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50/60 transition-colors flex items-center gap-2"
+                          >
+                            <span>🗑️</span> Delete Post
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -224,16 +252,16 @@ const handleSaveEditChanges = async (feedId) => {
                 {/* Content Body */}
                 <div className="px-4 py-3 bg-white">
                   {!isCurrentlyEditingThisItem ? (
-                    <p className="text-[13px] text-slate-800 leading-snug font-normal whitespace-pre-wrap">{item.body}</p>
+                    <p className="text-[13px] text-slate-800 leading-snug font-normal whitespace-pre-wrap break-words">{item.body}</p>
                   ) : (
-                    <div className="space-y-3 bg-slate-50 p-4 border border-dashed border-amber-300 rounded-xl">
+                    <div className="space-y-3 bg-slate-50 p-3 sm:p-4 border border-dashed border-amber-300 rounded-xl">
                       <div>
                         <label className="block text-[9px] font-mono font-bold text-amber-800 uppercase tracking-wider mb-1">Modify Bulletin Title Header</label>
                         <input
                           type="text"
                           value={editTitle}
                           onChange={(e) => setEditTitle(e.target.value)}
-                          className="w-full px-3 py-2 border bg-white rounded-lg font-bold text-slate-900 focus:outline-none focus:border-amber-500"
+                          className="w-full px-3 py-2 border bg-white rounded-lg font-bold text-slate-900 text-xs focus:outline-none focus:border-amber-500"
                         />
                       </div>
                       <div>
@@ -242,36 +270,36 @@ const handleSaveEditChanges = async (feedId) => {
                           rows="3"
                           value={editBody}
                           onChange={(e) => setEditBody(e.target.value)}
-                          className="w-full p-3 border bg-white rounded-lg text-slate-800 focus:outline-none focus:border-amber-500 resize-none leading-relaxed"
+                          className="w-full p-3 border bg-white rounded-lg text-slate-800 text-xs focus:outline-none focus:border-amber-500 resize-none leading-relaxed"
                         />
                       </div>
                       <div className="flex gap-2 justify-end text-[10px] font-mono font-bold uppercase">
                         <button type="button" onClick={() => setEditingItemId(null)} className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-all">Cancel</button>
-                        <button type="button" onClick={() => handleSaveEditChanges(item.feed_id)} className="px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all shadow-sm">Save Synchronizations</button>
+                        <button type="button" onClick={() => handleSaveEditChanges(item.feed_id)} className="px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all shadow-sm">Save</button>
                       </div>
                     </div>
                   )}
 
-                  <div className="mt-2.5 text-[10px] text-slate-500 bg-slate-100/80 border border-slate-200/50 rounded-md px-2 py-0.5 w-fit font-mono font-medium">
+                  <div className="mt-2.5 text-[9px] sm:text-[10px] text-slate-500 bg-slate-100/80 border border-slate-200/50 rounded-md px-2 py-0.5 w-fit font-mono font-medium max-w-full truncate">
                     Context Metric: <span className="font-sans text-slate-700 font-normal">{item.meta_details}</span>
                   </div>
                 </div>
 
-                {/* Secure fixed image stream layer */}
+                {/* Secure fixed image stream layer — CHANGED FOR RESPONSIVENESS */}
                 {item.image_url && (
                   <div
                     onClick={() => setLightboxImg(item.image_url)}
-                    className="w-full h-96 border-y border-slate-200 bg-slate-100 flex items-center justify-center overflow-hidden cursor-zoom-in hover:brightness-95 transition-all shrink-0"
+                    className="w-full h-64 sm:h-96 border-y border-slate-200 bg-slate-100 flex items-center justify-center overflow-hidden cursor-zoom-in hover:brightness-95 transition-all shrink-0"
                   >
                     <img src={item.image_url} alt="Attached Media Asset" className="w-full h-full object-cover select-none" />
                   </div>
                 )}
 
                 {/* Stats Row */}
-                <div className="px-4 py-2.5 flex items-center justify-between border-b border-slate-200 text-slate-500 text-[12px] font-normal select-none">
+                <div className="px-4 py-2.5 flex items-center justify-between border-b border-slate-200 text-slate-500 text-[11px] sm:text-[12px] font-normal select-none">
                   <div className="flex items-center gap-1.5">
                     {item.likes_count > 0 && (
-                      <span className="bg-[#1877F2] text-white p-1 rounded-full text-[9px] w-4 h-4 flex items-center justify-center shadow-sm">👍</span>
+                      <span className="bg-[#1877F2] text-white p-1 rounded-full text-[8px] w-4 h-4 flex items-center justify-center shadow-sm">👍</span>
                     )}
                     <span className="hover:underline cursor-pointer">{item.likes_count} {item.likes_count === 1 ? 'like' : 'likes'}</span>
                   </div>
@@ -279,32 +307,32 @@ const handleSaveEditChanges = async (feedId) => {
                 </div>
 
                 {/* Action Grid Panel */}
-                <div className="grid grid-cols-2 border-b border-slate-100 px-2 py-1 bg-white select-none">
+                <div className="grid grid-cols-2 border-b border-slate-100 px-2 py-0.5 bg-white select-none">
                   <button
                     type="button"
                     onClick={() => handleLikeToggle(item.feed_id)}
-                    className={`flex items-center justify-center gap-2 py-2 rounded-md font-bold text-[13px] transition-all hover:bg-slate-100/80 ${item.is_liked_by_me ? 'text-[#1877F2]' : 'text-slate-600'}`}
+                    className={`flex items-center justify-center gap-2 py-2 rounded-md font-bold text-xs sm:text-[13px] transition-all hover:bg-slate-100/80 ${item.is_liked_by_me ? 'text-[#1877F2]' : 'text-slate-600'}`}
                   >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M8.864.046C7.908-.193 7.02.53 6.956 1.466c-.072 1.051-.23 2.016-.428 2.59-.125.36-.479 1.013-1.04 1.639-.557.623-1.282 1.178-2.131 1.41C2.685 7.288 2 7.87 2 8.72v4.001c0 .845.682 1.43 1.357 1.616 1.062.293 2.28.463 3.167.463h4.486c1.104 0 1.93-.81 1.93-1.916 0-.256-.051-.505-.147-.733.458-.456.733-1.07.733-1.745 0-.412-.105-.797-.287-1.141.43-.513.687-1.157.687-1.862 0-.693-.244-1.32-.656-1.827.155-.333.242-.703.242-1.093 0-1.066-.826-1.875-1.88-1.875H9.684c.053-.298.09-.64.09-.999 0-1.378-.553-2.55-1.222-2.914l-.074-.038Z" /></svg>
                     <span>Like</span>
                   </button>
-                  <button type="button" className="flex items-center justify-center gap-2 py-2 rounded-md text-slate-600 font-bold text-[13px] hover:bg-slate-100/80 transition-all">
+                  <button type="button" className="flex items-center justify-center gap-2 py-2 rounded-md text-slate-600 font-bold text-xs sm:text-[13px] hover:bg-slate-100/80 transition-all">
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .786-.047C6.825 14.113 8.501 14.5 10.5 14.5c4.142 0 7.5-2.91 7.5-6.5S14.642 1.5 10.5 1.5 3 4.41 3 8c0 1.405.522 2.705 1.414 3.737a1 1 0 0 1-.21 1.157l-1.526 1.002Z" /></svg>
                     <span>Comment</span>
                   </button>
                 </div>
 
                 {/* FB Style Comments Thread */}
-                <div className="bg-[#F0F2F5]/60 px-4 py-3 space-y-2.5">
+                <div className="bg-[#F0F2F5]/60 px-3 sm:px-4 py-3 space-y-2.5">
                   {item.comments && item.comments.map((comm) => (
                     <div key={comm.comment_id} className="flex gap-2 text-left items-start">
-                      <div className="w-8 h-8 rounded-full bg-slate-400 text-white flex items-center justify-center font-bold text-[11px] uppercase shrink-0 border border-black/5 select-none shadow-sm">
+                      <div className="w-7 h-7 rounded-full bg-slate-400 text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 border border-black/5 select-none shadow-sm">
                         {comm.user_email.substring(0, 2)}
                       </div>
-                      <div className="flex flex-col max-w-[88%]">
-                        <div className="bg-[#E4E6EB] rounded-2xl px-3 py-1.5 shadow-sm">
-                          <p className="font-bold text-slate-900 text-[11px] leading-tight mb-0.5 hover:underline cursor-pointer">{comm.user_email}</p>
-                          <p className="text-slate-800 text-[12px] leading-snug font-normal">{comm.comment_text}</p>
+                      <div className="flex flex-col max-w-[85%] sm:max-w-[88%]">
+                        <div className="bg-[#E4E6EB] rounded-2xl px-3 py-1.5 shadow-sm break-words">
+                          <p className="font-bold text-slate-900 text-[10px] sm:text-[11px] leading-tight mb-0.5 hover:underline cursor-pointer truncate max-w-full">{comm.user_email}</p>
+                          <p className="text-slate-800 text-xs sm:text-[12px] leading-snug font-normal">{comm.comment_text}</p>
                         </div>
                       </div>
                     </div>
@@ -312,7 +340,7 @@ const handleSaveEditChanges = async (feedId) => {
 
                   {/* Form Input Capsule Input Row */}
                   <form onSubmit={(e) => handleSendComment(e, item.feed_id)} className="flex items-center gap-2 pt-1">
-                    <div className="w-8 h-8 rounded-full bg-[#5C0612] text-white flex items-center justify-center font-bold text-[11px] uppercase shrink-0 select-none border border-black/5 shadow-inner">
+                    <div className="w-7 h-7 rounded-full bg-[#5C0612] text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 select-none border border-black/5 shadow-inner">
                       {currentUserEmail.substring(0, 2)}
                     </div>
                     <div className="flex-1 relative flex items-center">
@@ -321,9 +349,9 @@ const handleSaveEditChanges = async (feedId) => {
                         value={commentInputs[item.feed_id] || ''}
                         onChange={(e) => setCommentInputs(prev => ({ ...prev, [item.feed_id]: e.target.value }))}
                         placeholder="Write a comment..."
-                        className="w-full bg-[#E4E6EB] border border-transparent rounded-full pl-4 pr-16 py-2 text-[12px] text-slate-800 focus:outline-none focus:bg-white focus:border-slate-300 transition-all placeholder-slate-500 shadow-inner"
+                        className="w-full bg-[#E4E6EB] border border-transparent rounded-full pl-4 pr-14 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-slate-300 transition-all placeholder-slate-500 shadow-inner"
                       />
-                      <button type="submit" className="absolute right-1 bg-[#5C0612] hover:bg-[#42040B] text-white font-bold text-[10px] uppercase px-3 py-1.5 rounded-full transition-all shadow-sm tracking-wider">Send</button>
+                      <button type="submit" className="absolute right-1 bg-[#5C0612] hover:bg-[#42040B] text-white font-bold text-[9px] uppercase px-2.5 py-1 rounded-full transition-all shadow-sm tracking-wider">Send</button>
                     </div>
                   </form>
                 </div>
@@ -333,8 +361,8 @@ const handleSaveEditChanges = async (feedId) => {
           })}
         </div>
 
-        {/* ================= RIGHT PANELS: static sidebar ================= */}
-        <div className="lg:col-span-5 space-y-4 w-full text-left hidden lg:block py-4 overflow-y-auto no-scrollbar">
+        {/* ================= RIGHT PANELS: static sidebar (Hidden automatically on Mobile layouts) ================= */}
+        <div className="lg:col-span-5 space-y-4 w-full text-left hidden lg:block py-4 overflow-y-auto no-scrollbar h-full">
 
           {/* Ecosystem Intelligence Console */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
@@ -400,10 +428,9 @@ const handleSaveEditChanges = async (feedId) => {
       </div>
 
       {/* ================= INJECTED REACT-STATE CONFIRMATION MODAL OVERLAY ================= */}
-      {/* EXCLUSIVELY REPLACES THE BROKEN WINDOWS event-loop freezing Native UI Modal */}
       {itemToDelete && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-6 text-center animate-scale-up">
+          <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-5 sm:p-6 text-center animate-scale-up">
             <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg">⚠️</div>
             <h3 className="font-black text-slate-900 text-sm tracking-tight mb-1">Confirm Record Purge</h3>
             <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">Are you absolutely sure you want to permanently scrub this log entry? This operation will instantly wipe all linked community interactions and can't be undone.</p>
@@ -433,13 +460,13 @@ const handleSaveEditChanges = async (feedId) => {
           onClick={() => setLightboxImg(null)}
           className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 cursor-zoom-out animate-fade-in"
         >
-          <button type="button" className="absolute top-6 right-6 text-white/70 hover:text-white font-mono text-xs bg-white/10 hover:bg-white/20 p-2 px-4 rounded-xl transition-all">
-            ✕ CLOSE FULLSCREEN
+          <button type="button" className="absolute top-4 sm:top-6 right-4 sm:right-6 text-white/70 hover:text-white font-mono text-[10px] sm:text-xs bg-white/10 hover:bg-white/20 p-2 px-3 sm:px-4 rounded-xl transition-all">
+            ✕ CLOSE
           </button>
           <img
             src={lightboxImg}
             alt="Expanded Media"
-            className="max-w-full max-h-[92vh] rounded-lg shadow-2xl object-contain animate-scale-up"
+            className="max-w-full max-h-[85vh] sm:max-h-[92vh] rounded-lg shadow-2xl object-contain animate-scale-up"
             onClick={(e) => e.stopPropagation()}
           />
         </div>
