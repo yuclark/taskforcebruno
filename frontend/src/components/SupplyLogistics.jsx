@@ -7,7 +7,7 @@ export default function SupplyLogistics() {
   const fetchLiveLogistics = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/api/inventory/');
+      const res = await fetch('https://taskforcebruno.onrender.com/api/inventory/');
       if (res.ok) {
         setInventory(await res.json());
       }

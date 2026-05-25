@@ -33,7 +33,7 @@ export default function PostAnnouncement({ session }) {
     }
 
     try {
-      const res = await fetch('http://localhost:8000/api/announcements/', {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/announcements/', {
         method: 'POST',
         body: uploadFormPayload
       });

@@ -9,7 +9,7 @@ export default function SightingTriage({ session }) {
   const fetchActiveReports = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/api/sightings/');
+      const res = await fetch('https://taskforcebruno.onrender.com/api/sightings/');
       if (res.ok) {
         const data = await res.json();
         setReports(data);
@@ -32,7 +32,7 @@ export default function SightingTriage({ session }) {
   const handleStatusMutation = async () => {
     const { reportId, targetStatus } = triageModal;
     try {
-      const res = await fetch(`http://localhost:8000/api/sightings/${reportId}/`, {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/sightings/${reportId}/`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus })

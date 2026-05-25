@@ -64,7 +64,7 @@ export default function AddNewPet({ onRefresh }) {
     }
 
     try {
-      const res = await fetch('http://localhost:8000/api/pets/', {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/pets/', {
         method: 'POST',
         body: multiPartFormPayload
       });

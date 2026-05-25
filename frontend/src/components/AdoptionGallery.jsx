@@ -34,7 +34,7 @@ export default function AdoptionGallery({ session }) {
 
   const fetchAvailablePlacements = () => {
     setLoading(true);
-    fetch('http://localhost:8000/api/pets/')
+    fetch('https://taskforcebruno.onrender.com/api/pets/')
       .then((res) => res.json())
       .then((data) => {
         const adoptionPlacements = data.filter(p => p.pet_type === 'For Adoption' && p.adoption_status === 'Available');
@@ -51,7 +51,7 @@ export default function AdoptionGallery({ session }) {
   const fetchMyTrackingLogs = () => {
     if (!session?.email) return;
     setLoadingTracking(true);
-    fetch(`http://localhost:8000/api/pets/applications/?email=${encodeURIComponent(session.email)}`)
+    fetch(`https://taskforcebruno.onrender.com/api/pets/applications/?email=${encodeURIComponent(session.email)}`)
       .then((res) => res.json())
       .then((data) => {
         setMyApplications(Array.isArray(data) ? data : []);
@@ -115,7 +115,7 @@ export default function AdoptionGallery({ session }) {
     };
 
     try {
-      const res = await fetch('http://localhost:8000/api/pets/applications/', {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/pets/applications/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

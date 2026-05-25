@@ -20,7 +20,7 @@ export default function StaffDashboard({ session, onLogout }) {
   const fetchAllRegisteredPets = async () => {
     setLoadingPets(true);
     try {
-      const res = await fetch('http://localhost:8000/api/pets/');
+      const res = await fetch('https://taskforcebruno.onrender.com/api/pets/');
       if (res.ok) setPets(await res.json());
     } catch (err) {
       console.error(err);
@@ -32,8 +32,8 @@ export default function StaffDashboard({ session, onLogout }) {
   const fetchInventory = async () => {
     setLoadingInventory(true);
     try {
-      const res = await fetch('http://localhost:8000/api/inventory/');
-      const ledgerRes = await fetch('http://localhost:8000/api/inventory/transactions/');
+      const res = await fetch('https://taskforcebruno.onrender.com/api/inventory/');
+      const ledgerRes = await fetch('https://taskforcebruno.onrender.com/api/inventory/transactions/');
       if (res.ok) setInventoryItems(await res.json());
       if (ledgerRes.ok) setTransactionLedger(await ledgerRes.json());
     } catch (err) {

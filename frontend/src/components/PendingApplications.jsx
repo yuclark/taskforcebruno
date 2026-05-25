@@ -9,7 +9,7 @@ export default function PendingApplications() {
   const fetchActiveApplicationsQueue = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/api/pets/applications/');
+      const res = await fetch('https://taskforcebruno.onrender.com/api/pets/applications/');
       if (res.ok) {
         setApplications(await res.json());
       }
@@ -31,7 +31,7 @@ export default function PendingApplications() {
   const confirmTriage = async () => {
     const { appId, status, petId } = decisionModal;
     try {
-      const res = await fetch(`http://localhost:8000/api/pets/applications/${appId}/`, {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/applications/${appId}/`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

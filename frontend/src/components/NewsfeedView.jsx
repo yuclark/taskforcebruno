@@ -19,7 +19,7 @@ export default function NewsfeedView({ session }) {
 
   const fetchStreamData = async () => {
     try {
-      const res = await fetch(`http://localhost:8000/api/newsfeed/?email=${encodeURIComponent(currentUserEmail)}`);
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/?email=${encodeURIComponent(currentUserEmail)}`);
       if (res.ok) setFeedItems(await res.json());
     } catch (err) {
       console.error('Error fetching stream:', err);
@@ -45,7 +45,7 @@ export default function NewsfeedView({ session }) {
     }));
 
     try {
-      await fetch('http://localhost:8000/api/newsfeed/like/', {
+      await fetch('https://taskforcebruno.onrender.com/api/newsfeed/like/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ feed_id: feedId, user_email: currentUserEmail })
@@ -63,7 +63,7 @@ export default function NewsfeedView({ session }) {
     setCommentInputs(prev => ({ ...prev, [feedId]: '' }));
 
     try {
-      const res = await fetch('http://localhost:8000/api/newsfeed/comment/', {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ feed_id: feedId, user_email: currentUserEmail, comment_text: text })
@@ -78,7 +78,7 @@ export default function NewsfeedView({ session }) {
   if (!itemToDelete) return;
 
   try {
-    const res = await fetch(`http://localhost:8000/api/newsfeed/action/?feed_id=${encodeURIComponent(itemToDelete)}`, {
+    const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/action/?feed_id=${encodeURIComponent(itemToDelete)}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -97,7 +97,7 @@ export default function NewsfeedView({ session }) {
 
 const handleSaveEditChanges = async (feedId) => {
   try {
-    const res = await fetch('http://localhost:8000/api/newsfeed/action/', {
+    const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/action/', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
