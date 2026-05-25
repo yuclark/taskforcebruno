@@ -1,6 +1,5 @@
 from django.db import models
 
-# Assuming you already have your Pet model here
 class Pet(models.Model):
     # Your existing Pet model fields are here...
     pass
