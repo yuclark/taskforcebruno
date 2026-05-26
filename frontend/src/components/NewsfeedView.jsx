@@ -205,6 +205,7 @@ export default function NewsfeedView({ session }) {
     );
   }
 
+  const activeSightingsCount = feedItems.filter(i => i.item_type === 'sighting').length;
   const totalCampusPetsCount = feedItems.filter(i => i.item_type === 'pet').length;
   const petsAwaitingHomeCount = feedItems.filter(i => i.item_type === 'pet' && (i.badge_text === 'Available' || i.badge_text === 'For Adoption')).length;
 
@@ -240,9 +241,11 @@ export default function NewsfeedView({ session }) {
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0 items-stretch">
         <div className="lg:col-span-7 w-full h-full flex flex-col min-h-0 bg-transparent">
-          <div className="flex justify-between items-center bg-white px-4 py-3 rounded-xl border border-slate-200/80 shadow-sm select-none shrink-0 mb-3">
-            <span className="font-mono text-[9px] font-black text-slate-400 uppercase tracking-wildest truncate mr-2">
-              Live Activity Node &bull; {filteredFeedItems.length} Feeds Match
+          
+          {/* ── MODIFIED: Replaced live activity node string with minimal, clean inline metrics tracking description row ── */}
+          <div className="flex items-center bg-white px-4 py-3 rounded-xl border border-slate-200/80 shadow-sm select-none shrink-0 mb-3">
+            <span className="font-mono text-[10px] font-bold text-slate-500 uppercase tracking-wide truncate">
+              {totalCampusPetsCount} pets roaming the campus now &bull; {petsAwaitingHomeCount} pets awaiting their new homes
             </span>
           </div>
 
@@ -271,6 +274,7 @@ export default function NewsfeedView({ session }) {
             )}
           </div>
 
+          {/* Posts Timeline Stream Area */}
           <div className="flex-1 overflow-y-auto space-y-4 pr-1 no-scrollbar min-h-0 pb-4">
             {paginatedFeedItems.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 italic">
@@ -328,7 +332,7 @@ export default function NewsfeedView({ session }) {
                             onClick={() => setActiveDropdownId(activeDropdownId === item.feed_id ? null : item.feed_id)}
                             className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors focus:outline-none border border-transparent hover:border-slate-200"
                           >
-                            ⋮
+                            &sube;
                           </button>
 
                           {activeDropdownId === item.feed_id && (
@@ -541,7 +545,7 @@ export default function NewsfeedView({ session }) {
               <p className="text-[10px] text-slate-400 mt-0.5 font-normal">Real-time macro parameters aggregated from tracking tables.</p>
             </div>
 
-            {/* ── CHANGED: Swapped live activity notes module grid layout with custom dynamic amount of pet trackers ── */}
+            {/* Retained dynamic amount of pet trackers layout modules in info section sidebar */}
             <div className="flex flex-col gap-3 font-sans text-xs">
               <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-xl flex items-center justify-between">
                 <span className="text-slate-600 font-medium">Active animals roaming the campus:</span>
