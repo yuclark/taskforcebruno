@@ -37,7 +37,6 @@ export default function AdoptionGallery({ session }) {
     fetch('https://taskforcebruno.onrender.com/api/pets/')
       .then((res) => res.json())
       .then((data) => {
-        // ── CHANGED: Explicitly support stray animal profiles in available options filter ──
         const adoptionPlacements = data.filter(p => 
           (p.pet_type === 'For Adoption' || p.pet_id?.startsWith('STRAY-')) && 
           p.adoption_status === 'Available'
@@ -256,13 +255,6 @@ export default function AdoptionGallery({ session }) {
             </div>
             <button onClick={fetchMyTrackingLogs} className="px-2.5 py-1 border text-[9px] font-mono font-bold text-slate-600 hover:bg-slate-50 bg-white shadow-sm rounded-lg">SYNC</button>
           </div>
-
-          {app.application_status && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200/60 text-emerald-900 rounded-xl text-[11.5px] leading-relaxed font-normal animate-fade-in">
-              <span className="font-black text-emerald-800 block mb-1">🚀 NEXT STEPS PROTOCOL REQUIRED:</span>
-              Please wait for an official text confirmation from our triage coordinators, or visit the **Task Force Bruno Head Office** directly to claim your companion and settle paperwork hand-off details!
-            </div>
-          )}
 
           {loadingTracking ? (
             <div className="p-12 text-center font-mono text-slate-400 animate-pulse">Syncing tracking array parameters...</div>
