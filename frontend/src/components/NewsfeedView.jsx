@@ -1,36 +1,26 @@
 import React, { useState, useEffect } from 'react';
 
-
 export default function NewsfeedView({ session }) {
   const [feedItems, setFeedItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [commentInputs, setCommentInputs] = useState({});
   const [lightboxImg, setLightboxImg] = useState(null);
 
-
   const [editingItemId, setEditingItemId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editBody, setEditBody] = useState('');
 
-
-  // Dropdown manager state for the 3-dot buttons
   const [activeDropdownId, setActiveDropdownId] = useState(null);
 
-
-  // Custom UI Modals & Error Notification states
   const [itemToDelete, setItemToDelete] = useState(null);
   const [moderationError, setModerationError] = useState('');
 
-
-  // ── NEW FEAT: CORE UX STATE MANAGERS ──
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [expandedComments, setExpandedComments] = useState({}); // Tracking structure: { [feedId]: boolean }
-
+  const [expandedComments, setExpandedComments] = useState({});
 
   const currentUserEmail = session?.email || 'anonymous@cit.edu';
   const isStaffClearance = session?.role === 'staff' || currentUserEmail.includes('staff') || currentUserEmail.includes('test');
-
 
   const fetchStreamData = async () => {
     try {
@@ -43,19 +33,15 @@ export default function NewsfeedView({ session }) {
     }
   };
 
-
   useEffect(() => {
     fetchStreamData();
   }, []);
 
-
-  // Closes dropdown when clicking anywhere else on the screen
   useEffect(() => {
     const handleOutsideClick = () => setActiveDropdownId(null);
     window.addEventListener('click', handleOutsideClick);
     return () => window.removeEventListener('click', handleOutsideClick);
   }, []);
-
 
   const handleLikeToggle = async (feedId) => {
     setFeedItems(prev => prev.map(item => {
@@ -69,7 +55,6 @@ export default function NewsfeedView({ session }) {
       return item;
     }));
 
-
     try {
       await fetch('https://taskforcebruno.onrender.com/api/newsfeed/like/', {
         method: 'POST',
@@ -81,15 +66,12 @@ export default function NewsfeedView({ session }) {
     }
   };
 
-
   const handleSendComment = async (e, feedId) => {
     e.preventDefault();
     const text = commentInputs[feedId]?.trim();
     if (!text) return;
 
-
     setCommentInputs(prev => ({ ...prev, [feedId]: '' }));
-
 
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/', {
@@ -103,17 +85,14 @@ export default function NewsfeedView({ session }) {
     }
   };
 
-
   const handleExecuteDelete = async () => {
     if (!itemToDelete) return;
-
 
     try {
       const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/action/?feed_id=${encodeURIComponent(itemToDelete)}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });
-
 
       if (res.ok) {
         setItemToDelete(null);
@@ -127,7 +106,6 @@ export default function NewsfeedView({ session }) {
     }
   };
 
-
   const handleSaveEditChanges = async (feedId) => {
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/action/', {
@@ -139,7 +117,6 @@ export default function NewsfeedView({ session }) {
           body: editBody.trim(),
         }),
       });
-
 
       if (res.ok) {
         setEditingItemId(null);
@@ -153,7 +130,6 @@ export default function NewsfeedView({ session }) {
     }
   };
 
-
   const startEditingWorkflow = (item) => {
     setModerationError('');
     setEditingItemId(item.feed_id);
@@ -161,8 +137,6 @@ export default function NewsfeedView({ session }) {
     setEditBody(item.body || '');
   };
 
-
-  // Toggle comments expand/collapse state drawer
   const toggleCommentsDrawer = (feedId) => {
     setExpandedComments(prev => ({
       ...prev,
@@ -170,18 +144,13 @@ export default function NewsfeedView({ session }) {
     }));
   };
 
-
   if (loading) {
     return <div className="w-full text-center p-12 font-mono text-[11px] text-slate-400 animate-pulse">COMPILING COMMUNITY INTERACTION MATRICES...</div>;
   }
 
-
-  // Ecosystem Counters stay tied to overall backend database values
   const activeSightingsCount = feedItems.filter(i => i.item_type === 'sighting').length;
   const recentRescuesCount = feedItems.filter(i => i.item_type === 'pet').length;
 
-
-  // ── NEW FEAT LOGIC: LIVE QUERY FILTERS ──
   const filteredFeedItems = feedItems.filter(item => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
@@ -193,25 +162,18 @@ export default function NewsfeedView({ session }) {
     );
   });
 
-
-  // ── NEW FEAT LOGIC: CLIENT SIDE PAGINATION MATRICES ──
   const ITEMS_PER_PAGE = 5;
   const totalPagesCount = Math.ceil(filteredFeedItems.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const paginatedFeedItems = filteredFeedItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-
   return (
     <div className="w-full max-w-5xl mx-auto px-1 sm:px-4 font-sans antialiased h-full flex flex-col overflow-hidden">
-      
-      {/* INJECTED CSS SCROLLBAR MASK UTILITY LAYER */}
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none !important; }
         .no-scrollbar { -ms-overflow-style: none !important; scrollbar-width: none !important; }
       `}</style>
 
-
-      {/* Inline Moderation Error Feedback Banner if updates fail */}
       {moderationError && (
         <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-900 font-medium text-center rounded-xl animate-fade-in relative flex items-center justify-between z-50 shrink-0">
           <span className="flex-1 truncate text-xs sm:text-sm">{moderationError}</span>
@@ -219,12 +181,8 @@ export default function NewsfeedView({ session }) {
         </div>
       )}
 
-
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-hidden h-full">
-
-
-        {/* ================= LEFT PANELS: PRIMARY SOCIAL TIMELINE STREAM ================= */}
-        <div className="lg:col-span-7 space-y-4 w-full overflow-y-auto pb-24 lg:pb-6 pr-1 no-scrollbar h-full flex flex-col">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0 items-start">
+        <div className="lg:col-span-7 space-y-4 w-full overflow-y-auto pb-24 lg:pb-6 pr-1 no-scrollbar h-full flex flex-col min-h-0">
           <div className="flex justify-between items-center bg-white px-4 py-3 rounded-xl border border-slate-200/80 shadow-sm select-none shrink-0">
             <span className="font-mono text-[9px] font-black text-slate-400 uppercase tracking-widest truncate mr-2">
               Live Activity Node &bull; {filteredFeedItems.length} Feeds Match
@@ -232,8 +190,6 @@ export default function NewsfeedView({ session }) {
             <button onClick={fetchStreamData} className="px-3 py-1 border text-[9px] font-mono font-bold bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg shadow-sm transition-all shrink-0">REFRESH MATRIX</button>
           </div>
 
-
-          {/* ── NEW FEAT UI: REAL-TIME SEARCH TEXT CAPSULE ── */}
           <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2.5 shrink-0">
             <div className="text-slate-400 pl-1.5 select-none text-xs">🔍</div>
             <input
@@ -253,9 +209,7 @@ export default function NewsfeedView({ session }) {
             )}
           </div>
 
-
-          {/* Social Feed Items Grid Stack List Container */}
-          <div className="space-y-4 flex-1">
+          <div className="space-y-4 flex-1 min-h-0">
             {paginatedFeedItems.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 italic">
                 No active records match your search criteria parameters.
@@ -265,23 +219,18 @@ export default function NewsfeedView({ session }) {
                 const initials = item.author_tag ? item.author_tag.substring(0, 2).toUpperCase() : 'CU';
                 const HongKongDate = new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                 const isAnnouncement = item.item_type === 'announcement';
-                
                 const isSystemAutomatedFeed = item.item_type === 'sighting' || item.item_type === 'pet' || item.author_tag === 'mdc.operations@cit.edu';
                 const isCurrentlyEditingThisItem = editingItemId === item.feed_id;
                 const isCommentsOpen = !!expandedComments[item.feed_id];
 
-
                 return (
                   <div key={item.feed_id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden text-left w-full animate-fade-in">
-
-
-                    {/* Header Configuration Row */}
                     <div className="p-4 flex items-start justify-between border-b border-slate-50 gap-3 relative">
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm select-none shadow-inner border border-black/5 text-white shrink-0 ${isAnnouncement ? 'bg-gradient-to-br from-[#5C0612] to-red-800' : 'bg-slate-500'}`}>
                           {initials}
                         </div>
-                        
+
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap max-w-full">
                             {!isCurrentlyEditingThisItem ? (
@@ -303,7 +252,6 @@ export default function NewsfeedView({ session }) {
                         </div>
                       </div>
 
-                      {/* 3-Dot Dropdown Panel */}
                       {isStaffClearance && !isCurrentlyEditingThisItem && (
                         <div className="shrink-0 relative" onClick={(e) => e.stopPropagation()}>
                           <button
@@ -312,7 +260,7 @@ export default function NewsfeedView({ session }) {
                             className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors focus:outline-none border border-transparent hover:border-slate-200"
                           >
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 16 16">
-                              <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                              <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
                             </svg>
                           </button>
 
@@ -340,8 +288,6 @@ export default function NewsfeedView({ session }) {
                       )}
                     </div>
 
-
-                    {/* Content Body */}
                     <div className="px-4 py-3 bg-white">
                       {!isCurrentlyEditingThisItem ? (
                         <p className="text-[13px] text-slate-800 leading-snug font-normal whitespace-pre-wrap break-words">{item.body}</p>
@@ -372,14 +318,11 @@ export default function NewsfeedView({ session }) {
                         </div>
                       )}
 
-
                       <div className="mt-2.5 text-[9px] sm:text-[10px] text-slate-500 bg-slate-100/80 border border-slate-200/50 rounded-md px-2 py-0.5 w-fit font-mono font-medium max-w-full truncate">
                         Context Metric: <span className="font-sans text-slate-700 font-normal">{item.meta_details}</span>
                       </div>
                     </div>
 
-
-                    {/* Secure fixed image stream layer */}
                     {item.image_url && (
                       <div
                         onClick={() => setLightboxImg(item.image_url)}
@@ -389,8 +332,6 @@ export default function NewsfeedView({ session }) {
                       </div>
                     )}
 
-
-                    {/* Stats Row */}
                     <div className="px-4 py-2.5 flex items-center justify-between border-b border-slate-200 text-slate-500 text-[11px] sm:text-[12px] font-normal select-none">
                       <div className="flex items-center gap-1.5">
                         {item.likes_count > 0 && (
@@ -406,8 +347,6 @@ export default function NewsfeedView({ session }) {
                       </div>
                     </div>
 
-
-                    {/* Action Grid Panel */}
                     <div className="grid grid-cols-2 border-b border-slate-100 px-2 py-0.5 bg-white select-none">
                       <button
                         type="button"
@@ -417,7 +356,7 @@ export default function NewsfeedView({ session }) {
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M8.864.046C7.908-.193 7.02.53 6.956 1.466c-.072 1.051-.23 2.016-.428 2.59-.125.36-.479 1.013-1.04 1.639-.557.623-1.282 1.178-2.131 1.41C2.685 7.288 2 7.87 2 8.72v4.001c0 .845.682 1.43 1.357 1.616 1.062.293 2.28.463 3.167.463h4.486c1.104 0 1.93-.81 1.93-1.916 0-.256-.051-.505-.147-.733.458-.456.733-1.07.733-1.745 0-.412-.105-.797-.287-1.141.43-.513.687-1.157.687-1.862 0-.693-.244-1.32-.656-1.827.155-.333.242-.703.242-1.093 0-1.066-.826-1.875-1.88-1.875H9.684c.053-.298.09-.64.09-.999 0-1.378-.553-2.55-1.222-2.914l-.074-.038Z" /></svg>
                         <span>Like</span>
                       </button>
-                      
+
                       <button 
                         type="button" 
                         onClick={() => toggleCommentsDrawer(item.feed_id)}
@@ -428,8 +367,6 @@ export default function NewsfeedView({ session }) {
                       </button>
                     </div>
 
-
-                    {/* ── MODIFIED FEAT UI: COLLAPSIBLE COMMENTS THREAD BLOCK ── */}
                     {isCommentsOpen && (
                       <div className="bg-[#F0F2F5]/60 px-3 sm:px-4 py-3 space-y-2.5 border-t border-slate-100 animate-fade-in">
                         {item.comments && item.comments.map((comm) => (
@@ -446,8 +383,6 @@ export default function NewsfeedView({ session }) {
                           </div>
                         ))}
 
-
-                        {/* Form Input Capsule Input Row */}
                         <form onSubmit={(e) => handleSendComment(e, item.feed_id)} className="flex items-center gap-2 pt-1">
                           <div className="w-7 h-7 rounded-full bg-[#5C0612] text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 select-none border border-black/5 shadow-inner">
                             {currentUserEmail.substring(0, 2)}
@@ -465,42 +400,37 @@ export default function NewsfeedView({ session }) {
                         </form>
                       </div>
                     )}
-
-
                   </div>
                 );
               })
             )}
           </div>
 
-
-          {/* ── NEW FEAT UI: RESPONSIVE PAGINATION INTERACTION CONTROLS (1 2 3 >) ── */}
           {totalPagesCount > 1 && (
             <div className="flex justify-center items-center gap-1.5 pt-4 pb-8 sm:pb-2 select-none font-mono text-xs shrink-0 w-full border-t border-slate-100 mt-2">
               <button
                 type="button"
                 disabled={currentPage === 1}
-                onClick={() => { setCurrentPage(prev => Math.max(prev - 1, 1)); document.getElementById('newsfeed-scroll-anchor')?.scrollIntoView(); }}
+                onClick={() => { setCurrentPage(prev => Math.max(prev - 1, 1)); }}
                 className="px-2.5 py-1.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white text-slate-700 font-black transition-all shadow-sm"
               >
                 &lt;
               </button>
-              
+
               {Array.from({ length: totalPagesCount }, (_, idx) => idx + 1).map((pageNumber) => (
                 <button
                   key={pageNumber}
                   type="button"
                   onClick={() => { setCurrentPage(pageNumber); }}
                   className={`px-3 py-1.5 border rounded-xl font-bold transition-all shadow-sm ${
-                    currentPage === pageNumber 
-                      ? 'bg-[#5C0612] border-[#5C0612] text-white shadow-inner' 
+                    currentPage === pageNumber
+                      ? 'bg-[#5C0612] border-[#5C0612] text-white shadow-inner'
                       : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
                   }`}
                 >
                   {pageNumber}
                 </button>
               ))}
-
 
               <button
                 type="button"
@@ -514,18 +444,12 @@ export default function NewsfeedView({ session }) {
           )}
         </div>
 
-
-        {/* ================= RIGHT PANELS: static sidebar (Hidden on Mobile) ================= */}
-        <div className="lg:col-span-5 space-y-4 w-full text-left hidden lg:block py-4 overflow-y-auto no-scrollbar h-full sticky top-0 self-start">
-
-
-          {/* Ecosystem Intelligence Console */}
+        <div className="lg:col-span-5 space-y-4 w-full text-left hidden lg:block py-4 sticky top-0 self-start max-h-[calc(100vh-2rem)] overflow-y-auto no-scrollbar">
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
             <div>
               <h4 className="font-black text-slate-900 text-sm tracking-tight">Ecosystem Intelligence Console</h4>
               <p className="text-[10px] text-slate-400 mt-0.5 font-normal">Real-time macro parameters aggregated from tracking tables.</p>
             </div>
-
 
             <div className="grid grid-cols-2 gap-3 font-mono text-center">
               <div className="bg-amber-50/40 border border-amber-200 p-3 rounded-xl">
@@ -538,11 +462,10 @@ export default function NewsfeedView({ session }) {
               </div>
             </div>
 
-
             <div className="border-t pt-3 space-y-2 text-[11px] text-slate-500 leading-relaxed font-normal">
               <p className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0"></span>
-                <span>Active node synchronized with **Cebu Institute of Technology – University** facility bounds.</span>
+                <span>Active node synchronized with Cebu Institute of Technology – University facility bounds.</span>
               </p>
               <p className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full shrink-0"></span>
@@ -551,8 +474,6 @@ export default function NewsfeedView({ session }) {
             </div>
           </div>
 
-
-          {/* Community Code of Conduct Matrix */}
           <div className="bg-gradient-to-br from-[#5C0612]/5 via-white to-white border border-slate-200 rounded-xl p-5 shadow-sm text-[11px] leading-relaxed space-y-3">
             <div>
               <h5 className="font-black text-slate-900 text-[12px] tracking-tight flex items-center gap-2">
@@ -561,11 +482,10 @@ export default function NewsfeedView({ session }) {
               <p className="text-[10px] text-slate-400 font-normal block mt-0.5">Mandatory compliance baselines for logged users and peer facilitators.</p>
             </div>
 
-
             <ul className="space-y-2.5 text-slate-600 font-normal list-inside list-none border-t pt-2.5">
               <li className="flex items-start gap-2">
                 <span className="text-[#5C0612] font-black mt-0.5">&bull;</span>
-                <div><strong className="text-slate-800 font-semibold block">01. Landmark Context Matrix</strong>Always attach explicit **Location Matrix Context** landmarks when submitting sightings to aid rapid response teams.</div>
+                <div><strong className="text-slate-800 font-semibold block">01. Landmark Context Matrix</strong>Always attach explicit Location Matrix Context landmarks when submitting sightings to aid rapid response teams.</div>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-[#5C0612] font-black mt-0.5">&bull;</span>
@@ -581,13 +501,9 @@ export default function NewsfeedView({ session }) {
               </li>
             </ul>
           </div>
-
-
         </div>
-
-
       </div>
-      
+
       {itemToDelete && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-5 sm:p-6 text-center animate-scale-up">
@@ -614,7 +530,6 @@ export default function NewsfeedView({ session }) {
         </div>
       )}
 
-
       {lightboxImg && (
         <div
           onClick={() => setLightboxImg(null)}
@@ -631,8 +546,6 @@ export default function NewsfeedView({ session }) {
           />
         </div>
       )}
-
-
     </div>
   );
 }
