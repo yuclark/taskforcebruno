@@ -45,22 +45,42 @@ export default function AddNewPet({ onRefresh }) {
     const massValueString = newPetForm.weight.toString().trim();
     const formattedWeightPayload = massValueString ? `${massValueString} kg` : 'Unknown';
 
-    // Auto-generate high-precision surrogate identification sequence if stray mode is active
     let finalizedPetId = newPetForm.pet_id.trim().toUpperCase();
     let finalizedSpecies = newPetForm.species;
     let finalizedPetType = newPetForm.pet_type;
+    let finalizedName = newPetForm.name.trim();
 
+    // ── NEW FEAT LOGIC: AUTO-INCREMENTAL FALLBACK STRINGS GENERATION ENGINE ──
     if (isStrayMode) {
       finalizedPetId = `STRAY-${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`;
-      finalizedSpecies = 'Dog';
       finalizedPetType = 'For Adoption';
+      
+      let strayCount = 1;
+      try {
+        const checkRes = await fetch('https://taskforcebruno.onrender.com/api/pets/');
+        if (checkRes.ok) {
+          const allIndexedPets = await checkRes.json();
+          // Count existing active stray profiles matching this specific biological species line
+          const matchingStrays = allIndexedPets.filter(p => 
+            p.pet_id?.startsWith('STRAY-') && 
+            p.species?.toLowerCase() === finalizedSpecies.toLowerCase()
+          );
+          strayCount = matchingStrays.length + 1;
+        }
+      } catch (err) {
+        console.error('Error calculating incremental profile matrices:', err);
+      }
+
+      if (!finalizedName) {
+        finalizedName = `Stray ${finalizedSpecies} #${strayCount}`;
+      }
     }
 
     multiPartFormPayload.append('pet_id', finalizedPetId);
-    multiPartFormPayload.append('name', newPetForm.name.trim());
+    multiPartFormPayload.append('name', finalizedName);
     multiPartFormPayload.append('species', finalizedSpecies);
     multiPartFormPayload.append('pet_type', finalizedPetType);
-    multiPartFormPayload.append('breed', isStrayMode ? (newPetForm.breed.trim() || 'Stray Dog Line') : (newPetForm.breed.trim() || 'Mix'));
+    multiPartFormPayload.append('breed', isStrayMode ? (newPetForm.breed.trim() || `Stray ${finalizedSpecies} Line`) : (newPetForm.breed.trim() || 'Mix'));
     multiPartFormPayload.append('gender', newPetForm.gender);
     multiPartFormPayload.append('age', newPetForm.age.trim() || 'Unknown');
     multiPartFormPayload.append('weight', formattedWeightPayload);
@@ -74,7 +94,9 @@ export default function AddNewPet({ onRefresh }) {
     multiPartFormPayload.append('behavior_notes', newPetForm.behavior_notes.trim() || 'Stable baseline parameters.');
     multiPartFormPayload.append('about_text', newPetForm.about_text.trim());
 
-    if (imageFile) { multiPartFormPayload.append('image', imageFile); }
+    if (imageFile) {
+      multiPartFormPayload.append('image', imageFile);
+    }
 
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/pets/', {
@@ -83,7 +105,7 @@ export default function AddNewPet({ onRefresh }) {
       });
       
       if (res.ok) {
-        setFormMessage({ type: 'success', text: `Profile successfully generated for ${newPetForm.name.trim()}!` });
+        setFormMessage({ type: 'success', text: `Profile successfully generated for ${finalizedName}!` });
         setNewPetForm({
           pet_id: '', name: '', species: 'Cat', pet_type: 'Campus Pet', breed: '', gender: 'Male', age: '', weight: '', size: 'Small',
           vaccination_status: 'Fully Vaccinated', spayed_neutered: true, adoption_status: 'Available',
@@ -111,10 +133,9 @@ export default function AddNewPet({ onRefresh }) {
           <p className="text-[10px] text-slate-400 mt-0.5">Generate core biometric logs, colony location keys, and primary visual metadata attachments.</p>
         </div>
         
-        {/* Toggle controls to handle stray intake logs seamlessly */}
         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 font-mono text-[10px] font-bold uppercase select-none shrink-0">
           <button type="button" onClick={() => setIsStrayMode(false)} className={`px-3 py-1.5 rounded-lg transition-all ${!isStrayMode ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>Standard Pet</button>
-          <button type="button" onClick={() => setIsStrayMode(true)} className={`px-3 py-1.5 rounded-lg transition-all ${isStrayMode ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>Add Stray Dog</button>
+          <button type="button" onClick={() => setIsStrayMode(true)} className={`px-3 py-1.5 rounded-lg transition-all ${isStrayMode ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>Add Stray Dog/Cat</button>
         </div>
       </div>
 
@@ -130,22 +151,24 @@ export default function AddNewPet({ onRefresh }) {
             {isStrayMode ? (
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Unique Pet ID</label>
-                <input type="text" disabled value="AUTO-GENERATED STRAY KEY" className="w-full px-3 py-2 border bg-slate-100 rounded-xl font-mono text-slate-400 focus:outline-none select-none select-none font-bold tracking-tight text-[10px]" />
+                <input type="text" disabled value="AUTO-GENERATED STRAY KEY" className="w-full px-3 py-2 border bg-slate-100 rounded-xl font-mono text-slate-400 focus:outline-none select-none font-bold tracking-tight text-[10px]" />
               </div>
             ) : (
               <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Unique Pet ID *</label><input type="text" name="pet_id" required={!isStrayMode} value={newPetForm.pet_id} onChange={handleCreateChange} placeholder="PET-3011" className="w-full px-3 py-2 border bg-white rounded-xl font-mono focus:outline-none" /></div>
             )}
             
-            <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Pet Name *</label><input type="text" name="name" required value={newPetForm.name} onChange={handleCreateChange} placeholder={isStrayMode ? "Ex: Buddy" : "Tiger"} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium text-slate-900" /></div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Pet Name {isStrayMode && '(Optional)'}</label>
+              <input type="text" name="name" required={!isStrayMode} value={newPetForm.name} onChange={handleCreateChange} placeholder={isStrayMode ? "Auto-Generated Fallback Name" : "Tiger"} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium text-slate-900" />
+            </div>
             
-            {isStrayMode ? (
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Species Subtype</label>
-                <input type="text" disabled value="Dog (Uncollared Stray)" className="w-full px-3 py-2 border bg-slate-100 rounded-xl font-sans text-slate-700 font-bold focus:outline-none" />
-              </div>
-            ) : (
-              <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Species Subtype *</label><select name="species" value={newPetForm.species} onChange={handleCreateChange} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium"><option value="Cat">Cat</option><option value="Dog">Dog</option></select></div>
-            )}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Species Subtype *</label>
+              <select name="species" value={newPetForm.species} onChange={handleCreateChange} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium">
+                <option value="Cat">Cat</option>
+                <option value="Dog">Dog</option>
+              </select>
+            </div>
 
             {isStrayMode ? (
               <div>
@@ -168,7 +191,7 @@ export default function AddNewPet({ onRefresh }) {
         <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 space-y-3">
           <span className="block font-mono text-[9px] font-bold text-slate-400 uppercase tracking-wider">02 &bull; Somatic Markers & Demographics</span>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Breed Line</label><input type="text" name="breed" value={newPetForm.breed} onChange={handleCreateChange} placeholder={isStrayMode ? "Askal / Native Breed" : "Puspin, Mix"} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none" /></div>
+            <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Breed Line</label><input type="text" name="breed" value={newPetForm.breed} onChange={handleCreateChange} placeholder={isStrayMode ? "Native / Mix Line" : "Puspin, Mix"} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none" /></div>
             <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Gender</label><select name="gender" value={newPetForm.gender} onChange={handleCreateChange} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium"><option value="Male">Male</option><option value="Female">Female</option></select></div>
             <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Estimated Age</label><input type="text" name="age" value={newPetForm.age} onChange={handleCreateChange} placeholder="Ex: 2 years" className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none" /></div>
             <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Size Bracket</label><select name="size" value={newPetForm.size} onChange={handleCreateChange} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium"><option value="Small">Small</option><option value="Medium">Medium</option><option value="Large">Large</option></select></div>
