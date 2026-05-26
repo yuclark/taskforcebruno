@@ -1,5 +1,17 @@
 import React, { useState } from 'react';
 
+// ── CONSTANT REGISTRY: 8 PRE-DEFINED CAMPUS COLONY LOCATIONS FOR DROPDOWN ENFORCEMENT ──
+const ALLOWED_LOCATIONS = [
+  "Wildcat Innovation Labs",
+  "NGE Building 1st Floor",
+  "GLE Building 1st Floor",
+  "Espacio",
+  "CIT-U Basketball Court",
+  "CIT-U Canteen",
+  "SAL Building",
+  "CIT-U Gymnasium"
+];
+
 export default function AddNewPet({ onRefresh }) {
   const [isStrayMode, setIsStrayMode] = useState(false);
   const [newPetForm, setNewPetForm] = useState({
@@ -15,7 +27,7 @@ export default function AddNewPet({ onRefresh }) {
     vaccination_status: 'Fully Vaccinated',
     spayed_neutered: true,
     adoption_status: 'Available',
-    found_near: '',
+    found_near: 'Wildcat Innovation Labs', // Initialize with the first valid selection
     rescue_date: new Date().toISOString().split('T')[0],
     current_conditions: 'None',
     behavior_notes: '',
@@ -50,7 +62,7 @@ export default function AddNewPet({ onRefresh }) {
     let finalizedPetType = newPetForm.pet_type;
     let finalizedName = newPetForm.name.trim();
 
-    // ── NEW FEAT LOGIC: AUTO-INCREMENTAL FALLBACK STRINGS GENERATION ENGINE ──
+    // ── AUTOMATED STRAY GENERATION SEQUENCE ENGINE ──
     if (isStrayMode) {
       finalizedPetId = `STRAY-${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`;
       finalizedPetType = 'For Adoption';
@@ -60,7 +72,6 @@ export default function AddNewPet({ onRefresh }) {
         const checkRes = await fetch('https://taskforcebruno.onrender.com/api/pets/');
         if (checkRes.ok) {
           const allIndexedPets = await checkRes.json();
-          // Count existing active stray profiles matching this specific biological species line
           const matchingStrays = allIndexedPets.filter(p => 
             p.pet_id?.startsWith('STRAY-') && 
             p.species?.toLowerCase() === finalizedSpecies.toLowerCase()
@@ -109,7 +120,7 @@ export default function AddNewPet({ onRefresh }) {
         setNewPetForm({
           pet_id: '', name: '', species: 'Cat', pet_type: 'Campus Pet', breed: '', gender: 'Male', age: '', weight: '', size: 'Small',
           vaccination_status: 'Fully Vaccinated', spayed_neutered: true, adoption_status: 'Available',
-          found_near: '', rescue_date: new Date().toISOString().split('T')[0], current_conditions: 'None',
+          found_near: 'Wildcat Innovation Labs', rescue_date: new Date().toISOString().split('T')[0], current_conditions: 'None',
           behavior_notes: '', about_text: ''
         });
         setImageFile(null);
@@ -223,7 +234,21 @@ export default function AddNewPet({ onRefresh }) {
 
         {/* Colony Context, Diagnostic & Asset Row Grid Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Rescue Colony Zone *</label><input type="text" name="found_near" required value={newPetForm.found_near} onChange={handleCreateChange} placeholder="Ex: CIT-U Main Gymnasium" className="w-full px-3 py-2 border rounded-xl focus:outline-none" /></div>
+          {/* ── CHANGED: Swapped standard text input field wrapper out for explicit drop down location zone matching filters ── */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Rescue Colony Zone *</label>
+            <select 
+              name="found_near" 
+              required 
+              value={newPetForm.found_near} 
+              onChange={handleCreateChange} 
+              className="w-full px-3 py-2 border bg-white rounded-xl font-sans font-medium text-slate-800 focus:outline-none"
+            >
+              {ALLOWED_LOCATIONS.map(loc => (
+                <option key={loc} value={loc}>{loc}</option>
+              ))}
+            </select>
+          </div>
           <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Rescue Capture Date</label><input type="date" name="rescue_date" value={newPetForm.rescue_date} onChange={handleCreateChange} className="w-full px-3 py-2 border rounded-xl font-mono focus:outline-none" /></div>
           <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Clinical / Medical Conditions</label><input type="text" name="current_conditions" value={newPetForm.current_conditions} onChange={handleCreateChange} placeholder="None, minor observations" className="w-full px-3 py-2 border rounded-xl focus:outline-none" /></div>
           <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Behavioral Assessment Analytics</label><input type="text" name="behavior_notes" value={newPetForm.behavior_notes} onChange={handleCreateChange} placeholder="Friendly, timid around foot traffic" className="w-full px-3 py-2 border rounded-xl focus:outline-none" /></div>
