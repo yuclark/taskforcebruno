@@ -21,27 +21,53 @@ export default function NewsfeedView({ session }) {
   const [activeCommentDropdownId, setActiveCommentDropdownId] = useState(null);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState('');
-
   const [commentToDelete, setCommentToDelete] = useState(null);
 
-  const currentUserEmail = (session?.email || 'anonymous@cit.edu').trim().toLowerCase();
+  const currentUserEmail = (session?.email || '').trim().toLowerCase();
   const currentUserRole = (session?.role || 'user').trim().toLowerCase();
-  const isStaffClearance = currentUserRole === 'staff' || currentUserEmail.includes('staff') || currentUserEmail.includes('test');
+  const isStaffClearance =
+    currentUserRole === 'staff' ||
+    currentUserEmail.includes('staff') ||
+    currentUserEmail.includes('test');
+
+  const resetCommentUi = () => {
+    setActiveCommentDropdownId(null);
+    setEditingCommentId(null);
+    setEditCommentText('');
+    setCommentToDelete(null);
+  };
 
   const fetchStreamData = async () => {
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/?email=${encodeURIComponent(currentUserEmail)}`);
-      if (res.ok) setFeedItems(await res.json());
+      const res = await fetch(
+        `https://taskforcebruno.onrender.com/api/newsfeed/?email=${encodeURIComponent(currentUserEmail)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setFeedItems(data);
+      } else {
+        setFeedItems([]);
+      }
     } catch (err) {
       console.error('Error fetching stream:', err);
+      setFeedItems([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    if (!currentUserEmail) return;
+    setLoading(true);
     fetchStreamData();
-  }, []);
+    setExpandedComments({});
+    resetCommentUi();
+    setActiveDropdownId(null);
+    setItemToDelete(null);
+    setEditingItemId(null);
+    setEditTitle('');
+    setEditBody('');
+  }, [currentUserEmail]);
 
   useEffect(() => {
     const handleOutsideClick = () => {
@@ -53,16 +79,18 @@ export default function NewsfeedView({ session }) {
   }, []);
 
   const handleLikeToggle = async (feedId) => {
-    setFeedItems(prev => prev.map(item => {
-      if (item.feed_id === feedId) {
-        return {
-          ...item,
-          is_liked_by_me: !item.is_liked_by_me,
-          likes_count: item.is_liked_by_me ? item.likes_count - 1 : item.likes_count + 1
-        };
-      }
-      return item;
-    }));
+    setFeedItems(prev =>
+      prev.map(item => {
+        if (item.feed_id === feedId) {
+          return {
+            ...item,
+            is_liked_by_me: !item.is_liked_by_me,
+            likes_count: item.is_liked_by_me ? item.likes_count - 1 : item.likes_count + 1
+          };
+        }
+        return item;
+      })
+    );
 
     try {
       await fetch('https://taskforcebruno.onrender.com/api/newsfeed/like/', {
@@ -77,7 +105,7 @@ export default function NewsfeedView({ session }) {
 
   const handleSendComment = async (e, feedId) => {
     e.preventDefault();
-    const text = commentInputs[feedId]?.trim();
+    const text = (commentInputs[feedId] || '').trim();
     if (!text) return;
 
     setCommentInputs(prev => ({ ...prev, [feedId]: '' }));
@@ -100,7 +128,6 @@ export default function NewsfeedView({ session }) {
         setModerationError(data.error || 'Failed to add comment.');
       }
     } catch (err) {
-      console.error('Comment execution error:', err);
       setModerationError('Network error while adding comment.');
     }
   };
@@ -121,9 +148,7 @@ export default function NewsfeedView({ session }) {
       });
 
       if (res.ok) {
-        setEditingCommentId(null);
-        setEditCommentText('');
-        setActiveCommentDropdownId(null);
+        resetCommentUi();
         await fetchStreamData();
       } else {
         const data = await res.json();
@@ -142,8 +167,7 @@ export default function NewsfeedView({ session }) {
       const res = await fetch(url, { method: 'DELETE' });
 
       if (res.ok) {
-        setCommentToDelete(null);
-        setActiveCommentDropdownId(null);
+        resetCommentUi();
         await fetchStreamData();
       } else {
         const data = await res.json();
@@ -158,9 +182,10 @@ export default function NewsfeedView({ session }) {
     if (!itemToDelete) return;
 
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/action/?feed_id=${encodeURIComponent(itemToDelete)}`, {
-        method: 'DELETE'
-      });
+      const res = await fetch(
+        `https://taskforcebruno.onrender.com/api/newsfeed/action/?feed_id=${encodeURIComponent(itemToDelete)}`,
+        { method: 'DELETE' }
+      );
 
       if (res.ok) {
         setItemToDelete(null);
@@ -182,12 +207,14 @@ export default function NewsfeedView({ session }) {
         body: JSON.stringify({
           feed_id: feedId,
           title: editTitle.trim(),
-          body: editBody.trim(),
-        }),
+          body: editBody.trim()
+        })
       });
 
       if (res.ok) {
         setEditingItemId(null);
+        setEditTitle('');
+        setEditBody('');
         await fetchStreamData();
       } else {
         const data = await res.json();
@@ -214,7 +241,11 @@ export default function NewsfeedView({ session }) {
   };
 
   if (loading) {
-    return <div className="w-full text-center p-12 font-mono text-[11px] text-slate-400 animate-pulse">COMPILING COMMUNITY INTERACTION MATRICES...</div>;
+    return (
+      <div className="w-full text-center p-12 font-mono text-[11px] text-slate-400 animate-pulse">
+        COMPILING COMMUNITY INTERACTION MATRICES...
+      </div>
+    );
   }
 
   const filteredFeedItems = feedItems.filter(item => {
@@ -260,13 +291,19 @@ export default function NewsfeedView({ session }) {
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
               placeholder="Filter active newsfeed logs by keywords, tags, or badges..."
               className="w-full bg-transparent text-xs text-slate-800 focus:outline-none placeholder-slate-400 font-medium"
             />
             {searchQuery && (
               <button
-                onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                onClick={() => {
+                  setSearchQuery('');
+                  setCurrentPage(1);
+                }}
                 className="text-slate-400 hover:text-slate-600 text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 rounded-md transition-colors"
               >
                 Clear
@@ -282,7 +319,12 @@ export default function NewsfeedView({ session }) {
             ) : (
               paginatedFeedItems.map((item) => {
                 const initials = item.author_tag ? item.author_tag.substring(0, 2).toUpperCase() : 'CU';
-                const HongKongDate = new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const HongKongDate = new Date(item.timestamp).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                });
                 const isAnnouncement = item.item_type === 'announcement';
                 const isSystemAutomatedFeed = item.item_type === 'sighting' || item.item_type === 'pet' || item.author_tag === 'mdc.operations@cit.edu';
                 const isCurrentlyEditingThisItem = editingItemId === item.feed_id;
@@ -299,9 +341,13 @@ export default function NewsfeedView({ session }) {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap max-w-full">
                             {!isCurrentlyEditingThisItem ? (
-                              <h4 className="font-bold text-slate-900 text-sm sm:text-[14px] tracking-tight leading-tight break-words pr-1">{item.title}</h4>
+                              <h4 className="font-bold text-slate-900 text-sm sm:text-[14px] tracking-tight leading-tight break-words pr-1">
+                                {item.title}
+                              </h4>
                             ) : (
-                              <span className="text-[9px] font-mono bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Modifying Record Payload</span>
+                              <span className="text-[9px] font-mono bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                                Modifying Record Payload
+                              </span>
                             )}
                             <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border shrink-0 ${isAnnouncement ? 'bg-rose-50 text-[#5C0612] border-rose-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'}`}>
                               {item.badge_text}
@@ -330,7 +376,10 @@ export default function NewsfeedView({ session }) {
                               {!isSystemAutomatedFeed && (
                                 <button
                                   type="button"
-                                  onClick={() => { startEditingWorkflow(item); setActiveDropdownId(null); }}
+                                  onClick={() => {
+                                    startEditingWorkflow(item);
+                                    setActiveDropdownId(null);
+                                  }}
                                   className="w-full text-left px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50/60 transition-colors"
                                 >
                                   Edit Post
@@ -338,7 +387,10 @@ export default function NewsfeedView({ session }) {
                               )}
                               <button
                                 type="button"
-                                onClick={() => { setItemToDelete(item.feed_id); setActiveDropdownId(null); }}
+                                onClick={() => {
+                                  setItemToDelete(item.feed_id);
+                                  setActiveDropdownId(null);
+                                }}
                                 className="w-full text-left px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50/60 transition-colors"
                               >
                                 Delete Post
@@ -351,11 +403,15 @@ export default function NewsfeedView({ session }) {
 
                     <div className="px-4 py-3 bg-white">
                       {!isCurrentlyEditingThisItem ? (
-                        <p className="text-[13px] text-slate-800 leading-snug font-normal whitespace-pre-wrap break-words">{item.body}</p>
+                        <p className="text-[13px] text-slate-800 leading-snug font-normal whitespace-pre-wrap break-words">
+                          {item.body}
+                        </p>
                       ) : (
                         <div className="space-y-3 bg-slate-50 p-3 sm:p-4 border border-dashed border-amber-300 rounded-xl">
                           <div>
-                            <label className="block text-[9px] font-mono font-bold text-amber-800 uppercase tracking-wider mb-1">Modify Bulletin Title Header</label>
+                            <label className="block text-[9px] font-mono font-bold text-amber-800 uppercase tracking-wider mb-1">
+                              Modify Bulletin Title Header
+                            </label>
                             <input
                               type="text"
                               value={editTitle}
@@ -364,7 +420,9 @@ export default function NewsfeedView({ session }) {
                             />
                           </div>
                           <div>
-                            <label className="block text-[9px] font-mono font-bold text-amber-800 uppercase tracking-wider mb-1">Modify Broadcast Narrative Content</label>
+                            <label className="block text-[9px] font-mono font-bold text-amber-800 uppercase tracking-wider mb-1">
+                              Modify Broadcast Narrative Content
+                            </label>
                             <textarea
                               rows="3"
                               value={editBody}
@@ -373,8 +431,20 @@ export default function NewsfeedView({ session }) {
                             />
                           </div>
                           <div className="flex gap-2 justify-end text-[10px] font-mono font-bold uppercase">
-                            <button type="button" onClick={() => setEditingItemId(null)} className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-all">Cancel</button>
-                            <button type="button" onClick={() => handleSaveEditChanges(item.feed_id)} className="px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all shadow-sm">Save</button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingItemId(null)}
+                              className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-all"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSaveEditChanges(item.feed_id)}
+                              className="px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all shadow-sm"
+                            >
+                              Save
+                            </button>
                           </div>
                         </div>
                       )}
@@ -389,7 +459,9 @@ export default function NewsfeedView({ session }) {
                         {item.likes_count > 0 && (
                           <span className="bg-[#1877F2] text-white p-1 rounded-full text-[8px] w-4 h-4 flex items-center justify-center shadow-sm">👍</span>
                         )}
-                        <span className="hover:underline cursor-pointer">{item.likes_count} {item.likes_count === 1 ? 'like' : 'likes'}</span>
+                        <span className="hover:underline cursor-pointer">
+                          {item.likes_count} {item.likes_count === 1 ? 'like' : 'likes'}
+                        </span>
                       </div>
                       <div
                         onClick={() => toggleCommentsDrawer(item.feed_id)}
@@ -436,7 +508,9 @@ export default function NewsfeedView({ session }) {
                                   </p>
 
                                   {!isCurrentlyEditingThisComment ? (
-                                    <p className="text-slate-800 text-xs sm:text-[12px] leading-snug font-normal">{comm.comment_text}</p>
+                                    <p className="text-slate-800 text-xs sm:text-[12px] leading-snug font-normal">
+                                      {comm.comment_text}
+                                    </p>
                                   ) : (
                                     <div className="mt-1 space-y-1">
                                       <input
@@ -446,8 +520,20 @@ export default function NewsfeedView({ session }) {
                                         className="w-full bg-white text-xs p-1.5 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-[#5C0612]"
                                       />
                                       <div className="flex gap-2 text-[9px] font-mono font-bold uppercase pt-0.5 pl-0.5">
-                                        <button type="button" onClick={() => setEditingCommentId(null)} className="text-slate-400 hover:text-slate-600 transition-colors">Cancel</button>
-                                        <button type="button" onClick={() => handleSaveCommentEdit(comm.comment_id)} className="text-[#5C0612] hover:text-[#42040B] transition-colors">Save</button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingCommentId(null)}
+                                          className="text-slate-400 hover:text-slate-600 transition-colors"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSaveCommentEdit(comm.comment_id)}
+                                          className="text-[#5C0612] hover:text-[#42040B] transition-colors"
+                                        >
+                                          Save
+                                        </button>
                                       </div>
                                     </div>
                                   )}
@@ -497,7 +583,7 @@ export default function NewsfeedView({ session }) {
 
                         <form onSubmit={(e) => handleSendComment(e, item.feed_id)} className="flex items-center gap-2 pt-1">
                           <div className="w-7 h-7 rounded-full bg-[#5C0612] text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 select-none border border-black/5 shadow-inner">
-                            {currentUserEmail.substring(0, 2)}
+                            {currentUserEmail.substring(0, 2) || 'CU'}
                           </div>
                           <div className="flex-1 relative flex items-center">
                             <input
@@ -507,7 +593,12 @@ export default function NewsfeedView({ session }) {
                               placeholder="Write a comment..."
                               className="w-full bg-[#E4E6EB] border border-transparent rounded-full pl-4 pr-14 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-slate-300 transition-all placeholder-slate-500 shadow-inner"
                             />
-                            <button type="submit" className="absolute right-1 bg-black hover:bg-neutral-800 text-white font-bold text-[9px] uppercase px-2.5 py-1 rounded-full transition-all shadow-sm tracking-wider">Send</button>
+                            <button
+                              type="submit"
+                              className="absolute right-1 bg-black hover:bg-neutral-800 text-white font-bold text-[9px] uppercase px-2.5 py-1 rounded-full transition-all shadow-sm tracking-wider"
+                            >
+                              Send
+                            </button>
                           </div>
                         </form>
                       </div>
@@ -525,10 +616,16 @@ export default function NewsfeedView({ session }) {
           <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-5 sm:p-6 text-center animate-scale-up">
             <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg">⚠️</div>
             <h3 className="font-black text-slate-900 text-sm tracking-tight mb-1">Confirm Record Purge</h3>
-            <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">Are you absolutely sure you want to permanently scrub this log entry? This operation will instantly wipe all linked community interactions and can't be undone.</p>
+            <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">
+              Are you absolutely sure you want to permanently scrub this log entry? This operation will instantly wipe all linked community interactions and can't be undone.
+            </p>
             <div className="flex gap-3 justify-center font-mono text-[10px] font-bold uppercase">
-              <button type="button" onClick={() => setItemToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">Cancel</button>
-              <button type="button" onClick={handleExecuteDelete} className="px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-xl transition-all shadow-sm tracking-wider">Scrub Log Entry</button>
+              <button type="button" onClick={() => setItemToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">
+                Cancel
+              </button>
+              <button type="button" onClick={handleExecuteDelete} className="px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-xl transition-all shadow-sm tracking-wider">
+                Scrub Log Entry
+              </button>
             </div>
           </div>
         </div>
@@ -539,10 +636,16 @@ export default function NewsfeedView({ session }) {
           <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-5 sm:p-6 text-center animate-scale-up">
             <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg">⚠️</div>
             <h3 className="font-black text-slate-900 text-sm tracking-tight mb-1">Confirm Comment Deletion</h3>
-            <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">Are you absolutely sure you want to permanently delete your comment? This action cannot be undone.</p>
+            <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">
+              Are you absolutely sure you want to permanently delete your comment? This action cannot be undone.
+            </p>
             <div className="flex gap-3 justify-center font-mono text-[10px] font-bold uppercase">
-              <button type="button" onClick={() => setCommentToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">Cancel</button>
-              <button type="button" onClick={handleExecuteDeleteComment} className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl transition-all shadow-sm tracking-wider">Delete</button>
+              <button type="button" onClick={() => setCommentToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">
+                Cancel
+              </button>
+              <button type="button" onClick={handleExecuteDeleteComment} className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl transition-all shadow-sm tracking-wider">
+                Delete
+              </button>
             </div>
           </div>
         </div>
