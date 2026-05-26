@@ -1,29 +1,36 @@
 import React, { useState, useEffect } from 'react';
 
+
 export default function NewsfeedView({ session }) {
   const [feedItems, setFeedItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [commentInputs, setCommentInputs] = useState({});
   const [lightboxImg, setLightboxImg] = useState(null);
 
+
   const [editingItemId, setEditingItemId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editBody, setEditBody] = useState('');
 
+
   // Dropdown manager state for the 3-dot buttons
   const [activeDropdownId, setActiveDropdownId] = useState(null);
+
 
   // Custom UI Modals & Error Notification states
   const [itemToDelete, setItemToDelete] = useState(null);
   const [moderationError, setModerationError] = useState('');
+
 
   // ── NEW FEAT: CORE UX STATE MANAGERS ──
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedComments, setExpandedComments] = useState({}); // Tracking structure: { [feedId]: boolean }
 
+
   const currentUserEmail = session?.email || 'anonymous@cit.edu';
   const isStaffClearance = session?.role === 'staff' || currentUserEmail.includes('staff') || currentUserEmail.includes('test');
+
 
   const fetchStreamData = async () => {
     try {
@@ -36,9 +43,11 @@ export default function NewsfeedView({ session }) {
     }
   };
 
+
   useEffect(() => {
     fetchStreamData();
   }, []);
+
 
   // Closes dropdown when clicking anywhere else on the screen
   useEffect(() => {
@@ -46,6 +55,7 @@ export default function NewsfeedView({ session }) {
     window.addEventListener('click', handleOutsideClick);
     return () => window.removeEventListener('click', handleOutsideClick);
   }, []);
+
 
   const handleLikeToggle = async (feedId) => {
     setFeedItems(prev => prev.map(item => {
@@ -59,6 +69,7 @@ export default function NewsfeedView({ session }) {
       return item;
     }));
 
+
     try {
       await fetch('https://taskforcebruno.onrender.com/api/newsfeed/like/', {
         method: 'POST',
@@ -70,12 +81,15 @@ export default function NewsfeedView({ session }) {
     }
   };
 
+
   const handleSendComment = async (e, feedId) => {
     e.preventDefault();
     const text = commentInputs[feedId]?.trim();
     if (!text) return;
 
+
     setCommentInputs(prev => ({ ...prev, [feedId]: '' }));
+
 
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/', {
@@ -89,14 +103,17 @@ export default function NewsfeedView({ session }) {
     }
   };
 
+
   const handleExecuteDelete = async () => {
     if (!itemToDelete) return;
+
 
     try {
       const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/action/?feed_id=${encodeURIComponent(itemToDelete)}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });
+
 
       if (res.ok) {
         setItemToDelete(null);
@@ -110,6 +127,7 @@ export default function NewsfeedView({ session }) {
     }
   };
 
+
   const handleSaveEditChanges = async (feedId) => {
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/action/', {
@@ -121,6 +139,7 @@ export default function NewsfeedView({ session }) {
           body: editBody.trim(),
         }),
       });
+
 
       if (res.ok) {
         setEditingItemId(null);
@@ -134,12 +153,14 @@ export default function NewsfeedView({ session }) {
     }
   };
 
+
   const startEditingWorkflow = (item) => {
     setModerationError('');
     setEditingItemId(item.feed_id);
     setEditTitle(item.title);
     setEditBody(item.body || '');
   };
+
 
   // Toggle comments expand/collapse state drawer
   const toggleCommentsDrawer = (feedId) => {
@@ -149,13 +170,16 @@ export default function NewsfeedView({ session }) {
     }));
   };
 
+
   if (loading) {
     return <div className="w-full text-center p-12 font-mono text-[11px] text-slate-400 animate-pulse">COMPILING COMMUNITY INTERACTION MATRICES...</div>;
   }
 
+
   // Ecosystem Counters stay tied to overall backend database values
   const activeSightingsCount = feedItems.filter(i => i.item_type === 'sighting').length;
   const recentRescuesCount = feedItems.filter(i => i.item_type === 'pet').length;
+
 
   // ── NEW FEAT LOGIC: LIVE QUERY FILTERS ──
   const filteredFeedItems = feedItems.filter(item => {
@@ -169,11 +193,13 @@ export default function NewsfeedView({ session }) {
     );
   });
 
+
   // ── NEW FEAT LOGIC: CLIENT SIDE PAGINATION MATRICES ──
   const ITEMS_PER_PAGE = 5;
   const totalPagesCount = Math.ceil(filteredFeedItems.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const paginatedFeedItems = filteredFeedItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
 
   return (
     <div className="w-full max-w-5xl mx-auto px-1 sm:px-4 font-sans antialiased h-full flex flex-col overflow-hidden">
@@ -184,6 +210,7 @@ export default function NewsfeedView({ session }) {
         .no-scrollbar { -ms-overflow-style: none !important; scrollbar-width: none !important; }
       `}</style>
 
+
       {/* Inline Moderation Error Feedback Banner if updates fail */}
       {moderationError && (
         <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-900 font-medium text-center rounded-xl animate-fade-in relative flex items-center justify-between z-50 shrink-0">
@@ -192,18 +219,19 @@ export default function NewsfeedView({ session }) {
         </div>
       )}
 
+
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-hidden h-full">
+
 
         {/* ================= LEFT PANELS: PRIMARY SOCIAL TIMELINE STREAM ================= */}
         <div className="lg:col-span-7 space-y-4 w-full overflow-y-auto pb-24 lg:pb-6 pr-1 no-scrollbar h-full flex flex-col">
-
-          {/* Activity Matrix Status Control Header Row */}
           <div className="flex justify-between items-center bg-white px-4 py-3 rounded-xl border border-slate-200/80 shadow-sm select-none shrink-0">
             <span className="font-mono text-[9px] font-black text-slate-400 uppercase tracking-widest truncate mr-2">
               Live Activity Node &bull; {filteredFeedItems.length} Feeds Match
             </span>
             <button onClick={fetchStreamData} className="px-3 py-1 border text-[9px] font-mono font-bold bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg shadow-sm transition-all shrink-0">REFRESH MATRIX</button>
           </div>
+
 
           {/* ── NEW FEAT UI: REAL-TIME SEARCH TEXT CAPSULE ── */}
           <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2.5 shrink-0">
@@ -225,6 +253,7 @@ export default function NewsfeedView({ session }) {
             )}
           </div>
 
+
           {/* Social Feed Items Grid Stack List Container */}
           <div className="space-y-4 flex-1">
             {paginatedFeedItems.length === 0 ? (
@@ -241,8 +270,10 @@ export default function NewsfeedView({ session }) {
                 const isCurrentlyEditingThisItem = editingItemId === item.feed_id;
                 const isCommentsOpen = !!expandedComments[item.feed_id];
 
+
                 return (
                   <div key={item.feed_id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden text-left w-full animate-fade-in">
+
 
                     {/* Header Configuration Row */}
                     <div className="p-4 flex items-start justify-between border-b border-slate-50 gap-3 relative">
@@ -272,7 +303,7 @@ export default function NewsfeedView({ session }) {
                         </div>
                       </div>
 
-                      {/* 3-Dot Dropdown Panel Replacing Raw Rows */}
+                      {/* 3-Dot Dropdown Panel */}
                       {isStaffClearance && !isCurrentlyEditingThisItem && (
                         <div className="shrink-0 relative" onClick={(e) => e.stopPropagation()}>
                           <button
@@ -285,7 +316,6 @@ export default function NewsfeedView({ session }) {
                             </svg>
                           </button>
 
-                          {/* Dropdown Floating Absolute Drawer */}
                           {activeDropdownId === item.feed_id && (
                             <div className="absolute right-0 mt-1 w-36 bg-white border border-slate-200 rounded-xl shadow-lg py-1 z-30 animate-fade-in">
                               {!isSystemAutomatedFeed && (
@@ -309,6 +339,7 @@ export default function NewsfeedView({ session }) {
                         </div>
                       )}
                     </div>
+
 
                     {/* Content Body */}
                     <div className="px-4 py-3 bg-white">
@@ -341,10 +372,12 @@ export default function NewsfeedView({ session }) {
                         </div>
                       )}
 
+
                       <div className="mt-2.5 text-[9px] sm:text-[10px] text-slate-500 bg-slate-100/80 border border-slate-200/50 rounded-md px-2 py-0.5 w-fit font-mono font-medium max-w-full truncate">
                         Context Metric: <span className="font-sans text-slate-700 font-normal">{item.meta_details}</span>
                       </div>
                     </div>
+
 
                     {/* Secure fixed image stream layer */}
                     {item.image_url && (
@@ -355,6 +388,7 @@ export default function NewsfeedView({ session }) {
                         <img src={item.image_url} alt="Attached Media Asset" className="w-full h-full object-cover select-none" />
                       </div>
                     )}
+
 
                     {/* Stats Row */}
                     <div className="px-4 py-2.5 flex items-center justify-between border-b border-slate-200 text-slate-500 text-[11px] sm:text-[12px] font-normal select-none">
@@ -372,6 +406,7 @@ export default function NewsfeedView({ session }) {
                       </div>
                     </div>
 
+
                     {/* Action Grid Panel */}
                     <div className="grid grid-cols-2 border-b border-slate-100 px-2 py-0.5 bg-white select-none">
                       <button
@@ -383,7 +418,6 @@ export default function NewsfeedView({ session }) {
                         <span>Like</span>
                       </button>
                       
-                      {/* ── MODIFIED ACTION: TOGGLES COMMENTS DRAWER SLIDE ── */}
                       <button 
                         type="button" 
                         onClick={() => toggleCommentsDrawer(item.feed_id)}
@@ -393,6 +427,7 @@ export default function NewsfeedView({ session }) {
                         <span>Comment</span>
                       </button>
                     </div>
+
 
                     {/* ── MODIFIED FEAT UI: COLLAPSIBLE COMMENTS THREAD BLOCK ── */}
                     {isCommentsOpen && (
@@ -410,6 +445,7 @@ export default function NewsfeedView({ session }) {
                             </div>
                           </div>
                         ))}
+
 
                         {/* Form Input Capsule Input Row */}
                         <form onSubmit={(e) => handleSendComment(e, item.feed_id)} className="flex items-center gap-2 pt-1">
@@ -430,11 +466,13 @@ export default function NewsfeedView({ session }) {
                       </div>
                     )}
 
+
                   </div>
                 );
               })
             )}
           </div>
+
 
           {/* ── NEW FEAT UI: RESPONSIVE PAGINATION INTERACTION CONTROLS (1 2 3 >) ── */}
           {totalPagesCount > 1 && (
@@ -463,6 +501,7 @@ export default function NewsfeedView({ session }) {
                 </button>
               ))}
 
+
               <button
                 type="button"
                 disabled={currentPage === totalPagesCount}
@@ -475,8 +514,10 @@ export default function NewsfeedView({ session }) {
           )}
         </div>
 
+
         {/* ================= RIGHT PANELS: static sidebar (Hidden on Mobile) ================= */}
-        <div className="lg:col-span-5 space-y-4 w-full text-left hidden lg:block py-4 overflow-y-auto no-scrollbar h-full">
+        <div className="lg:col-span-5 space-y-4 w-full text-left hidden lg:block py-4 overflow-y-auto no-scrollbar h-full sticky top-0 self-start">
+
 
           {/* Ecosystem Intelligence Console */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
@@ -484,6 +525,7 @@ export default function NewsfeedView({ session }) {
               <h4 className="font-black text-slate-900 text-sm tracking-tight">Ecosystem Intelligence Console</h4>
               <p className="text-[10px] text-slate-400 mt-0.5 font-normal">Real-time macro parameters aggregated from tracking tables.</p>
             </div>
+
 
             <div className="grid grid-cols-2 gap-3 font-mono text-center">
               <div className="bg-amber-50/40 border border-amber-200 p-3 rounded-xl">
@@ -495,6 +537,7 @@ export default function NewsfeedView({ session }) {
                 <span className="text-[8px] uppercase font-bold text-emerald-500 tracking-wider block mt-1">Companions Indexed</span>
               </div>
             </div>
+
 
             <div className="border-t pt-3 space-y-2 text-[11px] text-slate-500 leading-relaxed font-normal">
               <p className="flex items-center gap-2">
@@ -508,6 +551,7 @@ export default function NewsfeedView({ session }) {
             </div>
           </div>
 
+
           {/* Community Code of Conduct Matrix */}
           <div className="bg-gradient-to-br from-[#5C0612]/5 via-white to-white border border-slate-200 rounded-xl p-5 shadow-sm text-[11px] leading-relaxed space-y-3">
             <div>
@@ -516,6 +560,7 @@ export default function NewsfeedView({ session }) {
               </h5>
               <p className="text-[10px] text-slate-400 font-normal block mt-0.5">Mandatory compliance baselines for logged users and peer facilitators.</p>
             </div>
+
 
             <ul className="space-y-2.5 text-slate-600 font-normal list-inside list-none border-t pt-2.5">
               <li className="flex items-start gap-2">
@@ -537,11 +582,12 @@ export default function NewsfeedView({ session }) {
             </ul>
           </div>
 
+
         </div>
 
-      </div>
 
-      {/* ================= INJECTED REACT-STATE CONFIRMATION MODAL OVERLAY ================= */}
+      </div>
+      
       {itemToDelete && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-5 sm:p-6 text-center animate-scale-up">
@@ -568,7 +614,7 @@ export default function NewsfeedView({ session }) {
         </div>
       )}
 
-      {/* FULLSCREEN LIGHTBOX VIEWPORT PORTAL */}
+
       {lightboxImg && (
         <div
           onClick={() => setLightboxImg(null)}
@@ -585,6 +631,7 @@ export default function NewsfeedView({ session }) {
           />
         </div>
       )}
+
 
     </div>
   );

@@ -8,17 +8,20 @@ import SightingTriage from './SightingTriage';
 import PostAnnouncement from './PostAnnouncement';
 import NewsfeedView from './NewsfeedView';
 
+
 export default function StaffDashboard({ session, onLogout }) {
   const [activeMenu, setActiveMenu] = useState('Pet Listings');
   const [pets, setPets] = useState([]);
-  const [loadingPets, setLoadingPets] = useState(false);
+  const [loadingPets, setLoadingPets] = useState([]);
   
   // MOBILE STATE TRIGGER
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
+
   const [inventoryItems, setInventoryItems] = useState([]);
   const [transactionLedger, setTransactionLedger] = useState([]);
   const [loadingInventory, setLoadingInventory] = useState(false);
+
 
   const fetchAllRegisteredPets = async () => {
     setLoadingPets(true);
@@ -31,6 +34,7 @@ export default function StaffDashboard({ session, onLogout }) {
       setLoadingPets(false); 
     }
   };
+
 
   const fetchInventory = async () => {
     setLoadingInventory(true);
@@ -46,18 +50,22 @@ export default function StaffDashboard({ session, onLogout }) {
     }
   };
 
+
   useEffect(() => {
     fetchAllRegisteredPets();
     fetchInventory();
   }, []);
+
 
   useEffect(() => {
     if (activeMenu === 'Pet Listings') fetchAllRegisteredPets();
     if (activeMenu === 'Inventory Control') fetchInventory();
   }, [activeMenu]);
 
+
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-800 font-sans antialiased relative">
+
 
       {/* MOBILE DARK BACKDROP OVERLAY */}
       {isMobileOpen && (
@@ -66,6 +74,7 @@ export default function StaffDashboard({ session, onLogout }) {
           onClick={() => setIsMobileOpen(false)}
         />
       )}
+
 
       {/* Navigation Drawer — NOW MOBILE RESPONSIVE */}
       <aside className={`
@@ -84,7 +93,8 @@ export default function StaffDashboard({ session, onLogout }) {
                 <span className="text-[10px] text-[#D4AF37] font-semibold tracking-wider uppercase block mt-0.5">MDC Staff Portal</span>
               </div>
             </div>
-
+            
+            
             {/* MOBILE CLOSE BUTTON */}
             <button 
               onClick={() => setIsMobileOpen(false)} 
@@ -119,20 +129,18 @@ export default function StaffDashboard({ session, onLogout }) {
         </div>
       </aside>
 
-      {/* Main Container Viewport Workspace */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
 
-        {/* Header — NOW WITH HAMBURGER SUPPORT */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <div className="shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-5 px-6 md:px-8 pt-6 md:pt-8 bg-slate-50">
           <div className="flex items-center gap-3 w-full md:w-auto">
             
-            {/* HAMBURGER TRIGGER BUTTON */}
             <button 
               onClick={() => setIsMobileOpen(true)}
               className="md:hidden p-2 -ml-2 text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 shadow-sm transition-all focus:outline-none"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
             </button>
+
 
             <div>
               <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">{activeMenu}</h1>
@@ -145,13 +153,11 @@ export default function StaffDashboard({ session, onLogout }) {
           </div>
         </div>
 
-        {/* Content Wrapper */}
+
         <div className={`flex-1 ${activeMenu === 'Community Newsfeed' ? 'overflow-hidden px-4 md:px-8 pb-4 pt-6' : 'overflow-y-auto p-4 md:p-8'}`}>
           {activeMenu === 'Community Newsfeed' && <NewsfeedView session={session} />}
           {activeMenu === 'Pending Applications' && <PendingApplications />}
-          {activeMenu === 'Pet Listings' && (
-            <PetListings pets={pets} loadingPets={loadingPets} onRefresh={fetchAllRegisteredPets} />
-          )}
+          {activeMenu === 'Pet Listings' && <PetListings pets={pets} loadingPets={loadingPets} onRefresh={fetchAllRegisteredPets} />}
           {activeMenu === 'Add New Pet' && <AddNewPet onRefresh={fetchAllRegisteredPets} />}
           {activeMenu === 'Medical Logs' && <MedicalLogs pets={pets} />}
           {activeMenu === 'Inventory Control' && (
@@ -165,9 +171,7 @@ export default function StaffDashboard({ session, onLogout }) {
           {activeMenu === 'Sighting Reports' && <SightingTriage session={session} />}
           {activeMenu === 'Broadcast Bulletin' && <PostAnnouncement session={session} />}
         </div>
-
       </main>
-
     </div>
   );
 }
