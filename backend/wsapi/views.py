@@ -548,9 +548,10 @@ class CommentActionAPIView(APIView):
         try:
             d = request.data
             comment_id = d.get("comment_id")
-            comment_text = d.get("comment_text")
+            user_email = (d.get("user_email") or "").strip().lower()
+            comment_text = (d.get("comment_text") or "").strip()
 
-            if not comment_id or not comment_text:
+            if not comment_id or not user_email or not comment_text:
                 return Response(
                     {"error": "Missing parameters payload components."},
                     status=status.HTTP_400_BAD_REQUEST
@@ -571,6 +572,13 @@ class CommentActionAPIView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
+            owner_email = (check.data[0].get("user_email") or "").strip().lower()
+            if owner_email != user_email:
+                return Response(
+                    {"error": "You can only edit your own comment."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
             res = supabase.table("feed_comments").update(
                 {"comment_text": comment_text}
             ).eq(
@@ -589,8 +597,9 @@ class CommentActionAPIView(APIView):
     def delete(self, request):
         try:
             comment_id = request.query_params.get("comment_id") or request.data.get("comment_id")
+            user_email = (request.query_params.get("user_email") or request.data.get("user_email") or "").strip().lower()
 
-            if not comment_id:
+            if not comment_id or not user_email:
                 return Response(
                     {"error": "Missing parameters identifier keys."},
                     status=status.HTTP_400_BAD_REQUEST
@@ -611,6 +620,13 @@ class CommentActionAPIView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
+            owner_email = (check.data[0].get("user_email") or "").strip().lower()
+            if owner_email != user_email:
+                return Response(
+                    {"error": "You can only delete your own comment."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
             supabase.table("feed_comments").delete().eq("comment_id", comment_id).execute()
             return Response(
                 {"message": "Comment database entry cleanly scrubbed."},
@@ -619,7 +635,6 @@ class CommentActionAPIView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 
 # =====================================================================
 # 8. ADMINISTRATIVE SOCIAL TIMELINE MODERATION CORE

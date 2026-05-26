@@ -96,49 +96,50 @@ export default function NewsfeedView({ session }) {
   };
 
   const handleSaveCommentEdit = async (commentId) => {
-  if (!editCommentText.trim()) return;
+    if (!editCommentText.trim()) return;
 
-  try {
-    const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/action/', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        comment_id: commentId,
-        comment_text: editCommentText.trim()
-      })
-    });
+    try {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/action/', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          comment_id: commentId,
+          user_email: currentUserEmail,
+          comment_text: editCommentText.trim()
+        })
+      });
 
-    if (res.ok) {
-      setEditingCommentId(null);
-      fetchStreamData();
-    } else {
-      const data = await res.json();
-      setModerationError(data.error || 'Failed to modify comment record.');
+      if (res.ok) {
+        setEditingCommentId(null);
+        fetchStreamData();
+      } else {
+        const data = await res.json();
+        setModerationError(data.error || 'Failed to modify comment record.');
+      }
+    } catch (err) {
+      setModerationError('Network sync error editing comment.');
     }
-  } catch (err) {
-    setModerationError('Network sync error editing comment.');
-  }
-};
+  };
 
-const handleExecuteDeleteComment = async () => {
-  if (!commentToDelete) return;
+  const handleExecuteDeleteComment = async () => {
+    if (!commentToDelete) return;
 
-  try {
-    const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}`, {
-      method: 'DELETE'
-    });
+    try {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}&user_email=${encodeURIComponent(currentUserEmail)}`, {
+        method: 'DELETE'
+      });
 
-    if (res.ok) {
-      setCommentToDelete(null);
-      fetchStreamData();
-    } else {
-      const data = await res.json();
-      setModerationError(data.error || 'Failed to remove comment row.');
+      if (res.ok) {
+        setCommentToDelete(null);
+        fetchStreamData();
+      } else {
+        const data = await res.json();
+        setModerationError(data.error || 'Failed to remove comment row.');
+      }
+    } catch (err) {
+      setModerationError('Network error during comment deletion.');
     }
-  } catch (err) {
-    setModerationError('Network error during comment deletion.');
-  }
-};
+  };
 
   const handleExecuteDelete = async () => {
     if (!itemToDelete) return;
@@ -237,17 +238,13 @@ const handleExecuteDeleteComment = async () => {
       )}
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0 items-stretch">
-        
         <div className="lg:col-span-7 w-full h-full flex flex-col min-h-0 bg-transparent">
-          
-          {/* Pinned Activity Counter Header */}
           <div className="flex justify-between items-center bg-white px-4 py-3 rounded-xl border border-slate-200/80 shadow-sm select-none shrink-0 mb-3">
             <span className="font-mono text-[9px] font-black text-slate-400 uppercase tracking-wildest truncate mr-2">
               Live Activity Node &bull; {filteredFeedItems.length} Feeds Match
             </span>
           </div>
 
-          {/* Pinned Search Input Box Layer */}
           <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2.5 shrink-0 mb-3">
             <div className="text-slate-400 pl-1.5 select-none text-xs">🔍</div>
             <input
@@ -258,7 +255,7 @@ const handleExecuteDeleteComment = async () => {
               className="w-full bg-transparent text-xs text-slate-800 focus:outline-none placeholder-slate-400 font-medium"
             />
             {searchQuery && (
-              <button 
+              <button
                 onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
                 className="text-slate-400 hover:text-slate-600 text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 rounded-md transition-colors"
               >
@@ -267,7 +264,6 @@ const handleExecuteDeleteComment = async () => {
             )}
           </div>
 
-          {/* Posts Timeline Stream Area */}
           <div className="flex-1 overflow-y-auto space-y-4 pr-1 no-scrollbar min-h-0 pb-4">
             {paginatedFeedItems.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 italic">
@@ -305,8 +301,6 @@ const handleExecuteDeleteComment = async () => {
                             <span className="hover:underline cursor-pointer truncate max-w-[120px] sm:max-w-[180px]">{item.author_tag}</span>
                             <span>&bull;</span>
                             <span className="shrink-0">{HongKongDate}</span>
-                            <span>&bull;</span>
-                            <svg className="w-3 h-3 text-slate-400 shrink-0" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0M2.04 4.326c.325.132.658.258.994.377.58.205 1.193.367 1.835.485.409.075.82.125 1.233.148.327.017.65.03.972.036v1.073c-.287.006-.57.016-.847.031a15.5 15.5 0 0 0-3.37.527c-.276.07-.542.155-.798.254a1 1 0 0 0-.378.317 3.2 3.2 0 0 0-.247.436c-.05.105-.102.215-.155.33A7 7 0 0 1 2.04 4.327M8 15a7 7 0 0 1-5.166-2.284c.053-.105.108-.213.165-.32.161-.3.342-.596.544-.888A3 3 0 0 1 4 10.5a2.5 2.5 0 0 1 2.5-2.5h.793c.143 0 .285.01.426.03.435.063.854.16 1.253.29.218.07.426.154.625.25a3.5 3.5 0 0 1 1.25 1.25c.162.279.28.583.35.9a4.5 4.5 0 0 1 .04.606c0 .114.004.226.012.337A7 7 0 0 1 8 15" /></svg>
                           </div>
                         </div>
                       </div>
@@ -318,9 +312,7 @@ const handleExecuteDeleteComment = async () => {
                             onClick={() => setActiveDropdownId(activeDropdownId === item.feed_id ? null : item.feed_id)}
                             className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors focus:outline-none border border-transparent hover:border-slate-200"
                           >
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 16 16">
-                              <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
-                            </svg>
+                            ⋮
                           </button>
 
                           {activeDropdownId === item.feed_id && (
@@ -329,7 +321,7 @@ const handleExecuteDeleteComment = async () => {
                                 <button
                                   type="button"
                                   onClick={() => { startEditingWorkflow(item); setActiveDropdownId(null); }}
-                                  className="w-full text-left px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50/60 transition-colors flex items-center gap-2"
+                                  className="w-full text-left px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50/60 transition-colors"
                                 >
                                   Edit Post
                                 </button>
@@ -337,7 +329,7 @@ const handleExecuteDeleteComment = async () => {
                               <button
                                 type="button"
                                 onClick={() => { setItemToDelete(item.feed_id); setActiveDropdownId(null); }}
-                                className="w-full text-left px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50/60 transition-colors flex items-center gap-2"
+                                className="w-full text-left px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50/60 transition-colors"
                               >
                                 Delete Post
                               </button>
@@ -382,15 +374,6 @@ const handleExecuteDeleteComment = async () => {
                       </div>
                     </div>
 
-                    {item.image_url && (
-                      <div
-                        onClick={() => setLightboxImg(item.image_url)}
-                        className="w-full h-64 sm:h-96 border-y border-slate-200 bg-slate-100 flex items-center justify-center overflow-hidden cursor-zoom-in hover:brightness-95 transition-all shrink-0"
-                      >
-                        <img src={item.image_url} alt="Attached Media Asset" className="w-full h-full object-cover select-none" />
-                      </div>
-                    )}
-
                     <div className="px-4 py-2.5 flex items-center justify-between border-b border-slate-200 text-slate-500 text-[11px] sm:text-[12px] font-normal select-none">
                       <div className="flex items-center gap-1.5">
                         {item.likes_count > 0 && (
@@ -398,7 +381,7 @@ const handleExecuteDeleteComment = async () => {
                         )}
                         <span className="hover:underline cursor-pointer">{item.likes_count} {item.likes_count === 1 ? 'like' : 'likes'}</span>
                       </div>
-                      <div 
+                      <div
                         onClick={() => toggleCommentsDrawer(item.feed_id)}
                         className="hover:underline cursor-pointer text-slate-500 font-medium"
                       >
@@ -412,17 +395,15 @@ const handleExecuteDeleteComment = async () => {
                         onClick={() => handleLikeToggle(item.feed_id)}
                         className={`flex items-center justify-center gap-2 py-2 rounded-md font-bold text-xs sm:text-[13px] transition-all hover:bg-slate-100/80 ${item.is_liked_by_me ? 'text-[#1877F2]' : 'text-slate-600'}`}
                       >
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M8.864.046C7.908-.193 7.02.53 6.956 1.466c-.072 1.051-.23 2.016-.428 2.59-.125.36-.479 1.013-1.04 1.639-.557.623-1.282 1.178-2.131 1.41C2.685 7.288 2 7.87 2 8.72v4.001c0 .845.682 1.43 1.357 1.616 1.062.293 2.28.463 3.167.463h4.486c1.104 0 1.93-.81 1.93-1.916 0-.256-.051-.505-.147-.733.458-.456.733-1.07.733-1.745 0-.412-.105-.797-.287-1.141.43-.513.687-1.157.687-1.862 0-.693-.244-1.32-.656-1.827.155-.333.242-.703.242-1.093 0-1.066-.826-1.875-1.88-1.875H9.684c.053-.298.09-.64.09-.999 0-1.378-.553-2.55-1.222-2.914l-.074-.038Z" /></svg>
-                        <span>Like</span>
+                        Like
                       </button>
 
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => toggleCommentsDrawer(item.feed_id)}
                         className={`flex items-center justify-center gap-2 py-2 rounded-md font-bold text-xs sm:text-[13px] hover:bg-slate-100/80 transition-all ${isCommentsOpen ? 'text-[#5C0612] bg-stone-50' : 'text-slate-600'}`}
                       >
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .786-.047C6.825 14.113 8.501 14.5 10.5 14.5c4.142 0 7.5-2.91 7.5-6.5S14.642 1.5 10.5 1.5 3 4.41 3 8c0 1.405.522 2.705 1.414 3.737a1 1 0 0 1-.21 1.157l-1.526 1.002Z" /></svg>
-                        <span>Comment</span>
+                        Comment
                       </button>
                     </div>
 
@@ -431,26 +412,26 @@ const handleExecuteDeleteComment = async () => {
                         {item.comments && item.comments.map((comm) => {
                           const isCurrentlyEditingThisComment = editingCommentId === comm.comment_id;
                           const isMyComment = (comm.user_email || '').trim().toLowerCase() === currentUserEmail;
-                          const canManageComment = isMyComment || isStaffClearance;
+                          const canManageComment = isMyComment;
 
                           return (
                             <div key={comm.comment_id} className="flex gap-2 text-left items-start group relative">
                               <div className="w-7 h-7 rounded-full bg-slate-400 text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 border border-black/5 select-none shadow-sm">
-                                {comm.user_email.substring(0, 2)}
+                                {(comm.user_email || 'CU').substring(0, 2)}
                               </div>
-                              
+
                               <div className="flex-1 min-w-0 flex items-center gap-1.5 max-w-[85%] sm:max-w-[88%]">
                                 <div className="bg-[#E4E6EB] rounded-2xl px-3 py-1.5 shadow-sm break-words flex-1 min-w-0">
                                   <p className="font-bold text-slate-900 text-[10px] sm:text-[11px] leading-tight mb-0.5 hover:underline cursor-pointer truncate max-w-full">
                                     {comm.user_email}
                                   </p>
-                                  
+
                                   {!isCurrentlyEditingThisComment ? (
                                     <p className="text-slate-800 text-xs sm:text-[12px] leading-snug font-normal">{comm.comment_text}</p>
                                   ) : (
                                     <div className="mt-1 space-y-1">
-                                      <input 
-                                        type="text" 
+                                      <input
+                                        type="text"
                                         value={editCommentText}
                                         onChange={(e) => setEditCommentText(e.target.value)}
                                         className="w-full bg-white text-xs p-1.5 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-[#5C0612]"
@@ -470,9 +451,7 @@ const handleExecuteDeleteComment = async () => {
                                       onClick={() => setActiveCommentDropdownId(activeCommentDropdownId === comm.comment_id ? null : comm.comment_id)}
                                       className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors focus:outline-none"
                                     >
-                                      <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
-                                        <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
-                                      </svg>
+                                      ⋮
                                     </button>
 
                                     {activeCommentDropdownId === comm.comment_id && (
@@ -522,109 +501,9 @@ const handleExecuteDeleteComment = async () => {
               })
             )}
           </div>
-
-          {/* Persistent Pagination Drawer Base Module */}
-          {totalPagesCount > 1 && (
-            <div className="flex justify-center items-center gap-1.5 pt-3 pb-2 select-none font-mono text-xs shrink-0 w-full border-t border-slate-200 bg-slate-50 mt-auto">
-              <button
-                type="button"
-                disabled={currentPage === 1}
-                onClick={() => { setCurrentPage(prev => Math.max(prev - 1, 1)); }}
-                className="px-2.5 py-1.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white text-slate-700 font-black transition-all shadow-sm"
-              >
-                &lt;
-              </button>
-
-              {Array.from({ length: totalPagesCount }, (_, idx) => idx + 1).map((pageNumber) => (
-                <button
-                  key={pageNumber}
-                  type="button"
-                  onClick={() => { setCurrentPage(pageNumber); }}
-                  className={`px-3 py-1.5 border rounded-xl font-bold transition-all shadow-sm ${
-                    currentPage === pageNumber
-                      ? 'bg-black border-black text-white shadow-inner'
-                      : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
-                  }`}
-                >
-                  {pageNumber}
-                </button>
-              ))}
-
-              <button
-                type="button"
-                disabled={currentPage === totalPagesCount}
-                onClick={() => { setCurrentPage(prev => Math.min(prev + 1, totalPagesCount)); }}
-                className="px-2.5 py-1.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white text-slate-700 font-black transition-all shadow-sm"
-              >
-                &gt;
-              </button>
-            </div>
-          )}
         </div>
-
-        {/* Right Info Sidebar Layout Panel */}
-        <div className="lg:col-span-5 space-y-4 w-full text-left hidden lg:block sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-y-auto no-scrollbar pr-1">
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-            <div>
-              <h4 className="font-black text-slate-900 text-sm tracking-tight">Ecosystem Intelligence Console</h4>
-              <p className="text-[10px] text-slate-400 mt-0.5 font-normal">Real-time macro parameters aggregated from tracking tables.</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 font-mono text-center">
-              <div className="bg-amber-50/40 border border-amber-200 p-3 rounded-xl">
-                <span className="block text-xl font-black text-amber-800 leading-tight">{activeSightingsCount}</span>
-                <span className="text-[8px] uppercase font-bold text-amber-500 tracking-wider block mt-1">Active Sightings</span>
-              </div>
-              <div className="bg-emerald-50/40 border border-emerald-200 p-3 rounded-xl">
-                <span className="block text-xl font-black text-emerald-800 leading-tight">{recentRescuesCount}</span>
-                <span className="text-[8px] uppercase font-bold text-emerald-500 tracking-wider block mt-1">Companions Indexed</span>
-              </div>
-            </div>
-
-            <div className="border-t pt-3 space-y-2 text-[11px] text-slate-500 leading-relaxed font-normal">
-              <p className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0"></span>
-                <span>Active node synchronized with Cebu Institute of Technology – University facility bounds.</span>
-              </p>
-              <p className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full shrink-0"></span>
-                <span>All actions are signed using your institutional email domain balance (`@cit.edu`).</span>
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-[#5C0612]/5 via-white to-white border border-slate-200 rounded-xl p-5 shadow-sm text-[11px] leading-relaxed space-y-3">
-            <div>
-              <h5 className="font-black text-slate-900 text-[12px] tracking-tight flex items-center gap-2">
-                <span>🛡️</span> Community Code of Conduct Matrix
-              </h5>
-              <p className="text-[10px] text-slate-400 font-normal block mt-0.5">Mandatory compliance baselines for logged users and peer facilitators.</p>
-            </div>
-
-            <ul className="space-y-2.5 text-slate-600 font-normal list-inside list-none border-t pt-2.5">
-              <li className="flex items-start gap-2">
-                <span className="text-[#5C0612] font-black mt-0.5">&bull;</span>
-                <div><strong className="text-slate-800 font-semibold block">01. Landmark Context Matrix</strong>Always attach explicit Location Matrix Context landmarks when submitting sightings to aid rapid response teams.</div>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-[#5C0612] font-black mt-0.5">&bull;</span>
-                <div><strong className="text-slate-800 font-semibold block">02. Communication Guardrails</strong>Keep comment response tracks clean, constructive, and  oriented toward companion welfare tracking parameters.</div>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-[#5C0612] font-black mt-0.5">&bull;</span>
-                <div><strong className="text-slate-800 font-semibold block">03. QR Collar Asset Protection</strong>Never remove or exchange physical tracking collars from campus pets; doing so breaks active relational database mappings.</div>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-[#5C0612] font-black mt-0.5">&bull;</span>
-                <div><strong className="text-slate-800 font-semibold block">04. Telemetry Discrepancy Reports</strong>Report corrupted media asset links, invalid profile details, or broken data maps to portal node admins immediately.</div>
-              </li>
-            </ul>
-          </div>
-        </div>
-
       </div>
 
-      {/* Action Confirmation Overlay Modals */}
       {itemToDelete && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-5 sm:p-6 text-center animate-scale-up">
@@ -650,13 +529,6 @@ const handleExecuteDeleteComment = async () => {
               <button type="button" onClick={handleExecuteDeleteComment} className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl transition-all shadow-sm tracking-wider">Delete</button>
             </div>
           </div>
-        </div>
-      )}
-
-      {lightboxImg && (
-        <div onClick={() => setLightboxImg(null)} className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 cursor-zoom-out animate-fade-in">
-          <button type="button" className="absolute top-4 sm:top-6 right-4 sm:right-6 text-white/70 hover:text-white font-mono text-[10px] sm:text-xs bg-white/10 hover:bg-white/20 p-2 px-3 sm:px-4 rounded-xl transition-all">✕ CLOSE</button>
-          <img src={lightboxImg} alt="Expanded Media" className="max-w-full max-h-[85vh] sm:max-h-[92vh] rounded-lg shadow-2xl object-contain animate-scale-up" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>
