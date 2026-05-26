@@ -195,9 +195,9 @@ export default function InventoryControl({
         </div>
       )}
 
-      {/* VIEW PANEL 2: Catalog New Asset Creation Form */}
+      {/* VIEW PANEL 2: Catalog New Asset Creation Form — MODIFIED: Expands card width to full container limits */}
       {inventorySubTab === 'add-item' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 max-w-xl mx-auto shadow-sm animate-fade-in">
+        <div className="w-full bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm animate-fade-in">
           {formMessage.text && (
             <div className={`p-3 border text-xs font-light rounded-xl mb-4 ${formMessage.type === 'success' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-rose-50 text-rose-900 border-rose-200'}`}>
               {formMessage.text}
