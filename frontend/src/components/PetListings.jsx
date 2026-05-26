@@ -128,11 +128,14 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     return sortConfig.direction === 'asc' ? <span className="text-[#5C0612] ml-1">▲</span> : <span className="text-[#5C0612] ml-1">▼</span>;
   };
 
-  const activeUnadoptedPets = pets.filter(p => p.adoption_status !== 'Adopted');
+  // ── SEPARATION INTERFACES: THREE DYNAMIC RECORD TRAILING SECTIONS ──
   const adoptedAlumniPets = pets.filter(p => p.adoption_status === 'Adopted');
+  const strayPetsCollection = pets.filter(p => p.adoption_status !== 'Adopted' && p.pet_id?.startsWith('STRAY-'));
+  const activeUnadoptedPets = pets.filter(p => p.adoption_status !== 'Adopted' && !p.pet_id?.startsWith('STRAY-'));
 
   const sortedActiveCollection = applySortingMatrix(activeUnadoptedPets);
   const sortedAdoptedCollection = applySortingMatrix(adoptedAlumniPets);
+  const sortedStrayCollection = applySortingMatrix(strayPetsCollection);
 
   const generateRenderedTableBlock = (titleBlockLabel, collectionDataStream) => (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden text-xs text-slate-700">
@@ -165,16 +168,17 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                     </td>
                     <td className="p-4 font-semibold text-slate-950 text-sm">{pet.name}</td>
                     
-                    {/* ── CHANGED: Dynamic Status Classification Badge Engine ── */}
                     <td className="p-4 font-mono">
                       <span className={`px-2 py-0.5 rounded font-bold text-[9px] border ${
                         pet.adoption_status === 'Adopted'
                           ? 'bg-slate-100 text-slate-700 border-slate-300 shadow-sm'
+                          : pet.pet_id?.startsWith('STRAY-')
+                          ? 'bg-rose-50 text-rose-800 border-rose-200'
                           : pet.pet_type === 'For Adoption' 
                           ? 'bg-amber-50 text-amber-800 border-amber-200' 
                           : 'bg-purple-50 text-purple-800 border-purple-200'
                       }`}>
-                        {pet.adoption_status === 'Adopted' ? 'Adopted' : (pet.pet_type || 'Campus Pet')}
+                        {pet.adoption_status === 'Adopted' ? 'Adopted' : pet.pet_id?.startsWith('STRAY-') ? 'Stray Dog' : (pet.pet_type || 'Campus Pet')}
                       </span>
                     </td>
                     
@@ -298,6 +302,10 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
       )}
 
       {generateRenderedTableBlock("Active & Available Campus Companions", sortedActiveCollection)}
+      
+      {/* Dynamic render slice cleanly maps stray profiles underneath standard operations tables */}
+      {generateRenderedTableBlock("Stray Animals Available for Adoption", sortedStrayCollection)}
+      
       {generateRenderedTableBlock("Adopted Alumni Companions Registry", sortedAdoptedCollection)}
 
       {petIdToPurge && (

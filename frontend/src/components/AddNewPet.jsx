@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 
 export default function AddNewPet({ onRefresh }) {
+  const [isStrayMode, setIsStrayMode] = useState(false);
   const [newPetForm, setNewPetForm] = useState({
     pet_id: '',
     name: '',
@@ -9,7 +10,7 @@ export default function AddNewPet({ onRefresh }) {
     breed: '',
     gender: 'Male',
     age: '',
-    weight: '', // Traded to track raw input text strings numbers seamlessly
+    weight: '',
     size: 'Small',
     vaccination_status: 'Fully Vaccinated',
     spayed_neutered: true,
@@ -41,15 +42,25 @@ export default function AddNewPet({ onRefresh }) {
 
     const multiPartFormPayload = new FormData();
     
-    // ── MODIFIED: Auto-append matching data constraints prior to dispatching pipeline mutations ──
     const massValueString = newPetForm.weight.toString().trim();
     const formattedWeightPayload = massValueString ? `${massValueString} kg` : 'Unknown';
 
-    multiPartFormPayload.append('pet_id', newPetForm.pet_id.trim().toUpperCase());
+    // Auto-generate high-precision surrogate identification sequence if stray mode is active
+    let finalizedPetId = newPetForm.pet_id.trim().toUpperCase();
+    let finalizedSpecies = newPetForm.species;
+    let finalizedPetType = newPetForm.pet_type;
+
+    if (isStrayMode) {
+      finalizedPetId = `STRAY-${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`;
+      finalizedSpecies = 'Dog';
+      finalizedPetType = 'For Adoption';
+    }
+
+    multiPartFormPayload.append('pet_id', finalizedPetId);
     multiPartFormPayload.append('name', newPetForm.name.trim());
-    multiPartFormPayload.append('species', newPetForm.species);
-    multiPartFormPayload.append('pet_type', newPetForm.pet_type);
-    multiPartFormPayload.append('breed', newPetForm.breed.trim() || 'Mix');
+    multiPartFormPayload.append('species', finalizedSpecies);
+    multiPartFormPayload.append('pet_type', finalizedPetType);
+    multiPartFormPayload.append('breed', isStrayMode ? (newPetForm.breed.trim() || 'Stray Dog Line') : (newPetForm.breed.trim() || 'Mix'));
     multiPartFormPayload.append('gender', newPetForm.gender);
     multiPartFormPayload.append('age', newPetForm.age.trim() || 'Unknown');
     multiPartFormPayload.append('weight', formattedWeightPayload);
@@ -63,9 +74,7 @@ export default function AddNewPet({ onRefresh }) {
     multiPartFormPayload.append('behavior_notes', newPetForm.behavior_notes.trim() || 'Stable baseline parameters.');
     multiPartFormPayload.append('about_text', newPetForm.about_text.trim());
 
-    if (imageFile) {
-      multiPartFormPayload.append('image', imageFile);
-    }
+    if (imageFile) { multiPartFormPayload.append('image', imageFile); }
 
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/pets/', {
@@ -96,9 +105,17 @@ export default function AddNewPet({ onRefresh }) {
   return (
     <div className="w-full max-w-5xl bg-white border border-slate-200 shadow-xl rounded-3xl p-6 mx-auto animate-fade-in text-xs text-slate-700">
       
-      <div className="border-b pb-3 mb-5 text-left">
-        <h3 className="text-sm font-black text-slate-900 tracking-tight">Initialize Resident Animal File</h3>
-        <p className="text-[10px] text-slate-400 mt-0.5">Generate core biometric logs, colony location keys, and primary visual metadata attachments.</p>
+      <div className="border-b pb-3 mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-left">
+        <div>
+          <h3 className="text-sm font-black text-slate-900 tracking-tight">Initialize Resident Animal File</h3>
+          <p className="text-[10px] text-slate-400 mt-0.5">Generate core biometric logs, colony location keys, and primary visual metadata attachments.</p>
+        </div>
+        
+        {/* Toggle controls to handle stray intake logs seamlessly */}
+        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 font-mono text-[10px] font-bold uppercase select-none shrink-0">
+          <button type="button" onClick={() => setIsStrayMode(false)} className={`px-3 py-1.5 rounded-lg transition-all ${!isStrayMode ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>Standard Pet</button>
+          <button type="button" onClick={() => setIsStrayMode(true)} className={`px-3 py-1.5 rounded-lg transition-all ${isStrayMode ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>Add Stray Dog</button>
+        </div>
       </div>
 
       {formMessage.text && (
@@ -110,16 +127,40 @@ export default function AddNewPet({ onRefresh }) {
         <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 space-y-3">
           <span className="block font-mono text-[9px] font-bold text-slate-400 uppercase tracking-wider">01 &bull; Identification Framework tokens</span>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Unique Pet ID *</label><input type="text" name="pet_id" required value={newPetForm.pet_id} onChange={handleCreateChange} placeholder="PET-3011" className="w-full px-3 py-2 border bg-white rounded-xl font-mono focus:outline-none" /></div>
-            <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Pet Name *</label><input type="text" name="name" required value={newPetForm.name} onChange={handleCreateChange} placeholder="Tiger" className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium text-slate-900" /></div>
-            <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Species Subtype *</label><select name="species" value={newPetForm.species} onChange={handleCreateChange} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium"><option value="Cat">Cat</option><option value="Dog">Dog</option></select></div>
-            <div>
-              <label className="block text-[10px] font-bold text-[#5C0612] uppercase mb-1">System Classification *</label>
-              <select name="pet_type" value={newPetForm.pet_type} onChange={handleCreateChange} className="w-full px-3 py-2 border-2 border-[#D4AF37]/40 bg-amber-50/30 text-slate-900 rounded-xl focus:outline-none font-bold">
-                <option value="Campus Pet">Campus Pet (Resident)</option>
-                <option value="For Adoption">For Adoption (Outside Placement)</option>
-              </select>
-            </div>
+            {isStrayMode ? (
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Unique Pet ID</label>
+                <input type="text" disabled value="AUTO-GENERATED STRAY KEY" className="w-full px-3 py-2 border bg-slate-100 rounded-xl font-mono text-slate-400 focus:outline-none select-none select-none font-bold tracking-tight text-[10px]" />
+              </div>
+            ) : (
+              <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Unique Pet ID *</label><input type="text" name="pet_id" required={!isStrayMode} value={newPetForm.pet_id} onChange={handleCreateChange} placeholder="PET-3011" className="w-full px-3 py-2 border bg-white rounded-xl font-mono focus:outline-none" /></div>
+            )}
+            
+            <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Pet Name *</label><input type="text" name="name" required value={newPetForm.name} onChange={handleCreateChange} placeholder={isStrayMode ? "Ex: Buddy" : "Tiger"} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium text-slate-900" /></div>
+            
+            {isStrayMode ? (
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Species Subtype</label>
+                <input type="text" disabled value="Dog (Uncollared Stray)" className="w-full px-3 py-2 border bg-slate-100 rounded-xl font-sans text-slate-700 font-bold focus:outline-none" />
+              </div>
+            ) : (
+              <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Species Subtype *</label><select name="species" value={newPetForm.species} onChange={handleCreateChange} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium"><option value="Cat">Cat</option><option value="Dog">Dog</option></select></div>
+            )}
+
+            {isStrayMode ? (
+              <div>
+                <label className="block text-[10px] font-bold text-[#5C0612] uppercase mb-1">System Classification</label>
+                <input type="text" disabled value="For Adoption" className="w-full px-3 py-2 border-2 border-[#D4AF37]/30 bg-amber-50/20 text-slate-900 rounded-xl font-sans font-bold focus:outline-none" />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-[10px] font-bold text-[#5C0612] uppercase mb-1">System Classification *</label>
+                <select name="pet_type" value={newPetForm.pet_type} onChange={handleCreateChange} className="w-full px-3 py-2 border-2 border-[#D4AF37]/40 bg-amber-50/30 text-slate-900 rounded-xl focus:outline-none font-bold">
+                  <option value="Campus Pet">Campus Pet (Resident)</option>
+                  <option value="For Adoption">For Adoption (Outside Placement)</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
@@ -127,7 +168,7 @@ export default function AddNewPet({ onRefresh }) {
         <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 space-y-3">
           <span className="block font-mono text-[9px] font-bold text-slate-400 uppercase tracking-wider">02 &bull; Somatic Markers & Demographics</span>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Breed Line</label><input type="text" name="breed" value={newPetForm.breed} onChange={handleCreateChange} placeholder="Puspin, Mix" className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none" /></div>
+            <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Breed Line</label><input type="text" name="breed" value={newPetForm.breed} onChange={handleCreateChange} placeholder={isStrayMode ? "Askal / Native Breed" : "Puspin, Mix"} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none" /></div>
             <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Gender</label><select name="gender" value={newPetForm.gender} onChange={handleCreateChange} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium"><option value="Male">Male</option><option value="Female">Female</option></select></div>
             <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Estimated Age</label><input type="text" name="age" value={newPetForm.age} onChange={handleCreateChange} placeholder="Ex: 2 years" className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none" /></div>
             <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Size Bracket</label><select name="size" value={newPetForm.size} onChange={handleCreateChange} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium"><option value="Small">Small</option><option value="Medium">Medium</option><option value="Large">Large</option></select></div>
@@ -138,8 +179,6 @@ export default function AddNewPet({ onRefresh }) {
         <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 space-y-3">
           <span className="block font-mono text-[9px] font-bold text-slate-400 uppercase tracking-wider">03 &bull; Clinical & Pipeline Parameters</span>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            
-            {/* ── MODIFIED: Mass data input numeric constraints with right-aligned units tracker label asset ── */}
             <div>
               <label className="block text-[10px] font-bold text-[#5C0612] uppercase mb-1">Current Weight *</label>
               <div className="relative flex items-center">
