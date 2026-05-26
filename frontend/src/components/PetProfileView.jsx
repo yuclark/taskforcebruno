@@ -57,22 +57,28 @@ export default function PetProfileView({ petId, onBackToScanner }) {
   return (
     <div className="max-w-md w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-[32px] overflow-hidden shadow-[0_30px_70px_-15px_rgba(56,4,10,0.4)] border-4 border-[#5C0612] p-5 text-white flex flex-col justify-between relative h-[680px] animate-fade-in mx-auto">
       
-      {/* Top System Header */}
+      {/* Top System Header — MODIFIED: Checks for Adopted Status mapping */}
       <div className="flex justify-between items-center text-[10px] opacity-40 font-mono tracking-widest border-b border-white/5 pb-2.5 mb-3 shrink-0">
         <span>DECRYPTED_NODE: #{petData.pet_id}</span>
-        <span className="uppercase text-[#D4AF37] font-bold">{petData.pet_type || 'Campus Pet'}</span>
+        <span className="uppercase text-[#D4AF37] font-bold">
+          {petData.adoption_status === 'Adopted' ? 'Adopted' : (petData.pet_type || 'Campus Pet')}
+        </span>
       </div>
 
       {/* COMPREHENSIVE FULL DATA WORKSPACE (Scrollable for mobile support) */}
       <div className="space-y-4 flex-1 overflow-y-auto pr-1 mb-3 text-left">
         
-        {/* Media Frame Container */}
+        {/* Media Frame Container — MODIFIED: Dynamic badge rendering alignment with clean dark mode slate accents */}
         <div className="w-full h-40 bg-slate-900 border border-white/10 rounded-2xl overflow-hidden relative shadow-inner shrink-0">
           <img src={petData.primary_image || 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba'} alt="" className="w-full h-full object-cover" />
           <span className={`absolute bottom-3 left-3 px-2 py-0.5 rounded text-[8px] font-mono font-bold tracking-widest border uppercase ${
-            petData.pet_type === 'For Adoption' ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-[#5C0612] text-[#D4AF37] border-[#D4AF37]/30'
+            petData.adoption_status === 'Adopted'
+              ? 'bg-slate-800 text-slate-200 border-slate-700'
+              : petData.pet_type === 'For Adoption' 
+              ? 'bg-amber-500 text-slate-950 border-amber-400' 
+              : 'bg-[#5C0612] text-[#D4AF37] border-[#D4AF37]/30'
           }`}>
-            {petData.pet_type || 'Campus Pet'}
+            {petData.adoption_status === 'Adopted' ? 'Adopted' : (petData.pet_type || 'Campus Pet')}
           </span>
         </div>
 
@@ -110,7 +116,7 @@ export default function PetProfileView({ petId, onBackToScanner }) {
             <span className="text-rose-400 font-mono block mt-0.5 text-[10px] bg-rose-950/20 px-2 py-1 rounded border border-rose-900/30">{petData.current_conditions || 'None registered.'}</span>
           </div>
           <div className="text-slate-400">
-            Behavioral Evaluation Notes:
+            Behavior Evaluation Notes:
             <p className="text-slate-200 block mt-0.5 font-light leading-relaxed">{petData.behavior_notes || 'Stable behavior baseline configuration.'}</p>
           </div>
         </div>
@@ -136,7 +142,7 @@ export default function PetProfileView({ petId, onBackToScanner }) {
           </button>
         ) : (
           <div className="w-full py-2.5 bg-slate-900/40 border border-white/5 text-slate-500 rounded-xl text-[10px] font-mono tracking-wider uppercase text-center select-none font-semibold">
-            Institutional Protected Animal Asset
+            {petData.adoption_status === 'Adopted' ? 'Alumni Companion Protected Record' : 'Institutional Protected Animal Asset'}
           </div>
         )}
 
@@ -148,7 +154,7 @@ export default function PetProfileView({ petId, onBackToScanner }) {
         </button>
       </div>
 
-      {/* OVERLAY APPLICATION FORM (Unchanged logic loops) */}
+      {/* OVERLAY APPLICATION FORM */}
       {showApplyForm && isEligibleForAdoption && (
         <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md p-5 flex flex-col justify-between z-40 rounded-[28px] animate-fade-in text-left">
           <div className="space-y-3">
@@ -168,15 +174,15 @@ export default function PetProfileView({ petId, onBackToScanner }) {
                   <input type="text" required value={applicationForm.fullName} onChange={(e) => setApplicationForm({...applicationForm, fullName: e.target.value})} placeholder="Vince Clark Lanticse" className="w-full px-3 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-white text-xs focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5 font-mono">Contact Number</label>
+                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5 font-mono">Contact Number</label>
                   <input type="text" required value={applicationForm.contactNum} onChange={(e) => setApplicationForm({...applicationForm, contactNum: e.target.value})} placeholder="09---------" className="w-full px-3 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-white text-xs font-mono focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5 font-mono">Residential Address</label>
+                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5 font-mono">Residential Address</label>
                   <input type="text" required value={applicationForm.address} onChange={(e) => setApplicationForm({...applicationForm, address: e.target.value})} placeholder="Mandaue City, Cebu" className="w-full px-3 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-white text-xs focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5 font-mono">Caretaking Background</label>
+                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5 font-mono">Caretaking Background</label>
                   <select value={applicationForm.experience} onChange={(e) => setApplicationForm({...applicationForm, experience: e.target.value})} className="w-full p-1.5 bg-slate-900 border border-white/10 rounded-lg text-slate-300 text-xs focus:outline-none">
                     <option value="Beginner">First-time Companion Caretaker</option>
                     <option value="Intermediate">Have managed 1-2 pets previously</option>
