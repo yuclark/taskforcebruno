@@ -29,18 +29,15 @@ export default function App() {
       email: (sessionData?.email || '').trim().toLowerCase(),
       role: (sessionData?.role || 'user').trim().toLowerCase()
     };
-    setSession(normalized);
     localStorage.setItem('tfb_session', JSON.stringify(normalized));
+    setSession(normalized);
   };
 
-  const handleLogout = async () => {
-    try {
-      localStorage.removeItem('tfb_session');
-      sessionStorage.clear();
-    } catch {}
+  const handleLogout = () => {
+    localStorage.removeItem('tfb_session');
+    sessionStorage.clear();
     setSession(null);
     setIsLogin(true);
-    window.location.replace('/');
   };
 
   if (!session) {

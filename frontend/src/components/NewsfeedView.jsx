@@ -18,11 +18,6 @@ export default function NewsfeedView({ session }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedComments, setExpandedComments] = useState({});
 
-  const [activeCommentDropdownId, setActiveCommentDropdownId] = useState(null);
-  const [editingCommentId, setEditingCommentId] = useState(null);
-  const [editCommentText, setEditCommentText] = useState('');
-  const [commentToDelete, setCommentToDelete] = useState(null);
-
   const currentUserEmail = (session?.email || '').trim().toLowerCase();
   const currentUserRole = (session?.role || 'user').trim().toLowerCase();
 
@@ -41,10 +36,7 @@ export default function NewsfeedView({ session }) {
 
   const clearTransientUi = () => {
     setActiveDropdownId(null);
-    setActiveCommentDropdownId(null);
-    setEditingCommentId(null);
-    setEditCommentText('');
-    setCommentToDelete(null);
+    setModerationError('');
     setItemToDelete(null);
     setEditingItemId(null);
     setEditTitle('');
@@ -81,7 +73,6 @@ export default function NewsfeedView({ session }) {
   useEffect(() => {
     const handleOutsideClick = () => {
       setActiveDropdownId(null);
-      setActiveCommentDropdownId(null);
     };
     window.addEventListener('click', handleOutsideClick);
     return () => window.removeEventListener('click', handleOutsideClick);
@@ -137,55 +128,6 @@ export default function NewsfeedView({ session }) {
       }
     } catch (err) {
       setModerationError('Network error while adding comment.');
-    }
-  };
-
-  const handleSaveCommentEdit = async (commentId) => {
-    const trimmed = editCommentText.trim();
-    if (!trimmed) return;
-
-    try {
-      const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/action/', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          comment_id: commentId,
-          user_email: currentUserEmail,
-          comment_text: trimmed
-        })
-      });
-
-      const data = await safeJson(res);
-      if (res.ok) {
-        setEditingCommentId(null);
-        setEditCommentText('');
-        setActiveCommentDropdownId(null);
-        await fetchStreamData();
-      } else {
-        setModerationError(data.error || 'You cannot edit this comment.');
-      }
-    } catch (err) {
-      setModerationError('Network error while editing comment.');
-    }
-  };
-
-  const handleExecuteDeleteComment = async () => {
-    if (!commentToDelete) return;
-
-    try {
-      const url = `https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}&user_email=${encodeURIComponent(currentUserEmail)}`;
-      const res = await fetch(url, { method: 'DELETE' });
-      const data = await safeJson(res);
-
-      if (res.ok) {
-        setCommentToDelete(null);
-        setActiveCommentDropdownId(null);
-        await fetchStreamData();
-      } else {
-        setModerationError(data.error || 'You cannot delete this comment.');
-      }
-    } catch (err) {
-      setModerationError('Network error while deleting comment.');
     }
   };
 
@@ -248,7 +190,6 @@ export default function NewsfeedView({ session }) {
       ...prev,
       [feedId]: !prev[feedId]
     }));
-    setActiveCommentDropdownId(null);
   };
 
   if (loading) {
@@ -506,85 +447,22 @@ export default function NewsfeedView({ session }) {
 
                     {isCommentsOpen && (
                       <div className="bg-[#F0F2F5]/60 px-3 sm:px-4 py-3 space-y-2.5 border-t border-slate-100 animate-fade-in">
-                        {item.comments && item.comments.map((comm) => {
-                          const isCurrentlyEditingThisComment = editingCommentId === comm.comment_id;
-                          const isMyComment = (comm.user_email || '').trim().toLowerCase() === currentUserEmail;
+                        {item.comments && item.comments.map((comm) => (
+                          <div key={comm.comment_id} className="flex gap-2 text-left items-start group relative">
+                            <div className="w-7 h-7 rounded-full bg-slate-400 text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 border border-black/5 select-none shadow-sm">
+                              {(comm.user_email || 'CU').substring(0, 2)}
+                            </div>
 
-                          return (
-                            <div key={comm.comment_id} className="flex gap-2 text-left items-start group relative">
-                              <div className="w-7 h-7 rounded-full bg-slate-400 text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 border border-black/5 select-none shadow-sm">
-                                {(comm.user_email || 'CU').substring(0, 2)}
-                              </div>
-
-                              <div className="flex-1 min-w-0 flex items-center gap-1.5 max-w-[85%] sm:max-w-[88%]">
-                                <div className="bg-[#E4E6EB] rounded-2xl px-3 py-1.5 shadow-sm break-words flex-1 min-w-0">
-                                  <p className="font-bold text-slate-900 text-[10px] sm:text-[11px] leading-tight mb-0.5 hover:underline cursor-pointer truncate max-w-full">
-                                    {comm.user_email}
-                                  </p>
-
-                                  {!isCurrentlyEditingThisComment ? (
-                                    <p className="text-slate-800 text-xs sm:text-[12px] leading-snug font-normal">{comm.comment_text}</p>
-                                  ) : (
-                                    <div className="mt-1 space-y-1">
-                                      <input
-                                        type="text"
-                                        value={editCommentText}
-                                        onChange={(e) => setEditCommentText(e.target.value)}
-                                        className="w-full bg-white text-xs p-1.5 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-black"
-                                      />
-                                      <div className="flex gap-2 text-[9px] font-mono font-bold uppercase pt-0.5 pl-0.5">
-                                        <button type="button" onClick={() => setEditingCommentId(null)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                                          Cancel
-                                        </button>
-                                        <button type="button" onClick={() => handleSaveCommentEdit(comm.comment_id)} className="text-black hover:text-neutral-800 transition-colors">
-                                          Save
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {isMyComment && !isCurrentlyEditingThisComment && (
-                                  <div className="shrink-0 relative" onClick={(e) => e.stopPropagation()}>
-                                    <button
-                                      type="button"
-                                      onClick={() => setActiveCommentDropdownId(activeCommentDropdownId === comm.comment_id ? null : comm.comment_id)}
-                                      className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors focus:outline-none"
-                                    >
-                                      ⋮
-                                    </button>
-
-                                    {activeCommentDropdownId === comm.comment_id && (
-                                      <div className="absolute right-0 mt-0.5 w-24 bg-white border border-slate-200 rounded-xl shadow-md py-1 z-30 animate-fade-in">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setEditingCommentId(comm.comment_id);
-                                            setEditCommentText(comm.comment_text);
-                                            setActiveCommentDropdownId(null);
-                                          }}
-                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-amber-700 hover:bg-amber-50/60 transition-colors"
-                                        >
-                                          Edit
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setCommentToDelete(comm.comment_id);
-                                            setActiveCommentDropdownId(null);
-                                          }}
-                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-red-700 hover:bg-red-50/80 transition-colors"
-                                        >
-                                          Delete
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
+                            <div className="flex-1 min-w-0 flex items-center gap-1.5 max-w-[85%] sm:max-w-[88%]">
+                              <div className="bg-[#E4E6EB] rounded-2xl px-3 py-1.5 shadow-sm break-words flex-1 min-w-0">
+                                <p className="font-bold text-slate-900 text-[10px] sm:text-[11px] leading-tight mb-0.5 hover:underline cursor-pointer truncate max-w-full">
+                                  {comm.user_email}
+                                </p>
+                                <p className="text-slate-800 text-xs sm:text-[12px] leading-snug font-normal">{comm.comment_text}</p>
                               </div>
                             </div>
-                          );
-                        })}
+                          </div>
+                        ))}
 
                         <form onSubmit={(e) => handleSendComment(e, item.feed_id)} className="flex items-center gap-2 pt-1">
                           <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 select-none border border-black/5 shadow-inner">
@@ -721,20 +599,6 @@ export default function NewsfeedView({ session }) {
             <div className="flex gap-3 justify-center font-mono text-[10px] font-bold uppercase">
               <button type="button" onClick={() => setItemToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">Cancel</button>
               <button type="button" onClick={handleExecuteDelete} className="px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-xl transition-all shadow-sm tracking-wider">Scrub Log Entry</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {commentToDelete && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-5 sm:p-6 text-center animate-scale-up">
-            <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg">⚠️</div>
-            <h3 className="font-black text-slate-900 text-sm tracking-tight mb-1">Confirm Comment Deletion</h3>
-            <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">Are you absolutely sure you want to permanently delete your comment? This action cannot be undone.</p>
-            <div className="flex gap-3 justify-center font-mono text-[10px] font-bold uppercase">
-              <button type="button" onClick={() => setCommentToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">Cancel</button>
-              <button type="button" onClick={handleExecuteDeleteComment} className="px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-xl transition-all shadow-sm tracking-wider">Delete</button>
             </div>
           </div>
         </div>
