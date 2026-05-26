@@ -259,6 +259,9 @@ export default function NewsfeedView({ session }) {
     );
   }
 
+  const activeSightingsCount = feedItems.filter(i => i.item_type === 'sighting').length;
+  const recentRescuesCount = feedItems.filter(i => i.item_type === 'pet').length;
+
   const filteredFeedItems = feedItems.filter(item => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
@@ -345,7 +348,7 @@ export default function NewsfeedView({ session }) {
                   <div key={item.feed_id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden text-left w-full animate-fade-in">
                     <div className="p-4 flex items-start justify-between border-b border-slate-50 gap-3 relative">
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm select-none shadow-inner border border-black/5 text-white shrink-0 ${isAnnouncement ? 'bg-gradient-to-br from-[#5C0612] to-red-800' : 'bg-slate-500'}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm select-none shadow-inner border border-black/5 text-white shrink-0 ${isAnnouncement ? 'bg-gradient-to-br from-black to-neutral-800' : 'bg-slate-500'}`}>
                           {initials}
                         </div>
 
@@ -360,7 +363,7 @@ export default function NewsfeedView({ session }) {
                                 Modifying Record Payload
                               </span>
                             )}
-                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border shrink-0 ${isAnnouncement ? 'bg-rose-50 text-[#5C0612] border-rose-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'}`}>
+                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border shrink-0 ${isAnnouncement ? 'bg-stone-100 text-neutral-900 border-stone-300' : 'bg-emerald-50 text-emerald-800 border-emerald-200'}`}>
                               {item.badge_text}
                             </span>
                           </div>
@@ -457,6 +460,15 @@ export default function NewsfeedView({ session }) {
                       </div>
                     </div>
 
+                    {item.image_url && (
+                      <div
+                        onClick={() => setLightboxImg(item.image_url)}
+                        className="w-full h-64 sm:h-96 border-y border-slate-200 bg-slate-100 flex items-center justify-center overflow-hidden cursor-zoom-in hover:brightness-95 transition-all shrink-0"
+                      >
+                        <img src={item.image_url} alt="Attached Media Asset" className="w-full h-full object-cover select-none" />
+                      </div>
+                    )}
+
                     <div className="px-4 py-2.5 flex items-center justify-between border-b border-slate-200 text-slate-500 text-[11px] sm:text-[12px] font-normal select-none">
                       <div className="flex items-center gap-1.5">
                         {item.likes_count > 0 && (
@@ -486,7 +498,7 @@ export default function NewsfeedView({ session }) {
                       <button
                         type="button"
                         onClick={() => toggleCommentsDrawer(item.feed_id)}
-                        className={`flex items-center justify-center gap-2 py-2 rounded-md font-bold text-xs sm:text-[13px] hover:bg-slate-100/80 transition-all ${isCommentsOpen ? 'text-[#5C0612] bg-stone-50' : 'text-slate-600'}`}
+                        className={`flex items-center justify-center gap-2 py-2 rounded-md font-bold text-xs sm:text-[13px] hover:bg-slate-100/80 transition-all ${isCommentsOpen ? 'text-black bg-stone-50' : 'text-slate-600'}`}
                       >
                         Comment
                       </button>
@@ -518,13 +530,13 @@ export default function NewsfeedView({ session }) {
                                         type="text"
                                         value={editCommentText}
                                         onChange={(e) => setEditCommentText(e.target.value)}
-                                        className="w-full bg-white text-xs p-1.5 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-[#5C0612]"
+                                        className="w-full bg-white text-xs p-1.5 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-black"
                                       />
                                       <div className="flex gap-2 text-[9px] font-mono font-bold uppercase pt-0.5 pl-0.5">
                                         <button type="button" onClick={() => setEditingCommentId(null)} className="text-slate-400 hover:text-slate-600 transition-colors">
                                           Cancel
                                         </button>
-                                        <button type="button" onClick={() => handleSaveCommentEdit(comm.comment_id)} className="text-[#5C0612] hover:text-[#42040B] transition-colors">
+                                        <button type="button" onClick={() => handleSaveCommentEdit(comm.comment_id)} className="text-black hover:text-neutral-800 transition-colors">
                                           Save
                                         </button>
                                       </div>
@@ -551,7 +563,7 @@ export default function NewsfeedView({ session }) {
                                             setEditCommentText(comm.comment_text);
                                             setActiveCommentDropdownId(null);
                                           }}
-                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-sky-700 hover:bg-sky-50/80 transition-colors"
+                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-amber-700 hover:bg-amber-50/60 transition-colors"
                                         >
                                           Edit
                                         </button>
@@ -575,7 +587,7 @@ export default function NewsfeedView({ session }) {
                         })}
 
                         <form onSubmit={(e) => handleSendComment(e, item.feed_id)} className="flex items-center gap-2 pt-1">
-                          <div className="w-7 h-7 rounded-full bg-[#5C0612] text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 select-none border border-black/5 shadow-inner">
+                          <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 select-none border border-black/5 shadow-inner">
                             {(currentUserEmail || 'CU').substring(0, 2)}
                           </div>
                           <div className="flex-1 relative flex items-center">
@@ -598,24 +610,117 @@ export default function NewsfeedView({ session }) {
               })
             )}
           </div>
+
+          {/* Persistent Pagination Drawer Base Module */}
+          {totalPagesCount > 1 && (
+            <div className="flex justify-center items-center gap-1.5 pt-3 pb-2 select-none font-mono text-xs shrink-0 w-full border-t border-slate-200 bg-slate-50 mt-auto">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => { setCurrentPage(prev => Math.max(prev - 1, 1)); }}
+                className="px-2.5 py-1.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white text-slate-700 font-black transition-all shadow-sm"
+              >
+                &lt;
+              </button>
+
+              {Array.from({ length: totalPagesCount }, (_, idx) => idx + 1).map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  type="button"
+                  onClick={() => { setCurrentPage(pageNumber); }}
+                  className={`px-3 py-1.5 border rounded-xl font-bold transition-all shadow-sm ${
+                    currentPage === pageNumber
+                      ? 'bg-black border-black text-white shadow-inner'
+                      : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
+                  }`}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                disabled={currentPage === totalPagesCount}
+                onClick={() => { setCurrentPage(prev => Math.min(prev + 1, totalPagesCount)); }}
+                className="px-2.5 py-1.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white text-slate-700 font-black transition-all shadow-sm"
+              >
+                &gt;
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Right Info Sidebar Layout Panel */}
+        <div className="lg:col-span-5 space-y-4 w-full text-left hidden lg:block sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-y-auto no-scrollbar pr-1">
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+            <div>
+              <h4 className="font-black text-slate-900 text-sm tracking-tight">Ecosystem Intelligence Console</h4>
+              <p className="text-[10px] text-slate-400 mt-0.5 font-normal">Real-time macro parameters aggregated from tracking tables.</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 font-mono text-center">
+              <div className="bg-amber-50/40 border border-amber-200 p-3 rounded-xl">
+                <span className="block text-xl font-black text-amber-800 leading-tight">{activeSightingsCount}</span>
+                <span className="text-[8px] uppercase font-bold text-amber-500 tracking-wider block mt-1">Active Sightings</span>
+              </div>
+              <div className="bg-emerald-50/40 border border-emerald-200 p-3 rounded-xl">
+                <span className="block text-xl font-black text-emerald-800 leading-tight">{recentRescuesCount}</span>
+                <span className="text-[8px] uppercase font-bold text-emerald-500 tracking-wider block mt-1">Companions Indexed</span>
+              </div>
+            </div>
+
+            <div className="border-t pt-3 space-y-2 text-[11px] text-slate-500 leading-relaxed font-normal">
+              <p className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0"></span>
+                <span>Active node synchronized with Cebu Institute of Technology – University facility bounds.</span>
+              </p>
+              <p className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full shrink-0"></span>
+                <span>All actions are signed using your institutional email domain balance (`@cit.edu`).</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-black/5 via-white to-white border border-slate-200 rounded-xl p-5 shadow-sm text-[11px] leading-relaxed space-y-3">
+            <div>
+              <h5 className="font-black text-slate-900 text-[12px] tracking-tight flex items-center gap-2">
+                🛡️ Community Code of Conduct Matrix
+              </h5>
+              <p className="text-[10px] text-slate-400 font-normal block mt-0.5">Mandatory compliance baselines for logged users and peer facilitators.</p>
+            </div>
+
+            <ul className="space-y-2.5 text-slate-600 font-normal list-inside list-none border-t pt-2.5">
+              <li className="flex items-start gap-2">
+                <span className="text-black font-black mt-0.5">&bull;</span>
+                <div><strong className="text-slate-800 font-semibold block">01. Landmark Context Matrix</strong>Always attach explicit Location Matrix Context landmarks when submitting sightings to aid rapid response teams.</div>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-black font-black mt-0.5">&bull;</span>
+                <div><strong className="text-slate-800 font-semibold block">02. Communication Guardrails</strong>Keep comment response tracks clean, constructive, and oriented toward companion welfare tracking parameters.</div>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-black font-black mt-0.5">&bull;</span>
+                <div><strong className="text-slate-800 font-semibold block">03. QR Collar Asset Protection</strong>Never remove or exchange physical tracking collars from campus pets; doing so breaks active relational database mappings.</div>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-black font-black mt-0.5">&bull;</span>
+                <div><strong className="text-slate-800 font-semibold block">04. Telemetry Discrepancy Reports</strong>Report corrupted media asset links, invalid profile details, or broken data maps to portal node admins immediately.</div>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
 
+      {/* Action Confirmation Overlay Modals */}
       {itemToDelete && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-5 sm:p-6 text-center animate-scale-up">
             <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg">⚠️</div>
             <h3 className="font-black text-slate-900 text-sm tracking-tight mb-1">Confirm Record Purge</h3>
-            <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">
-              Are you absolutely sure you want to permanently scrub this log entry? This operation will instantly wipe all linked community interactions and can't be undone.
-            </p>
+            <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">Are you absolutely sure you want to permanently scrub this log entry? This operation will instantly wipe all linked community interactions and can't be undone.</p>
             <div className="flex gap-3 justify-center font-mono text-[10px] font-bold uppercase">
-              <button type="button" onClick={() => setItemToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">
-                Cancel
-              </button>
-              <button type="button" onClick={handleExecuteDelete} className="px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-xl transition-all shadow-sm tracking-wider">
-                Scrub Log Entry
-              </button>
+              <button type="button" onClick={() => setItemToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">Cancel</button>
+              <button type="button" onClick={handleExecuteDelete} className="px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-xl transition-all shadow-sm tracking-wider">Scrub Log Entry</button>
             </div>
           </div>
         </div>
@@ -626,18 +731,19 @@ export default function NewsfeedView({ session }) {
           <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-5 sm:p-6 text-center animate-scale-up">
             <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg">⚠️</div>
             <h3 className="font-black text-slate-900 text-sm tracking-tight mb-1">Confirm Comment Deletion</h3>
-            <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">
-              Are you absolutely sure you want to permanently delete your comment? This action cannot be undone.
-            </p>
+            <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">Are you absolutely sure you want to permanently delete your comment? This action cannot be undone.</p>
             <div className="flex gap-3 justify-center font-mono text-[10px] font-bold uppercase">
-              <button type="button" onClick={() => setCommentToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">
-                Cancel
-              </button>
-              <button type="button" onClick={handleExecuteDeleteComment} className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl transition-all shadow-sm tracking-wider">
-                Delete
-              </button>
+              <button type="button" onClick={() => setCommentToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">Cancel</button>
+              <button type="button" onClick={handleExecuteDeleteComment} className="px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-xl transition-all shadow-sm tracking-wider">Delete</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {lightboxImg && (
+        <div onClick={() => setLightboxImg(null)} className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 cursor-zoom-out animate-fade-in">
+          <button type="button" className="absolute top-4 sm:top-6 right-4 sm:right-6 text-white/70 hover:text-white font-mono text-[10px] sm:text-xs bg-white/10 hover:bg-white/20 p-2 px-3 sm:px-4 rounded-xl transition-all">✕ CLOSE</button>
+          <img src={lightboxImg} alt="Expanded Media" className="max-w-full max-h-[85vh] sm:max-h-[92vh] rounded-lg shadow-2xl object-contain animate-scale-up" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>
