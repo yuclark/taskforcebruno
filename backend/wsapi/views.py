@@ -572,8 +572,8 @@ class CommentActionAPIView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            owner_email = (check.data[0].get("user_email") or "").strip().lower()
-            if owner_email != user_email:
+            existing_email = (check.data[0].get("user_email") or "").strip().lower()
+            if existing_email != user_email:
                 return Response(
                     {"error": "You can only edit your own comment."},
                     status=status.HTTP_403_FORBIDDEN
@@ -620,8 +620,8 @@ class CommentActionAPIView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            owner_email = (check.data[0].get("user_email") or "").strip().lower()
-            if owner_email != user_email:
+            existing_email = (check.data[0].get("user_email") or "").strip().lower()
+            if existing_email != user_email:
                 return Response(
                     {"error": "You can only delete your own comment."},
                     status=status.HTTP_403_FORBIDDEN
@@ -635,7 +635,6 @@ class CommentActionAPIView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 # =====================================================================
 # 8. ADMINISTRATIVE SOCIAL TIMELINE MODERATION CORE
 # =====================================================================

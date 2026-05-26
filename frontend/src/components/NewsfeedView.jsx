@@ -11,7 +11,6 @@ export default function NewsfeedView({ session }) {
   const [editBody, setEditBody] = useState('');
 
   const [activeDropdownId, setActiveDropdownId] = useState(null);
-
   const [itemToDelete, setItemToDelete] = useState(null);
   const [moderationError, setModerationError] = useState('');
 
@@ -22,7 +21,6 @@ export default function NewsfeedView({ session }) {
   const [activeCommentDropdownId, setActiveCommentDropdownId] = useState(null);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState('');
-
   const [commentToDelete, setCommentToDelete] = useState(null);
 
   const currentUserEmail = (session?.email || 'anonymous@cit.edu').trim().toLowerCase();
@@ -87,8 +85,13 @@ export default function NewsfeedView({ session }) {
       const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feed_id: feedId, user_email: currentUserEmail, comment_text: text })
+        body: JSON.stringify({
+          feed_id: feedId,
+          user_email: currentUserEmail,
+          comment_text: text
+        })
       });
+
       if (res.ok) fetchStreamData();
     } catch (err) {
       console.error('Comment execution error:', err);
@@ -111,6 +114,8 @@ export default function NewsfeedView({ session }) {
 
       if (res.ok) {
         setEditingCommentId(null);
+        setEditCommentText('');
+        setActiveCommentDropdownId(null);
         fetchStreamData();
       } else {
         const data = await res.json();
@@ -125,12 +130,14 @@ export default function NewsfeedView({ session }) {
     if (!commentToDelete) return;
 
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}&user_email=${encodeURIComponent(currentUserEmail)}`, {
-        method: 'DELETE'
-      });
+      const res = await fetch(
+        `https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}&user_email=${encodeURIComponent(currentUserEmail)}`,
+        { method: 'DELETE' }
+      );
 
       if (res.ok) {
         setCommentToDelete(null);
+        setActiveCommentDropdownId(null);
         fetchStreamData();
       } else {
         const data = await res.json();
@@ -146,8 +153,7 @@ export default function NewsfeedView({ session }) {
 
     try {
       const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/action/?feed_id=${encodeURIComponent(itemToDelete)}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'DELETE'
       });
 
       if (res.ok) {
@@ -170,7 +176,7 @@ export default function NewsfeedView({ session }) {
         body: JSON.stringify({
           feed_id: feedId,
           title: editTitle.trim(),
-          body: editBody.trim(),
+          body: editBody.trim()
         }),
       });
 
@@ -201,11 +207,12 @@ export default function NewsfeedView({ session }) {
   };
 
   if (loading) {
-    return <div className="w-full text-center p-12 font-mono text-[11px] text-slate-400 animate-pulse">COMPILING COMMUNITY INTERACTION MATRICES...</div>;
+    return (
+      <div className="w-full text-center p-12 font-mono text-[11px] text-slate-400 animate-pulse">
+        COMPILING COMMUNITY INTERACTION MATRICES...
+      </div>
+    );
   }
-
-  const activeSightingsCount = feedItems.filter(i => i.item_type === 'sighting').length;
-  const recentRescuesCount = feedItems.filter(i => i.item_type === 'pet').length;
 
   const filteredFeedItems = feedItems.filter(item => {
     const query = searchQuery.toLowerCase().trim();
@@ -412,7 +419,6 @@ export default function NewsfeedView({ session }) {
                         {item.comments && item.comments.map((comm) => {
                           const isCurrentlyEditingThisComment = editingCommentId === comm.comment_id;
                           const isMyComment = (comm.user_email || '').trim().toLowerCase() === currentUserEmail;
-                          const canManageComment = isMyComment;
 
                           return (
                             <div key={comm.comment_id} className="flex gap-2 text-left items-start group relative">
@@ -444,7 +450,7 @@ export default function NewsfeedView({ session }) {
                                   )}
                                 </div>
 
-                                {canManageComment && !isCurrentlyEditingThisComment && (
+                                {isMyComment && !isCurrentlyEditingThisComment && (
                                   <div className="shrink-0 relative" onClick={(e) => e.stopPropagation()}>
                                     <button
                                       type="button"
@@ -458,14 +464,21 @@ export default function NewsfeedView({ session }) {
                                       <div className="absolute right-0 mt-0.5 w-24 bg-white border border-slate-200 rounded-xl shadow-md py-1 z-30 animate-fade-in">
                                         <button
                                           type="button"
-                                          onClick={() => { setEditingCommentId(comm.comment_id); setEditCommentText(comm.comment_text); setActiveCommentDropdownId(null); }}
+                                          onClick={() => {
+                                            setEditingCommentId(comm.comment_id);
+                                            setEditCommentText(comm.comment_text);
+                                            setActiveCommentDropdownId(null);
+                                          }}
                                           className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-sky-700 hover:bg-sky-50/80 transition-colors"
                                         >
                                           Edit
                                         </button>
                                         <button
                                           type="button"
-                                          onClick={() => { setCommentToDelete(comm.comment_id); setActiveCommentDropdownId(null); }}
+                                          onClick={() => {
+                                            setCommentToDelete(comm.comment_id);
+                                            setActiveCommentDropdownId(null);
+                                          }}
                                           className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-red-700 hover:bg-red-50/80 transition-colors"
                                         >
                                           Delete
