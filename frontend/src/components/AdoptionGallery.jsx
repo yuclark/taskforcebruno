@@ -37,6 +37,7 @@ export default function AdoptionGallery({ session }) {
     fetch('https://taskforcebruno.onrender.com/api/pets/')
       .then((res) => res.json())
       .then((data) => {
+        // Enforce parsing compliance for both standard profiles and raw uncollared stray assets
         const adoptionPlacements = data.filter(p => 
           (p.pet_type === 'For Adoption' || p.pet_id?.startsWith('STRAY-')) && 
           p.adoption_status === 'Available'
@@ -197,8 +198,17 @@ export default function AdoptionGallery({ session }) {
           <div className="h-[450px] w-full bg-white border border-slate-200 rounded-[32px] overflow-hidden shadow-[0_15px_45px_rgba(0,0,0,0.03)] flex flex-col relative group shrink-0 transition-all duration-300">
             <div className="w-full h-[46%] relative bg-slate-950 overflow-hidden shrink-0 border-b border-slate-100">
               <img src={currentPet.primary_image || 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba'} alt="" className="w-full h-full object-cover select-none pointer-events-none brightness-[0.96]" />
-              <div className="absolute top-4 left-4 flex flex-col gap-1.5 font-mono text-[9px] font-bold">
+              
+              {/* ── MODIFIED: Dynamic System Classification Badge Engine renders Stray labels cleanly inside Swiper ── */}
+              <div className="absolute top-4 left-4 flex gap-1.5 font-mono text-[9px] font-bold select-none">
                 <span className="px-2.5 py-1 bg-slate-950/70 backdrop-blur-md text-white rounded-lg border border-white/10 shadow-sm">#{currentPet.pet_id}</span>
+                <span className={`px-2.5 py-1 backdrop-blur-md rounded-lg border shadow-sm tracking-wide uppercase ${
+                  currentPet.pet_id?.startsWith('STRAY-')
+                    ? 'bg-rose-950/80 text-rose-200 border-rose-800'
+                    : 'bg-amber-950/80 text-amber-200 border-amber-800'
+                }`}>
+                  {currentPet.pet_id?.startsWith('STRAY-') ? `Stray ${currentPet.species}` : (currentPet.pet_type || 'For Adoption')}
+                </span>
               </div>
             </div>
 
