@@ -9,7 +9,7 @@ export default function AddNewPet({ onRefresh }) {
     breed: '',
     gender: 'Male',
     age: '',
-    weight: '',
+    weight: '', // Traded to track raw input text strings numbers seamlessly
     size: 'Small',
     vaccination_status: 'Fully Vaccinated',
     spayed_neutered: true,
@@ -41,6 +41,10 @@ export default function AddNewPet({ onRefresh }) {
 
     const multiPartFormPayload = new FormData();
     
+    // ── MODIFIED: Auto-append matching data constraints prior to dispatching pipeline mutations ──
+    const massValueString = newPetForm.weight.toString().trim();
+    const formattedWeightPayload = massValueString ? `${massValueString} kg` : 'Unknown';
+
     multiPartFormPayload.append('pet_id', newPetForm.pet_id.trim().toUpperCase());
     multiPartFormPayload.append('name', newPetForm.name.trim());
     multiPartFormPayload.append('species', newPetForm.species);
@@ -48,7 +52,7 @@ export default function AddNewPet({ onRefresh }) {
     multiPartFormPayload.append('breed', newPetForm.breed.trim() || 'Mix');
     multiPartFormPayload.append('gender', newPetForm.gender);
     multiPartFormPayload.append('age', newPetForm.age.trim() || 'Unknown');
-    multiPartFormPayload.append('weight', newPetForm.weight.trim() || 'Unknown');
+    multiPartFormPayload.append('weight', formattedWeightPayload);
     multiPartFormPayload.append('size', newPetForm.size);
     multiPartFormPayload.append('vaccination_status', newPetForm.vaccination_status);
     multiPartFormPayload.append('spayed_neutered', newPetForm.spayed_neutered);
@@ -90,7 +94,6 @@ export default function AddNewPet({ onRefresh }) {
   };
 
   return (
-    /* STRETCHED CARD BODY CONTAINER: Max-width upgrades to 5xl to command total layout width parity */
     <div className="w-full max-w-5xl bg-white border border-slate-200 shadow-xl rounded-3xl p-6 mx-auto animate-fade-in text-xs text-slate-700">
       
       <div className="border-b pb-3 mb-5 text-left">
@@ -135,7 +138,16 @@ export default function AddNewPet({ onRefresh }) {
         <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 space-y-3">
           <span className="block font-mono text-[9px] font-bold text-slate-400 uppercase tracking-wider">03 &bull; Clinical & Pipeline Parameters</span>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Current Weight</label><input type="text" name="weight" value={newPetForm.weight} onChange={handleCreateChange} placeholder="Ex: 4.5 kg" className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none" /></div>
+            
+            {/* ── MODIFIED: Mass data input numeric constraints with right-aligned units tracker label asset ── */}
+            <div>
+              <label className="block text-[10px] font-bold text-[#5C0612] uppercase mb-1">Current Weight *</label>
+              <div className="relative flex items-center">
+                <input type="number" step="0.01" name="weight" required value={newPetForm.weight} onChange={handleCreateChange} placeholder="Ex: 4.5" className="w-full px-3 py-2 pr-8 border bg-white rounded-xl font-mono focus:outline-none focus:border-[#5C0612]" />
+                <span className="absolute right-3 text-slate-400 font-mono font-bold text-[10px] select-none">kg</span>
+              </div>
+            </div>
+
             <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Immunization State</label><select name="vaccination_status" value={newPetForm.vaccination_status} onChange={handleCreateChange} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium"><option value="Fully Vaccinated">Fully Vaccinated</option><option value="Partially Vaccinated">Partially Vaccinated</option><option value="Not Vaccinated">Not Vaccinated</option></select></div>
             <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Adoption Pipeline Stage</label><select name="adoption_status" value={newPetForm.adoption_status} onChange={handleCreateChange} className="w-full px-3 py-2 border bg-white rounded-xl focus:outline-none font-medium"><option value="Available">Available</option><option value="Fostered">Fostered</option><option value="Adopted">Adopted</option></select></div>
             <div className="flex items-center h-full pt-4 pl-2">
