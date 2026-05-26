@@ -181,18 +181,15 @@ export default function NewsfeedView({ session }) {
         </div>
       )}
 
-      {/* ── CHANGED: Swapped items-start with items-stretch to enforce clean column bounds ── */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0 items-stretch">
         
-        {/* ── CHANGED: Removed parent scrolling layout classes to pin headers/footers cleanly ── */}
         <div className="lg:col-span-7 w-full h-full flex flex-col min-h-0 bg-transparent">
           
-          {/* Pinned Activity Counter Header */}
+          {/* Pinned Activity Counter Header — ── CHANGED: Removed Refresh Matrix Button ── */}
           <div className="flex justify-between items-center bg-white px-4 py-3 rounded-xl border border-slate-200/80 shadow-sm select-none shrink-0 mb-3">
-            <span className="font-mono text-[9px] font-black text-slate-400 uppercase tracking-wildest truncate mr-2">
+            <span className="font-mono text-[9px] font-black text-slate-400 uppercase tracking-widest truncate mr-2">
               Live Activity Node &bull; {filteredFeedItems.length} Feeds Match
             </span>
-            <button onClick={fetchStreamData} className="px-3 py-1 border text-[9px] font-mono font-bold bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg shadow-sm transition-all shrink-0">REFRESH MATRIX</button>
           </div>
 
           {/* Pinned Search Input Box Layer */}
@@ -215,7 +212,7 @@ export default function NewsfeedView({ session }) {
             )}
           </div>
 
-          {/* ── CHANGED: Added separate scrolling mechanics exclusively to the posts timeline section ── */}
+          {/* Posts Timeline Stream Area */}
           <div className="flex-1 overflow-y-auto space-y-4 pr-1 no-scrollbar min-h-0 pb-4">
             {paginatedFeedItems.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 italic">
@@ -413,7 +410,7 @@ export default function NewsfeedView({ session }) {
             )}
           </div>
 
-          {/* ── CHANGED: Pinned pagination bar layout module layer (Always stays perfectly visible at the base of the view frame) ── */}
+          {/* Persistent Pagination Drawer Base Module */}
           {totalPagesCount > 1 && (
             <div className="flex justify-center items-center gap-1.5 pt-3 pb-2 select-none font-mono text-xs shrink-0 w-full border-t border-slate-200 bg-slate-50 mt-auto">
               <button
@@ -452,7 +449,7 @@ export default function NewsfeedView({ session }) {
           )}
         </div>
 
-        {/* Right Info Sidebar (Unchanged structural values) */}
+        {/* Right Info Sidebar Layout Panel */}
         <div className="lg:col-span-5 space-y-4 w-full text-left hidden lg:block sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-y-auto no-scrollbar pr-1">
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
             <div>
