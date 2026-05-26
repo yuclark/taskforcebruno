@@ -444,7 +444,7 @@ export default function NewsfeedView({ session }) {
           )}
         </div>
 
-        <div className="lg:col-span-5 space-y-4 w-full text-left hidden lg:block py-4 sticky top-0 self-start max-h-[calc(100vh-2rem)] overflow-y-auto no-scrollbar">
+        <div className="lg:col-span-5 space-y-4 w-full text-left hidden lg:block sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-y-auto no-scrollbar pr-1">
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
             <div>
               <h4 className="font-black text-slate-900 text-sm tracking-tight">Ecosystem Intelligence Console</h4>

@@ -110,7 +110,13 @@ export default function DashboardContainer({ session, onLogout }) {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8 bg-gradient-to-br from-slate-50 via-stone-50 to-slate-100 relative min-h-0">
+        <div
+  className={`flex-1 overflow-x-hidden relative min-h-0 bg-gradient-to-br from-slate-50 via-stone-50 to-slate-100 ${
+    currentTab === 'newsfeed'
+      ? 'overflow-hidden p-4 md:p-8'
+      : 'overflow-y-auto p-4 md:p-8'
+  }`}
+>
           <div className="absolute inset-0 z-0 pointer-events-none opacity-40 overflow-hidden">
             <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
               <defs>
