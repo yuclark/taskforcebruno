@@ -181,16 +181,22 @@ export default function NewsfeedView({ session }) {
         </div>
       )}
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0 items-start">
-        <div className="lg:col-span-7 space-y-4 w-full overflow-y-auto pb-24 lg:pb-6 pr-1 no-scrollbar h-full flex flex-col min-h-0">
-          <div className="flex justify-between items-center bg-white px-4 py-3 rounded-xl border border-slate-200/80 shadow-sm select-none shrink-0">
-            <span className="font-mono text-[9px] font-black text-slate-400 uppercase tracking-widest truncate mr-2">
+      {/* ── CHANGED: Swapped items-start with items-stretch to enforce clean column bounds ── */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0 items-stretch">
+        
+        {/* ── CHANGED: Removed parent scrolling layout classes to pin headers/footers cleanly ── */}
+        <div className="lg:col-span-7 w-full h-full flex flex-col min-h-0 bg-transparent">
+          
+          {/* Pinned Activity Counter Header */}
+          <div className="flex justify-between items-center bg-white px-4 py-3 rounded-xl border border-slate-200/80 shadow-sm select-none shrink-0 mb-3">
+            <span className="font-mono text-[9px] font-black text-slate-400 uppercase tracking-wildest truncate mr-2">
               Live Activity Node &bull; {filteredFeedItems.length} Feeds Match
             </span>
             <button onClick={fetchStreamData} className="px-3 py-1 border text-[9px] font-mono font-bold bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg shadow-sm transition-all shrink-0">REFRESH MATRIX</button>
           </div>
 
-          <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2.5 shrink-0">
+          {/* Pinned Search Input Box Layer */}
+          <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2.5 shrink-0 mb-3">
             <div className="text-slate-400 pl-1.5 select-none text-xs">🔍</div>
             <input
               type="text"
@@ -209,7 +215,8 @@ export default function NewsfeedView({ session }) {
             )}
           </div>
 
-          <div className="space-y-4 flex-1 min-h-0">
+          {/* ── CHANGED: Added separate scrolling mechanics exclusively to the posts timeline section ── */}
+          <div className="flex-1 overflow-y-auto space-y-4 pr-1 no-scrollbar min-h-0 pb-4">
             {paginatedFeedItems.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 italic">
                 No active records match your search criteria parameters.
@@ -406,8 +413,9 @@ export default function NewsfeedView({ session }) {
             )}
           </div>
 
+          {/* ── CHANGED: Pinned pagination bar layout module layer (Always stays perfectly visible at the base of the view frame) ── */}
           {totalPagesCount > 1 && (
-            <div className="flex justify-center items-center gap-1.5 pt-4 pb-8 sm:pb-2 select-none font-mono text-xs shrink-0 w-full border-t border-slate-100 mt-2">
+            <div className="flex justify-center items-center gap-1.5 pt-3 pb-2 select-none font-mono text-xs shrink-0 w-full border-t border-slate-200 bg-slate-50 mt-auto">
               <button
                 type="button"
                 disabled={currentPage === 1}
@@ -444,6 +452,7 @@ export default function NewsfeedView({ session }) {
           )}
         </div>
 
+        {/* Right Info Sidebar (Unchanged structural values) */}
         <div className="lg:col-span-5 space-y-4 w-full text-left hidden lg:block sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-y-auto no-scrollbar pr-1">
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
             <div>
@@ -502,8 +511,10 @@ export default function NewsfeedView({ session }) {
             </ul>
           </div>
         </div>
+
       </div>
 
+      {/* Action Confirmation Overlay Modals */}
       {itemToDelete && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-5 sm:p-6 text-center animate-scale-up">
@@ -511,39 +522,17 @@ export default function NewsfeedView({ session }) {
             <h3 className="font-black text-slate-900 text-sm tracking-tight mb-1">Confirm Record Purge</h3>
             <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">Are you absolutely sure you want to permanently scrub this log entry? This operation will instantly wipe all linked community interactions and can't be undone.</p>
             <div className="flex gap-3 justify-center font-mono text-[10px] font-bold uppercase">
-              <button 
-                type="button" 
-                onClick={() => setItemToDelete(null)} 
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider"
-              >
-                Cancel
-              </button>
-              <button 
-                type="button" 
-                onClick={handleExecuteDelete} 
-                className="px-4 py-2 bg-[#5C0612] hover:bg-[#42040B] text-white rounded-xl transition-all shadow-sm tracking-wider"
-              >
-                Scrub Log Entry
-              </button>
+              <button type="button" onClick={() => setItemToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">Cancel</button>
+              <button type="button" onClick={handleExecuteDelete} className="px-4 py-2 bg-[#5C0612] text-white rounded-xl transition-all shadow-sm tracking-wider">Scrub Log Entry</button>
             </div>
           </div>
         </div>
       )}
 
       {lightboxImg && (
-        <div
-          onClick={() => setLightboxImg(null)}
-          className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 cursor-zoom-out animate-fade-in"
-        >
-          <button type="button" className="absolute top-4 sm:top-6 right-4 sm:right-6 text-white/70 hover:text-white font-mono text-[10px] sm:text-xs bg-white/10 hover:bg-white/20 p-2 px-3 sm:px-4 rounded-xl transition-all">
-            ✕ CLOSE
-          </button>
-          <img
-            src={lightboxImg}
-            alt="Expanded Media"
-            className="max-w-full max-h-[85vh] sm:max-h-[92vh] rounded-lg shadow-2xl object-contain animate-scale-up"
-            onClick={(e) => e.stopPropagation()}
-          />
+        <div onClick={() => setLightboxImg(null)} className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 cursor-zoom-out animate-fade-in">
+          <button type="button" className="absolute top-4 sm:top-6 right-4 sm:right-6 text-white/70 hover:text-white font-mono text-[10px] sm:text-xs bg-white/10 hover:bg-white/20 p-2 px-3 sm:px-4 rounded-xl transition-all">✕ CLOSE</button>
+          <img src={lightboxImg} alt="Expanded Media" className="max-w-full max-h-[85vh] sm:max-h-[92vh] rounded-lg shadow-2xl object-contain animate-scale-up" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>
