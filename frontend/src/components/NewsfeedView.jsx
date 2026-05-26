@@ -23,6 +23,8 @@ export default function NewsfeedView({ session }) {
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState('');
 
+  const [commentToDelete, setCommentToDelete] = useState(null);
+
   const currentUserEmail = session?.email || 'anonymous@cit.edu';
   const isStaffClearance = session?.role === 'staff' || currentUserEmail.includes('staff') || currentUserEmail.includes('test');
 
@@ -116,13 +118,14 @@ export default function NewsfeedView({ session }) {
     }
   };
 
-  const handleDeleteComment = async (commentId) => {
-    if (!window.confirm("Are you sure you want to permanently delete your comment?")) return;
+  const handleExecuteDeleteComment = async () => {
+    if (!commentToDelete) return;
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentId)}&user_email=${encodeURIComponent(currentUserEmail)}`, {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}&user_email=${encodeURIComponent(currentUserEmail)}`, {
         method: 'DELETE'
       });
       if (res.ok) {
+        setCommentToDelete(null);
         fetchStreamData();
       } else {
         const data = await res.json();
@@ -316,7 +319,6 @@ export default function NewsfeedView({ session }) {
                             </svg>
                           </button>
 
-                          {/* ── CHANGED: Stripped out all emojis for professional panel alignment ── */}
                           {activeDropdownId === item.feed_id && (
                             <div className="absolute right-0 mt-1 w-36 bg-white border border-slate-200 rounded-xl shadow-lg py-1 z-30 animate-fade-in">
                               {!isSystemAutomatedFeed && (
@@ -456,7 +458,6 @@ export default function NewsfeedView({ session }) {
                                   )}
                                 </div>
 
-                                {/* ── CHANGED: Stripped out emojis to render text-only drop-downs cleanly ── */}
                                 {isMyComment && !isCurrentlyEditingThisComment && (
                                   <div className="shrink-0 relative" onClick={(e) => e.stopPropagation()}>
                                     <button
@@ -480,7 +481,7 @@ export default function NewsfeedView({ session }) {
                                         </button>
                                         <button
                                           type="button"
-                                          onClick={() => { handleDeleteComment(comm.comment_id); setActiveCommentDropdownId(null); }}
+                                          onClick={() => { setCommentToDelete(comm.comment_id); setActiveCommentDropdownId(null); }}
                                           className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-rose-700 hover:bg-rose-50/60 transition-colors"
                                         >
                                           Delete
@@ -506,7 +507,7 @@ export default function NewsfeedView({ session }) {
                               placeholder="Write a comment..."
                               className="w-full bg-[#E4E6EB] border border-transparent rounded-full pl-4 pr-14 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-slate-300 transition-all placeholder-slate-500 shadow-inner"
                             />
-                            <button type="submit" className="absolute right-1 bg-[#5C0612] hover:bg-[#42040B] text-white font-bold text-[9px] uppercase px-2.5 py-1 rounded-full transition-all shadow-sm tracking-wider">Send</button>
+                            <button type="submit" className="absolute right-1 bg-black hover:bg-neutral-800 text-white font-bold text-[9px] uppercase px-2.5 py-1 rounded-full transition-all shadow-sm tracking-wider">Send</button>
                           </div>
                         </form>
                       </div>
@@ -536,7 +537,7 @@ export default function NewsfeedView({ session }) {
                   onClick={() => { setCurrentPage(pageNumber); }}
                   className={`px-3 py-1.5 border rounded-xl font-bold transition-all shadow-sm ${
                     currentPage === pageNumber
-                      ? 'bg-[#5C0612] border-[#5C0612] text-white shadow-inner'
+                      ? 'bg-black border-black text-white shadow-inner'
                       : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
                   }`}
                 >
@@ -602,7 +603,7 @@ export default function NewsfeedView({ session }) {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-[#5C0612] font-black mt-0.5">&bull;</span>
-                <div><strong className="text-slate-800 font-semibold block">02. Communication Guardrails</strong>Keep comment response tracks clean, constructive, and strictly oriented toward companion welfare tracking parameters.</div>
+                <div><strong className="text-slate-800 font-semibold block">02. Communication Guardrails</strong>Keep comment response tracks clean, constructive, and  oriented toward companion welfare tracking parameters.</div>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-[#5C0612] font-black mt-0.5">&bull;</span>
@@ -627,7 +628,21 @@ export default function NewsfeedView({ session }) {
             <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">Are you absolutely sure you want to permanently scrub this log entry? This operation will instantly wipe all linked community interactions and can't be undone.</p>
             <div className="flex gap-3 justify-center font-mono text-[10px] font-bold uppercase">
               <button type="button" onClick={() => setItemToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">Cancel</button>
-              <button type="button" onClick={handleExecuteDelete} className="px-4 py-2 bg-[#5C0612] text-white rounded-xl transition-all shadow-sm tracking-wider">Scrub Log Entry</button>
+              <button type="button" onClick={handleExecuteDelete} className="px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-xl transition-all shadow-sm tracking-wider">Scrub Log Entry</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {commentToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-5 sm:p-6 text-center animate-scale-up">
+            <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg">⚠️</div>
+            <h3 className="font-black text-slate-900 text-sm tracking-tight mb-1">Confirm Comment Deletion</h3>
+            <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">Are you absolutely sure you want to permanently delete your comment? This action cannot be undone.</p>
+            <div className="flex gap-3 justify-center font-mono text-[10px] font-bold uppercase">
+              <button type="button" onClick={() => setCommentToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">Cancel</button>
+              <button type="button" onClick={handleExecuteDeleteComment} className="px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-xl transition-all shadow-sm tracking-wider">Delete</button>
             </div>
           </div>
         </div>
