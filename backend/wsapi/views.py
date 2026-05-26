@@ -107,8 +107,6 @@ class PetListAPIView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-# REPLACE THE PetDetailAPIView CLASS INSIDE backend/wsapi/views.py WITH THIS:
-
 class PetDetailAPIView(APIView):
     def get(self, request, pet_id):
         try:
@@ -133,33 +131,26 @@ class PetDetailAPIView(APIView):
 
     def delete(self, request, pet_id):
         try:
-            # Dynamic Admin Context instantiation handles RLS & Caching loops safely
             admin_supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
-            
             print(f"\n[PURGE ENGINE] Initiating cascade wipe sequence for Profile Asset ID: #{pet_id}")
             
-            # 1. Clear out social timeline dependency rows mapping to this specific pet asset signature
             feed_id_token = f"pet_{pet_id}"
             admin_supabase.table("feed_likes").delete().eq("feed_id", feed_id_token).execute()
             admin_supabase.table("feed_comments").delete().eq("feed_id", feed_id_token).execute()
             
-            # 2. Scrub active clinical/medical records linked to this pet profile
             admin_supabase.table("medical_records").delete().eq("pet_id", pet_id).execute()
             admin_supabase.table("vaccination_logs").delete().eq("pet_id", pet_id).execute()
             
-            # 3. Handle active adoption filings parameters mappings
             admin_supabase.table("adoption_applications").delete().eq("pet_id", pet_id).execute()
-            
-            # 4. Wipe linked binary storage tracking maps
             admin_supabase.table("pet_images").delete().eq("pet_id", pet_id).execute()
             
-            # 5. Scrub the core anchor row safely out of the pets table database matrix
             res = admin_supabase.table("pets").delete().eq("pet_id", pet_id).execute()
             print(f"[PURGE ENGINE] Relational matrix cascade execution trace payload: {res.data}\n")
             
             return Response({"message": "Profile configuration data cleanly scrubbed from active registers."}, status=status.HTTP_200_OK)
         except Exception as e: 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 # =====================================================================
 # 3. CLINICAL HEALTH & MEDICAL TIMELINES
@@ -552,6 +543,51 @@ class AddCommentAPIView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+# ── NEW FEAT CORE VIEW: LOCAL STUDENT COMMENT LIFECYCLE CONTROLLER ──
+class CommentActionAPIView(APIView):
+    def put(self, request):
+        try:
+            d = request.data
+            comment_id = d.get("comment_id")
+            user_email = d.get("user_email")
+            comment_text = d.get("comment_text")
+            
+            if not comment_id or not user_email or not comment_text:
+                return Response({"error": "Missing parameters payload components."}, status=status.HTTP_400_BAD_REQUEST)
+                
+            check = supabase.table("feed_comments").select("*").eq("comment_id", comment_id).execute()
+            if not check.data:
+                return Response({"error": "Comment not found inside active database records."}, status=status.HTTP_404_NOT_FOUND)
+                
+            if check.data[0].get("user_email") != user_email:
+                return Response({"error": "Ownership authorization token mismatch signature rejection."}, status=status.HTTP_403_FORBIDDEN)
+                
+            res = supabase.table("feed_comments").update({"comment_text": comment_text}).eq("comment_id", comment_id).execute()
+            return Response(res.data[0], status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request):
+        try:
+            comment_id = request.query_params.get("comment_id") or request.data.get("comment_id")
+            user_email = request.query_params.get("user_email") or request.data.get("user_email")
+            
+            if not comment_id or not user_email:
+                return Response({"error": "Missing parameters identifier keys."}, status=status.HTTP_400_BAD_REQUEST)
+                
+            check = supabase.table("feed_comments").select("*").eq("comment_id", comment_id).execute()
+            if not check.data:
+                return Response({"error": "Comment not found inside active database records."}, status=status.HTTP_404_NOT_FOUND)
+                
+            if check.data[0].get("user_email") != user_email:
+                return Response({"error": "Ownership authorization token mismatch signature rejection."}, status=status.HTTP_403_FORBIDDEN)
+                
+            supabase.table("feed_comments").delete().eq("comment_id", comment_id).execute()
+            return Response({"message": "Comment database entry cleanly scrubbed."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 # =====================================================================
 # 8. ADMINISTRATIVE SOCIAL TIMELINE MODERATION CORE
 # =====================================================================
@@ -563,9 +599,6 @@ class NewsfeedItemActionAPIView(APIView):
             if not feed_id:
                 return Response({"error": "Missing feed_id."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # FORCE INITIALIZE DEDICATED ADMIN CLIENT ON-DEMAND:
-            # Re-creating the client here guarantees the request utilizes the super-admin 
-            # service_role clearance token, blowing past module-level variable caching locks!
             admin_supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 
             raw_id = feed_id.replace("announcement_", "").replace("sighting_", "").replace("pet_", "")
@@ -575,12 +608,10 @@ class NewsfeedItemActionAPIView(APIView):
                 target_id = raw_id
 
             if feed_id.startswith("announcement_"):
-                # Use admin_supabase to fetch lookahead verification blocks
                 check = admin_supabase.table("campus_announcements").select("*").eq("announcement_id", target_id).execute()
                 if not check.data:
-                    return Response({"error": "Announcement not found inside active database records."}, status=status.HTTP_404_NOT_FOUND)
+                    return Response({"error": "Announcement not found inside active database records."}, status=status.HTTP_44_NOT_FOUND)
                 
-                # Cascade clear linked row items to satisfy relational integrity constraints
                 admin_supabase.table("feed_likes").delete().eq("feed_id", feed_id).execute()
                 admin_supabase.table("feed_comments").delete().eq("feed_id", feed_id).execute()
                 admin_supabase.table("campus_announcements").delete().eq("announcement_id", target_id).execute()
@@ -620,7 +651,6 @@ class NewsfeedItemActionAPIView(APIView):
             if not feed_id.startswith("announcement_"):
                 return Response({"error": "Only announcements can be edited."}, status=status.HTTP_403_FORBIDDEN)
 
-            # FORCE INITIALIZE DEDICATED ADMIN CLIENT ON-DEMAND:
             admin_supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 
             raw_id = feed_id.replace("announcement_", "")

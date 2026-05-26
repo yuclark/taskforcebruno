@@ -19,6 +19,11 @@ export default function NewsfeedView({ session }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedComments, setExpandedComments] = useState({});
 
+  // ── NEW FEAT STATES: COMMENT SYSTEM SELECTION PARAMETERS ──
+  const [activeCommentDropdownId, setActiveCommentDropdownId] = useState(null);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editCommentText, setEditCommentText] = useState('');
+
   const currentUserEmail = session?.email || 'anonymous@cit.edu';
   const isStaffClearance = session?.role === 'staff' || currentUserEmail.includes('staff') || currentUserEmail.includes('test');
 
@@ -37,8 +42,12 @@ export default function NewsfeedView({ session }) {
     fetchStreamData();
   }, []);
 
+  // Closes dropdown menus when clicking anywhere else on the view screen
   useEffect(() => {
-    const handleOutsideClick = () => setActiveDropdownId(null);
+    const handleOutsideClick = () => {
+      setActiveDropdownId(null);
+      setActiveCommentDropdownId(null); // Resets comment operations drawers
+    };
     window.addEventListener('click', handleOutsideClick);
     return () => window.removeEventListener('click', handleOutsideClick);
   }, []);
@@ -82,6 +91,49 @@ export default function NewsfeedView({ session }) {
       if (res.ok) fetchStreamData();
     } catch (err) {
       console.error('Comment execution error:', err);
+    }
+  };
+
+  // ── NEW FEAT METHOD: COMMITS COMMENT MUTATION ENTRIES TO DISK ──
+  const handleSaveCommentEdit = async (commentId) => {
+    if (!editCommentText.trim()) return;
+    try {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/action/', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          comment_id: commentId,
+          user_email: currentUserEmail,
+          comment_text: editCommentText.trim()
+        })
+      });
+      if (res.ok) {
+        setEditingCommentId(null);
+        fetchStreamData();
+      } else {
+        const data = await res.json();
+        setModerationError(data.error || 'Failed to modify comment record.');
+      }
+    } catch (err) {
+      setModerationError('Network sync error editing comment.');
+    }
+  };
+
+  // ── NEW FEAT METHOD: TRANSMITS COMMENT ERASURE COMMAND UPSTREAM ──
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm("Are you sure you want to permanently delete your comment?")) return;
+    try {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentId)}&user_email=${encodeURIComponent(currentUserEmail)}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        fetchStreamData();
+      } else {
+        const data = await res.json();
+        setModerationError(data.error || 'Failed to remove comment row.');
+      }
+    } catch (err) {
+      setModerationError('Network error during comment deletion.');
     }
   };
 
@@ -185,9 +237,9 @@ export default function NewsfeedView({ session }) {
         
         <div className="lg:col-span-7 w-full h-full flex flex-col min-h-0 bg-transparent">
           
-          {/* Pinned Activity Counter Header — ── CHANGED: Removed Refresh Matrix Button ── */}
+          {/* Pinned Activity Counter Header */}
           <div className="flex justify-between items-center bg-white px-4 py-3 rounded-xl border border-slate-200/80 shadow-sm select-none shrink-0 mb-3">
-            <span className="font-mono text-[9px] font-black text-slate-400 uppercase tracking-widest truncate mr-2">
+            <span className="font-mono text-[9px] font-black text-slate-400 uppercase tracking-wildest truncate mr-2">
               Live Activity Node &bull; {filteredFeedItems.length} Feeds Match
             </span>
           </div>
@@ -373,20 +425,81 @@ export default function NewsfeedView({ session }) {
 
                     {isCommentsOpen && (
                       <div className="bg-[#F0F2F5]/60 px-3 sm:px-4 py-3 space-y-2.5 border-t border-slate-100 animate-fade-in">
-                        {item.comments && item.comments.map((comm) => (
-                          <div key={comm.comment_id} className="flex gap-2 text-left items-start">
-                            <div className="w-7 h-7 rounded-full bg-slate-400 text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 border border-black/5 select-none shadow-sm">
-                              {comm.user_email.substring(0, 2)}
-                            </div>
-                            <div className="flex flex-col max-w-[85%] sm:max-w-[88%]">
-                              <div className="bg-[#E4E6EB] rounded-2xl px-3 py-1.5 shadow-sm break-words">
-                                <p className="font-bold text-slate-900 text-[10px] sm:text-[11px] leading-tight mb-0.5 hover:underline cursor-pointer truncate max-w-full">{comm.user_email}</p>
-                                <p className="text-slate-800 text-xs sm:text-[12px] leading-snug font-normal">{comm.comment_text}</p>
+                        {item.comments && item.comments.map((comm) => {
+                          // ── NEW FEAT LOGIC: CONDITIONAL RENDERING VARIABLES FOR INDIVIDUAL COMMENTS ──
+                          const isCurrentlyEditingThisComment = editingCommentId === comm.comment_id;
+                          const isMyComment = comm.user_email === currentUserEmail;
+
+                          return (
+                            <div key={comm.comment_id} className="flex gap-2 text-left items-start group relative">
+                              <div className="w-7 h-7 rounded-full bg-slate-400 text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 border border-black/5 select-none shadow-sm">
+                                {comm.user_email.substring(0, 2)}
+                              </div>
+                              
+                              {/* ── MODIFIED: Layout wrap architecture supports inline comment operations dropdowns ── */}
+                              <div className="flex-1 min-w-0 flex items-center gap-1.5 max-w-[85%] sm:max-w-[88%]">
+                                <div className="bg-[#E4E6EB] rounded-2xl px-3 py-1.5 shadow-sm break-words flex-1 min-w-0">
+                                  <p className="font-bold text-slate-900 text-[10px] sm:text-[11px] leading-tight mb-0.5 hover:underline cursor-pointer truncate max-w-full">
+                                    {comm.user_email}
+                                  </p>
+                                  
+                                  {!isCurrentlyEditingThisComment ? (
+                                    <p className="text-slate-800 text-xs sm:text-[12px] leading-snug font-normal">{comm.comment_text}</p>
+                                  ) : (
+                                    <div className="mt-1 space-y-1">
+                                      <input 
+                                        type="text" 
+                                        value={editCommentText}
+                                        onChange={(e) => setEditCommentText(e.target.value)}
+                                        className="w-full bg-white text-xs p-1.5 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-[#5C0612]"
+                                      />
+                                      <div className="flex gap-2 text-[9px] font-mono font-bold uppercase pt-0.5 pl-0.5">
+                                        <button type="button" onClick={() => setEditingCommentId(null)} className="text-slate-400 hover:text-slate-600 transition-colors">Cancel</button>
+                                        <button type="button" onClick={() => handleSaveCommentEdit(comm.comment_id)} className="text-[#5C0612] hover:text-[#42040B] transition-colors">Save</button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* ── NEW FEAT UI: Localized 3-Dot Dropdown Panel for Individual Comments ── */}
+                                {isMyComment && !isCurrentlyEditingThisComment && (
+                                  <div className="shrink-0 relative" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveCommentDropdownId(activeCommentDropdownId === comm.comment_id ? null : comm.comment_id)}
+                                      className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors focus:outline-none"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
+                                        <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
+                                      </svg>
+                                    </button>
+
+                                    {activeCommentDropdownId === comm.comment_id && (
+                                      <div className="absolute right-0 mt-0.5 w-24 bg-white border border-slate-200 rounded-xl shadow-md py-1 z-30 animate-fade-in">
+                                        <button
+                                          type="button"
+                                          onClick={() => { setEditingCommentId(comm.comment_id); setEditCommentText(comm.comment_text); setActiveCommentDropdownId(null); }}
+                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-amber-700 hover:bg-amber-50/60 transition-colors flex items-center gap-1"
+                                        >
+                                          ✏️ Edit
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => { handleDeleteComment(comm.comment_id); setActiveCommentDropdownId(null); }}
+                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-rose-700 hover:bg-rose-50/60 transition-colors flex items-center gap-1"
+                                        >
+                                          🗑️ Delete
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
 
+                        {/* Form Input Capsule Input Row */}
                         <form onSubmit={(e) => handleSendComment(e, item.feed_id)} className="flex items-center gap-2 pt-1">
                           <div className="w-7 h-7 rounded-full bg-[#5C0612] text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 select-none border border-black/5 shadow-inner">
                             {currentUserEmail.substring(0, 2)}
