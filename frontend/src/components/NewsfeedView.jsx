@@ -96,47 +96,49 @@ export default function NewsfeedView({ session }) {
   };
 
   const handleSaveCommentEdit = async (commentId) => {
-    if (!editCommentText.trim()) return;
-    try {
-      const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/action/', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          comment_id: commentId,
-          user_email: currentUserEmail,
-          user_role: currentUserRole,
-          comment_text: editCommentText.trim()
-        })
-      });
-      if (res.ok) {
-        setEditingCommentId(null);
-        fetchStreamData();
-      } else {
-        const data = await res.json();
-        setModerationError(data.error || 'Failed to modify comment record.');
-      }
-    } catch (err) {
-      setModerationError('Network sync error editing comment.');
-    }
-  };
+  if (!editCommentText.trim()) return;
 
-  const handleExecuteDeleteComment = async () => {
-    if (!commentToDelete) return;
-    try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}&user_email=${encodeURIComponent(currentUserEmail)}&user_role=${encodeURIComponent(currentUserRole)}`, {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        setCommentToDelete(null);
-        fetchStreamData();
-      } else {
-        const data = await res.json();
-        setModerationError(data.error || 'Failed to remove comment row.');
-      }
-    } catch (err) {
-      setModerationError('Network error during comment deletion.');
+  try {
+    const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/action/', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        comment_id: commentId,
+        comment_text: editCommentText.trim()
+      })
+    });
+
+    if (res.ok) {
+      setEditingCommentId(null);
+      fetchStreamData();
+    } else {
+      const data = await res.json();
+      setModerationError(data.error || 'Failed to modify comment record.');
     }
-  };
+  } catch (err) {
+    setModerationError('Network sync error editing comment.');
+  }
+};
+
+const handleExecuteDeleteComment = async () => {
+  if (!commentToDelete) return;
+
+  try {
+    const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}`, {
+      method: 'DELETE'
+    });
+
+    if (res.ok) {
+      setCommentToDelete(null);
+      fetchStreamData();
+    } else {
+      const data = await res.json();
+      setModerationError(data.error || 'Failed to remove comment row.');
+    }
+  } catch (err) {
+    setModerationError('Network error during comment deletion.');
+  }
+};
 
   const handleExecuteDelete = async () => {
     if (!itemToDelete) return;
