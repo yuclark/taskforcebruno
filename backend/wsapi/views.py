@@ -246,7 +246,7 @@ class InventoryTransactionAPIView(APIView):
             new_q = (q + d.get("quantity_changed")) if d.get("transaction_type") == 'IN' else max(0, q - d.get("quantity_changed"))
             supabase.table("inventory").update({"quantity": new_q}).eq("item_id", d.get("item_id")).execute()
             tx = supabase.table("inventory_transactions").insert({"item_id": d.get("item_id"), "transaction_type": d.get("transaction_type"), "quantity_changed": d.get("quantity_changed"), "reason": d.get("reason"), "supplier_donor": d.get("supplier_donor")}).execute()
-            return Response(tx.data[0], status=status.HTTP_201_CREATED)
+            return Response(tx.data[0], status=status.HTTP_21_CREATED)
         except Exception as e: 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -553,7 +553,6 @@ class AddCommentAPIView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-# ── CHANGED: Strict integer typecasting safeguards against schema mismatch errors ──
 class CommentActionAPIView(APIView):
     def put(self, request):
         try:
@@ -580,8 +579,6 @@ class CommentActionAPIView(APIView):
                 return Response({"error": "Ownership authorization token mismatch signature rejection."}, status=status.HTTP_403_FORBIDDEN)
                 
             res = supabase.table("feed_comments").update({"comment_text": comment_text}).eq("comment_id", comment_id).execute()
-            
-            # Safe access lookup array handler checks to guarantee 'list index out of range' can never happen
             finalized_data = res.data[0] if res.data else {"comment_id": comment_id, "comment_text": comment_text}
             return Response(finalized_data, status=status.HTTP_200_OK)
         except Exception as e:
