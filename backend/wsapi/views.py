@@ -546,6 +546,8 @@ class AddCommentAPIView(APIView):
 class CommentActionAPIView(APIView):
     def put(self, request):
         try:
+            print("\n[COMMENT PUT] raw data:", request.data)
+
             d = request.data
             comment_id = d.get("comment_id")
             user_email = (d.get("user_email") or "").strip().lower()
@@ -566,6 +568,8 @@ class CommentActionAPIView(APIView):
                 )
 
             check = supabase.table("feed_comments").select("*").eq("comment_id", comment_id).execute()
+            print("[COMMENT PUT] lookup:", check.data)
+
             if not check.data:
                 return Response(
                     {"error": "Comment not found inside active database records."},
@@ -573,6 +577,8 @@ class CommentActionAPIView(APIView):
                 )
 
             existing_email = (check.data[0].get("user_email") or "").strip().lower()
+            print("[COMMENT PUT] owner check:", {"existing_email": existing_email, "request_email": user_email})
+
             if existing_email != user_email:
                 return Response(
                     {"error": "You can only edit your own comment."},
@@ -585,6 +591,8 @@ class CommentActionAPIView(APIView):
                 "comment_id", comment_id
             ).execute()
 
+            print("[COMMENT PUT] update result:", res.data)
+
             finalized_data = res.data[0] if res.data else {
                 "comment_id": comment_id,
                 "comment_text": comment_text
@@ -592,10 +600,15 @@ class CommentActionAPIView(APIView):
             return Response(finalized_data, status=status.HTTP_200_OK)
 
         except Exception as e:
+            print("[COMMENT PUT] ERROR:", str(e))
+            traceback.print_exc()
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request):
         try:
+            print("\n[COMMENT DELETE] query params:", dict(request.query_params))
+            print("[COMMENT DELETE] body data:", request.data)
+
             comment_id = request.query_params.get("comment_id") or request.data.get("comment_id")
             user_email = (request.query_params.get("user_email") or request.data.get("user_email") or "").strip().lower()
 
@@ -614,6 +627,8 @@ class CommentActionAPIView(APIView):
                 )
 
             check = supabase.table("feed_comments").select("*").eq("comment_id", comment_id).execute()
+            print("[COMMENT DELETE] lookup:", check.data)
+
             if not check.data:
                 return Response(
                     {"error": "Comment not found inside active database records."},
@@ -621,19 +636,25 @@ class CommentActionAPIView(APIView):
                 )
 
             existing_email = (check.data[0].get("user_email") or "").strip().lower()
+            print("[COMMENT DELETE] owner check:", {"existing_email": existing_email, "request_email": user_email})
+
             if existing_email != user_email:
                 return Response(
                     {"error": "You can only delete your own comment."},
                     status=status.HTTP_403_FORBIDDEN
                 )
 
-            supabase.table("feed_comments").delete().eq("comment_id", comment_id).execute()
+            res = supabase.table("feed_comments").delete().eq("comment_id", comment_id).execute()
+            print("[COMMENT DELETE] delete result:", res.data)
+
             return Response(
                 {"message": "Comment database entry cleanly scrubbed."},
                 status=status.HTTP_200_OK
             )
 
         except Exception as e:
+            print("[COMMENT DELETE] ERROR:", str(e))
+            traceback.print_exc()
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 # =====================================================================
 # 8. ADMINISTRATIVE SOCIAL TIMELINE MODERATION CORE

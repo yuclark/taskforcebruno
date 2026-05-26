@@ -21,6 +21,7 @@ export default function NewsfeedView({ session }) {
   const [activeCommentDropdownId, setActiveCommentDropdownId] = useState(null);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState('');
+
   const [commentToDelete, setCommentToDelete] = useState(null);
 
   const currentUserEmail = (session?.email || 'anonymous@cit.edu').trim().toLowerCase();
@@ -92,14 +93,21 @@ export default function NewsfeedView({ session }) {
         })
       });
 
-      if (res.ok) fetchStreamData();
+      if (res.ok) {
+        await fetchStreamData();
+      } else {
+        const data = await res.json();
+        setModerationError(data.error || 'Failed to add comment.');
+      }
     } catch (err) {
       console.error('Comment execution error:', err);
+      setModerationError('Network error while adding comment.');
     }
   };
 
   const handleSaveCommentEdit = async (commentId) => {
-    if (!editCommentText.trim()) return;
+    const trimmed = editCommentText.trim();
+    if (!trimmed) return;
 
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/action/', {
@@ -108,7 +116,7 @@ export default function NewsfeedView({ session }) {
         body: JSON.stringify({
           comment_id: commentId,
           user_email: currentUserEmail,
-          comment_text: editCommentText.trim()
+          comment_text: trimmed
         })
       });
 
@@ -116,7 +124,7 @@ export default function NewsfeedView({ session }) {
         setEditingCommentId(null);
         setEditCommentText('');
         setActiveCommentDropdownId(null);
-        fetchStreamData();
+        await fetchStreamData();
       } else {
         const data = await res.json();
         setModerationError(data.error || 'Failed to modify comment record.');
@@ -130,15 +138,13 @@ export default function NewsfeedView({ session }) {
     if (!commentToDelete) return;
 
     try {
-      const res = await fetch(
-        `https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}&user_email=${encodeURIComponent(currentUserEmail)}`,
-        { method: 'DELETE' }
-      );
+      const url = `https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}&user_email=${encodeURIComponent(currentUserEmail)}`;
+      const res = await fetch(url, { method: 'DELETE' });
 
       if (res.ok) {
         setCommentToDelete(null);
         setActiveCommentDropdownId(null);
-        fetchStreamData();
+        await fetchStreamData();
       } else {
         const data = await res.json();
         setModerationError(data.error || 'Failed to remove comment row.');
@@ -158,7 +164,7 @@ export default function NewsfeedView({ session }) {
 
       if (res.ok) {
         setItemToDelete(null);
-        fetchStreamData();
+        await fetchStreamData();
       } else {
         const data = await res.json();
         setModerationError(data.error || 'Delete failed.');
@@ -176,13 +182,13 @@ export default function NewsfeedView({ session }) {
         body: JSON.stringify({
           feed_id: feedId,
           title: editTitle.trim(),
-          body: editBody.trim()
+          body: editBody.trim(),
         }),
       });
 
       if (res.ok) {
         setEditingItemId(null);
-        fetchStreamData();
+        await fetchStreamData();
       } else {
         const data = await res.json();
         setModerationError(data.error || 'Edit failed.');
@@ -204,14 +210,11 @@ export default function NewsfeedView({ session }) {
       ...prev,
       [feedId]: !prev[feedId]
     }));
+    setActiveCommentDropdownId(null);
   };
 
   if (loading) {
-    return (
-      <div className="w-full text-center p-12 font-mono text-[11px] text-slate-400 animate-pulse">
-        COMPILING COMMUNITY INTERACTION MATRICES...
-      </div>
-    );
+    return <div className="w-full text-center p-12 font-mono text-[11px] text-slate-400 animate-pulse">COMPILING COMMUNITY INTERACTION MATRICES...</div>;
   }
 
   const filteredFeedItems = feedItems.filter(item => {
