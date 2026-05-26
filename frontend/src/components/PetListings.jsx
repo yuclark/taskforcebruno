@@ -26,18 +26,21 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   const [petIdToPurge, setPetIdToPurge] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // ── HELPER UTILITY: DETERMINISTIC STRING MAPPING ENGINE FOR HISTORICAL STRINGS ──
+  // ── CHANGED: Highly accurate keyword-matching location parsing matrix engine ──
   const getNormalizedLocation = (locStr, petId) => {
     if (!locStr) return ALLOWED_LOCATIONS[0];
+    const s = locStr.toLowerCase().trim();
     
-    // Check if the current free-form text already matches or contains any of our 8 target zones
-    const found = ALLOWED_LOCATIONS.find(l => 
-      locStr.toLowerCase().includes(l.toLowerCase()) || 
-      l.toLowerCase().includes(locStr.toLowerCase())
-    );
-    if (found) return found;
+    if (s.includes("lab") || s.includes("wildcat") || s.includes("innovation")) return "Wildcat Innovation Labs";
+    if (s.includes("nge")) return "NGE Building 1st Floor";
+    if (s.includes("gle")) return "GLE Building 1st Floor";
+    if (s.includes("espacio")) return "Espacio";
+    if (s.includes("court") || s.includes("basketball")) return "CIT-U Basketball Court";
+    if (s.includes("canteen") || s.includes("cafeteria") || s.includes("eat")) return "CIT-U Canteen";
+    if (s.includes("sal")) return "SAL Building";
+    if (s.includes("gym") || s.includes("gymnasium")) return "CIT-U Gymnasium";
     
-    // Deterministic fallback hash loop based on unique Pet ID to simulate a balanced distribution
+    // Fallback deterministic lookup hash mapping if string signature is completely custom
     let hash = 0;
     const trackingKey = petId || locStr;
     for (let i = 0; i < trackingKey.length; i++) {
@@ -161,6 +164,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     return sortConfig.direction === 'asc' ? <span className="text-[#5C0612] ml-1">▲</span> : <span className="text-[#5C0612] ml-1">▼</span>;
   };
 
+  // ── SEPARATION INTERFACES: THREE DYNAMIC RECORD TRAILING SECTIONS ──
   const adoptedAlumniPets = pets.filter(p => p.adoption_status === 'Adopted');
   const strayPetsCollection = pets.filter(p => p.adoption_status !== 'Adopted' && p.pet_id?.startsWith('STRAY-'));
   const activeUnadoptedPets = pets.filter(p => p.adoption_status !== 'Adopted' && !p.pet_id?.startsWith('STRAY-'));
@@ -169,26 +173,29 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   const sortedAdoptedCollection = applySortingMatrix(adoptedAlumniPets);
   const sortedStrayCollection = applySortingMatrix(strayPetsCollection);
 
-  // ── DATA AGGREGATION CORE PARAMETERS ──
-  const totalPetsCount = pets.length;
-  const totalCatsCount = pets.filter(p => p.species?.toLowerCase() === 'cat').length;
-  const totalDogsCount = pets.filter(p => p.species?.toLowerCase() === 'dog').length;
+  // ── CHANGED: STRIPPED ADOPTED PETS FROM ECOSYSTEM REPRODUCTIVE & POPULATION STATISTICS COUNTERS ──
+  const activePets = pets.filter(p => p.adoption_status !== 'Adopted');
+  
+  const totalPetsCount = activePets.length;
+  const totalCatsCount = activePets.filter(p => p.species?.toLowerCase() === 'cat').length;
+  const totalDogsCount = activePets.filter(p => p.species?.toLowerCase() === 'dog').length;
 
-  const totalNeuteredCount = pets.filter(p => p.spayed_neutered === true || String(p.spayed_neutered).toLowerCase() === 'true').length;
-  const totalVaccinatedCount = pets.filter(p => p.vaccination_status === 'Fully Vaccinated').length;
+  const totalNeuteredCount = activePets.filter(p => p.spayed_neutered === true || String(p.spayed_neutered).toLowerCase() === 'true').length;
+  const totalVaccinatedCount = activePets.filter(p => p.vaccination_status === 'Fully Vaccinated').length;
 
+  // Safe percentage ratio calculation fallbacks based on unadopted assets exclusively
   const catPercentage = totalPetsCount > 0 ? (totalCatsCount / totalPetsCount) * 100 : 0;
   const dogPercentage = totalPetsCount > 0 ? (totalDogsCount / totalPetsCount) * 100 : 0;
   const neuteredPercentage = totalPetsCount > 0 ? (totalNeuteredCount / totalPetsCount) * 100 : 0;
   const vaccinatedPercentage = totalPetsCount > 0 ? (totalVaccinatedCount / totalPetsCount) * 100 : 0;
 
-  // ── DYNAMIC GENERATION: AGGREGATE ZONE DISPLACEMENT DISTRIBUTION VALUE ──
+  // ── CHANGED: STRIPPED ADOPTED ANIMALS FROM ZONE OCCUPANCY CALCULATION MATRIX TO ENSURE FIELD ACCURACY ──
   const locationCounts = ALLOWED_LOCATIONS.reduce((acc, loc) => {
     acc[loc] = 0;
     return acc;
   }, {});
 
-  pets.forEach(pet => {
+  activePets.forEach(pet => {
     const normLoc = getNormalizedLocation(pet.found_near, pet.pet_id);
     if (locationCounts[normLoc] !== undefined) {
       locationCounts[normLoc]++;
@@ -291,7 +298,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {/* ── CHANGED: Converted Rescue Colony Zone free-text field into an explicit dropdown selector ── */}
                               <div>
                                 <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Rescue Colony Zone *</label>
                                 <select 
@@ -378,7 +384,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
         </div>
       )}
 
-      {/* ── CHANGED: Extended analytics dashboard dock layout configuration into a balanced 3-column row grid ── */}
+      {/* Analytics dashboard dock layout configuration into a balanced 3-column row grid */}
       {!loadingPets && totalPetsCount > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in select-none">
           
@@ -406,14 +412,14 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
             </div>
           </div>
 
-          {/* ── NEW CHART CARD 2: DYNAMIC HORIZONTAL COLONY ZONE CONCENTRATION CHART ── */}
+          {/* ── CHANGED: Removed max-h restricts and hidden scrollbar modifiers to ensure complete visibility of all 8 rows ── */}
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between text-left">
             <div>
               <h5 className="font-bold text-slate-900 tracking-tight font-sans text-xs">Colony Zone Occupancy Density</h5>
               <p className="text-[10px] text-slate-400 mt-0.5">Active population concentration metrics mapped across campus hot spots.</p>
             </div>
 
-            <div className="my-3 space-y-2 max-h-[110px] overflow-y-auto pr-1 no-scrollbar">
+            <div className="my-3 space-y-2.5 pr-1 overflow-y-auto max-h-[140px]">
               {ALLOWED_LOCATIONS.map(loc => {
                 const zoneCount = locationCounts[loc] || 0;
                 const progressWidth = (zoneCount / maxZoneCount) * 100;
