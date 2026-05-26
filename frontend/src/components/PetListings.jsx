@@ -137,6 +137,20 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   const sortedAdoptedCollection = applySortingMatrix(adoptedAlumniPets);
   const sortedStrayCollection = applySortingMatrix(strayPetsCollection);
 
+  // ── NEW DATA AGGREGATION: COMPUTE POPULATION STATISTICS FROM LIVE PROPS ──
+  const totalPetsCount = pets.length;
+  const totalCatsCount = pets.filter(p => p.species?.toLowerCase() === 'cat').length;
+  const totalDogsCount = pets.filter(p => p.species?.toLowerCase() === 'dog').length;
+
+  const totalNeuteredCount = pets.filter(p => p.spayed_neutered === true || String(p.spayed_neutered).toLowerCase() === 'true').length;
+  const totalVaccinatedCount = pets.filter(p => p.vaccination_status === 'Fully Vaccinated').length;
+
+  // Safe percentage ratio calculation fallbacks
+  const catPercentage = totalPetsCount > 0 ? (totalCatsCount / totalPetsCount) * 100 : 0;
+  const dogPercentage = totalPetsCount > 0 ? (totalDogsCount / totalPetsCount) * 100 : 0;
+  const neuteredPercentage = totalPetsCount > 0 ? (totalNeuteredCount / totalPetsCount) * 100 : 0;
+  const vaccinatedPercentage = totalPetsCount > 0 ? (totalVaccinatedCount / totalPetsCount) * 100 : 0;
+
   const generateRenderedTableBlock = (titleBlockLabel, collectionDataStream) => (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden text-xs text-slate-700">
       <div className="bg-slate-100/60 px-5 py-3 border-b border-slate-200 text-left">
@@ -178,7 +192,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                           ? 'bg-amber-50 text-amber-800 border-amber-200' 
                           : 'bg-purple-50 text-purple-800 border-purple-200'
                       }`}>
-                        {pet.adoption_status === 'Adopted' ? 'Adopted' : pet.pet_id?.startsWith('STRAY-') ? 'Stray Dog' : (pet.pet_type || 'Campus Pet')}
+                        {pet.adoption_status === 'Adopted' ? 'Adopted' : pet.pet_id?.startsWith('STRAY-') ? 'Stray Animal' : (pet.pet_type || 'Campus Pet')}
                       </span>
                     </td>
                     
@@ -301,12 +315,83 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
         </div>
       )}
 
-      {generateRenderedTableBlock("Active & Available Campus Companions", sortedActiveCollection)}
-      
-      {/* Dynamic render slice cleanly maps stray profiles underneath standard operations tables */}
-      {generateRenderedTableBlock("Stray Animals Available for Adoption", sortedStrayCollection)}
-      
-      {generateRenderedTableBlock("Adopted Alumni Companions Registry", sortedAdoptedCollection)}
+      {/* ── NEW FEAT UI: POPULATION CONTROL STRATEGY CHARTS DOCK ── */}
+      {!loadingPets && totalPetsCount > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in select-none">
+          
+          {/* Chart Card 1: Species Distribution Metric */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between text-left">
+            <div>
+              <h5 className="font-bold text-slate-900 tracking-tight font-sans text-xs">Ecosystem Species Density Breakdown</h5>
+              <p className="text-[10px] text-slate-400 mt-0.5">Ratio distribution across registered campus animals.</p>
+            </div>
+            
+            <div className="my-4 space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-medium font-sans">
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-amber-500 block"></span>Cats ({totalCatsCount})</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-indigo-600 block"></span>Dogs ({totalDogsCount})</span>
+              </div>
+              
+              {/* Stacked Compound Bar Graph Chart Component */}
+              <div className="w-full h-4.5 bg-slate-100 rounded-lg flex overflow-hidden border border-slate-200/40">
+                <div style={{ width: `${catPercentage}%` }} className="h-full bg-amber-500 transition-all duration-500 ease-out shadow-inner" />
+                <div style={{ width: `${dogPercentage}%` }} className="h-full bg-indigo-600 transition-all duration-500 ease-out shadow-inner" />
+              </div>
+            </div>
+
+            <div className="text-[9px] font-mono text-slate-400 border-t pt-2 mt-1">
+              Macro Metric Total Size: <span className="font-sans font-bold text-slate-700">{totalPetsCount} Individuals</span>
+            </div>
+          </div>
+
+          {/* Chart Card 2: Population Control Target Markers Progress */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between text-left">
+            <div>
+              <h5 className="font-bold text-slate-900 tracking-tight font-sans text-xs">Population Control Performance Parameters</h5>
+              <p className="text-[10px] text-slate-400 mt-0.5">Active monitoring metrics for medical/clinical stabilization goals.</p>
+            </div>
+
+            <div className="my-3 space-y-3">
+              {/* Progress Bar Item 1: Sterilized */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
+                  <span>Sterilization Rate (TNR)</span>
+                  <span className="text-purple-700">{totalNeuteredCount}/{totalPetsCount} ({Math.round(neuteredPercentage)}%)</span>
+                </div>
+                <div className="w-full h-2.5 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
+                  <div style={{ width: `${neuteredPercentage}%` }} className="h-full bg-purple-600 transition-all duration-500 ease-out" />
+                </div>
+              </div>
+
+              {/* Progress Bar Item 2: Fully Vaccinated */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
+                  <span>Immunization Clearance Depth</span>
+                  <span className="text-emerald-700">{totalVaccinatedCount}/{totalPetsCount} ({Math.round(vaccinatedPercentage)}%)</span>
+                </div>
+                <div className="w-full h-2.5 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
+                  <div style={{ width: `${vaccinatedPercentage}%` }} className="h-full bg-emerald-500 transition-all duration-500 ease-out" />
+                </div>
+              </div>
+            </div>
+
+            <div className="text-[9px] font-mono text-slate-400 border-t pt-2 mt-1">
+              Target Stability Level: <span className="font-sans font-bold text-purple-700">100% Non-Breeding Goal</span>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {loadingPets ? (
+        <div className="p-12 text-center text-slate-400 font-mono animate-pulse">COMPILING DATA GRIDS...</div>
+      ) : (
+        <>
+          {generateRenderedTableBlock("Active & Available Campus Companions", sortedActiveCollection)}
+          {generateRenderedTableBlock("Stray Animals Available for Adoption", sortedStrayCollection)}
+          {generateRenderedTableBlock("Adopted Alumni Companions Registry", sortedAdoptedCollection)}
+        </>
+      )}
 
       {petIdToPurge && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in font-sans">

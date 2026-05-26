@@ -18,6 +18,11 @@ export default function NewsfeedView({ session }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedComments, setExpandedComments] = useState({});
 
+  const [activeCommentDropdownId, setActiveCommentDropdownId] = useState(null);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editCommentText, setEditCommentText] = useState('');
+  const [commentToDelete, setCommentToDelete] = useState(null);
+
   const currentUserEmail = (session?.email || '').trim().toLowerCase();
   const currentUserRole = (session?.role || 'user').trim().toLowerCase();
 
@@ -200,8 +205,8 @@ export default function NewsfeedView({ session }) {
     );
   }
 
-  const activeSightingsCount = feedItems.filter(i => i.item_type === 'sighting').length;
-  const recentRescuesCount = feedItems.filter(i => i.item_type === 'pet').length;
+  const totalCampusPetsCount = feedItems.filter(i => i.item_type === 'pet').length;
+  const petsAwaitingHomeCount = feedItems.filter(i => i.item_type === 'pet' && (i.badge_text === 'Available' || i.badge_text === 'For Adoption')).length;
 
   const filteredFeedItems = feedItems.filter(item => {
     const query = searchQuery.toLowerCase().trim();
@@ -536,14 +541,15 @@ export default function NewsfeedView({ session }) {
               <p className="text-[10px] text-slate-400 mt-0.5 font-normal">Real-time macro parameters aggregated from tracking tables.</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 font-mono text-center">
-              <div className="bg-amber-50/40 border border-amber-200 p-3 rounded-xl">
-                <span className="block text-xl font-black text-amber-800 leading-tight">{activeSightingsCount}</span>
-                <span className="text-[8px] uppercase font-bold text-amber-500 tracking-wider block mt-1">Active Sightings</span>
+            {/* ── CHANGED: Swapped live activity notes module grid layout with custom dynamic amount of pet trackers ── */}
+            <div className="flex flex-col gap-3 font-sans text-xs">
+              <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-xl flex items-center justify-between">
+                <span className="text-slate-600 font-medium">Active animals roaming the campus:</span>
+                <span className="font-mono font-black text-sm text-slate-900 bg-slate-200/60 px-2.5 py-1 rounded-lg shrink-0 ml-2">{totalCampusPetsCount}</span>
               </div>
-              <div className="bg-emerald-50/40 border border-emerald-200 p-3 rounded-xl">
-                <span className="block text-xl font-black text-emerald-800 leading-tight">{recentRescuesCount}</span>
-                <span className="text-[8px] uppercase font-bold text-emerald-500 tracking-wider block mt-1">Companions Indexed</span>
+              <div className="bg-amber-50/40 border border-amber-200 p-3 rounded-xl flex items-center justify-between">
+                <span className="text-amber-800 font-medium">Companions awaiting for a new home:</span>
+                <span className="font-mono font-black text-sm text-amber-800 bg-amber-100/50 px-2.5 py-1 rounded-lg shrink-0 ml-2">{petsAwaitingHomeCount}</span>
               </div>
             </div>
 
