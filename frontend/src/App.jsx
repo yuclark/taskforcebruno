@@ -6,8 +6,19 @@ import StaffDashboard from './components/StaffDashboard';
 
 export default function App() {
   const [session, setSession] = useState(() => {
-    const savedSession = localStorage.getItem('tfb_session');
-    return savedSession ? JSON.parse(savedSession) : null;
+    const saved = localStorage.getItem('tfb_session');
+    if (!saved) return null;
+    try {
+      const parsed = JSON.parse(saved);
+      return {
+        ...parsed,
+        email: (parsed?.email || '').trim().toLowerCase(),
+        role: (parsed?.role || 'user').trim().toLowerCase()
+      };
+    } catch {
+      localStorage.removeItem('tfb_session');
+      return null;
+    }
   });
 
   const [isLogin, setIsLogin] = useState(true);
@@ -22,10 +33,14 @@ export default function App() {
     localStorage.setItem('tfb_session', JSON.stringify(normalized));
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      localStorage.removeItem('tfb_session');
+      sessionStorage.clear();
+    } catch {}
     setSession(null);
     setIsLogin(true);
-    localStorage.removeItem('tfb_session');
+    window.location.replace('/');
   };
 
   if (!session) {
@@ -40,9 +55,21 @@ export default function App() {
     );
   }
 
-  if ((session.role || '').toLowerCase() === 'staff') {
-    return <StaffDashboard key={session.email} session={session} onLogout={handleLogout} />;
+  if (session.role === 'staff') {
+    return (
+      <StaffDashboard
+        key={`staff-${session.email}`}
+        session={session}
+        onLogout={handleLogout}
+      />
+    );
   }
 
-  return <DashboardContainer key={session.email} session={session} onLogout={handleLogout} />;
+  return (
+    <DashboardContainer
+      key={`user-${session.email}`}
+      session={session}
+      onLogout={handleLogout}
+    />
+  );
 }

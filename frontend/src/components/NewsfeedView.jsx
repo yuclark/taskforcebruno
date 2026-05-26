@@ -25,19 +25,34 @@ export default function NewsfeedView({ session }) {
 
   const currentUserEmail = (session?.email || '').trim().toLowerCase();
   const currentUserRole = (session?.role || 'user').trim().toLowerCase();
+
   const isStaffClearance =
     currentUserRole === 'staff' ||
     currentUserEmail.includes('staff') ||
     currentUserEmail.includes('test');
 
-  const resetCommentUi = () => {
+  const safeJson = async (res) => {
+    try {
+      return await res.json();
+    } catch {
+      return {};
+    }
+  };
+
+  const clearTransientUi = () => {
+    setActiveDropdownId(null);
     setActiveCommentDropdownId(null);
     setEditingCommentId(null);
     setEditCommentText('');
     setCommentToDelete(null);
+    setItemToDelete(null);
+    setEditingItemId(null);
+    setEditTitle('');
+    setEditBody('');
   };
 
   const fetchStreamData = async () => {
+    if (!currentUserEmail) return;
     try {
       const res = await fetch(
         `https://taskforcebruno.onrender.com/api/newsfeed/?email=${encodeURIComponent(currentUserEmail)}`
@@ -57,17 +72,11 @@ export default function NewsfeedView({ session }) {
   };
 
   useEffect(() => {
-    if (!currentUserEmail) return;
     setLoading(true);
-    fetchStreamData();
+    clearTransientUi();
     setExpandedComments({});
-    resetCommentUi();
-    setActiveDropdownId(null);
-    setItemToDelete(null);
-    setEditingItemId(null);
-    setEditTitle('');
-    setEditBody('');
-  }, [currentUserEmail]);
+    fetchStreamData();
+  }, [currentUserEmail, currentUserRole]);
 
   useEffect(() => {
     const handleOutsideClick = () => {
@@ -108,8 +117,6 @@ export default function NewsfeedView({ session }) {
     const text = (commentInputs[feedId] || '').trim();
     if (!text) return;
 
-    setCommentInputs(prev => ({ ...prev, [feedId]: '' }));
-
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/', {
         method: 'POST',
@@ -121,10 +128,11 @@ export default function NewsfeedView({ session }) {
         })
       });
 
+      const data = await safeJson(res);
       if (res.ok) {
+        setCommentInputs(prev => ({ ...prev, [feedId]: '' }));
         await fetchStreamData();
       } else {
-        const data = await res.json();
         setModerationError(data.error || 'Failed to add comment.');
       }
     } catch (err) {
@@ -147,15 +155,17 @@ export default function NewsfeedView({ session }) {
         })
       });
 
+      const data = await safeJson(res);
       if (res.ok) {
-        resetCommentUi();
+        setEditingCommentId(null);
+        setEditCommentText('');
+        setActiveCommentDropdownId(null);
         await fetchStreamData();
       } else {
-        const data = await res.json();
-        setModerationError(data.error || 'Failed to modify comment record.');
+        setModerationError(data.error || 'You cannot edit this comment.');
       }
     } catch (err) {
-      setModerationError('Network sync error editing comment.');
+      setModerationError('Network error while editing comment.');
     }
   };
 
@@ -165,16 +175,17 @@ export default function NewsfeedView({ session }) {
     try {
       const url = `https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}&user_email=${encodeURIComponent(currentUserEmail)}`;
       const res = await fetch(url, { method: 'DELETE' });
+      const data = await safeJson(res);
 
       if (res.ok) {
-        resetCommentUi();
+        setCommentToDelete(null);
+        setActiveCommentDropdownId(null);
         await fetchStreamData();
       } else {
-        const data = await res.json();
-        setModerationError(data.error || 'Failed to remove comment row.');
+        setModerationError(data.error || 'You cannot delete this comment.');
       }
     } catch (err) {
-      setModerationError('Network error during comment deletion.');
+      setModerationError('Network error while deleting comment.');
     }
   };
 
@@ -186,12 +197,12 @@ export default function NewsfeedView({ session }) {
         `https://taskforcebruno.onrender.com/api/newsfeed/action/?feed_id=${encodeURIComponent(itemToDelete)}`,
         { method: 'DELETE' }
       );
+      const data = await safeJson(res);
 
       if (res.ok) {
         setItemToDelete(null);
         await fetchStreamData();
       } else {
-        const data = await res.json();
         setModerationError(data.error || 'Delete failed.');
       }
     } catch (err) {
@@ -207,9 +218,10 @@ export default function NewsfeedView({ session }) {
         body: JSON.stringify({
           feed_id: feedId,
           title: editTitle.trim(),
-          body: editBody.trim()
-        })
+          body: editBody.trim(),
+        }),
       });
+      const data = await safeJson(res);
 
       if (res.ok) {
         setEditingItemId(null);
@@ -217,7 +229,6 @@ export default function NewsfeedView({ session }) {
         setEditBody('');
         await fetchStreamData();
       } else {
-        const data = await res.json();
         setModerationError(data.error || 'Edit failed.');
       }
     } catch (err) {
@@ -228,7 +239,7 @@ export default function NewsfeedView({ session }) {
   const startEditingWorkflow = (item) => {
     setModerationError('');
     setEditingItemId(item.feed_id);
-    setEditTitle(item.title);
+    setEditTitle(item.title || '');
     setEditBody(item.body || '');
   };
 
@@ -431,18 +442,10 @@ export default function NewsfeedView({ session }) {
                             />
                           </div>
                           <div className="flex gap-2 justify-end text-[10px] font-mono font-bold uppercase">
-                            <button
-                              type="button"
-                              onClick={() => setEditingItemId(null)}
-                              className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-all"
-                            >
+                            <button type="button" onClick={() => setEditingItemId(null)} className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-all">
                               Cancel
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleSaveEditChanges(item.feed_id)}
-                              className="px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all shadow-sm"
-                            >
+                            <button type="button" onClick={() => handleSaveEditChanges(item.feed_id)} className="px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all shadow-sm">
                               Save
                             </button>
                           </div>
@@ -508,9 +511,7 @@ export default function NewsfeedView({ session }) {
                                   </p>
 
                                   {!isCurrentlyEditingThisComment ? (
-                                    <p className="text-slate-800 text-xs sm:text-[12px] leading-snug font-normal">
-                                      {comm.comment_text}
-                                    </p>
+                                    <p className="text-slate-800 text-xs sm:text-[12px] leading-snug font-normal">{comm.comment_text}</p>
                                   ) : (
                                     <div className="mt-1 space-y-1">
                                       <input
@@ -520,18 +521,10 @@ export default function NewsfeedView({ session }) {
                                         className="w-full bg-white text-xs p-1.5 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-[#5C0612]"
                                       />
                                       <div className="flex gap-2 text-[9px] font-mono font-bold uppercase pt-0.5 pl-0.5">
-                                        <button
-                                          type="button"
-                                          onClick={() => setEditingCommentId(null)}
-                                          className="text-slate-400 hover:text-slate-600 transition-colors"
-                                        >
+                                        <button type="button" onClick={() => setEditingCommentId(null)} className="text-slate-400 hover:text-slate-600 transition-colors">
                                           Cancel
                                         </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleSaveCommentEdit(comm.comment_id)}
-                                          className="text-[#5C0612] hover:text-[#42040B] transition-colors"
-                                        >
+                                        <button type="button" onClick={() => handleSaveCommentEdit(comm.comment_id)} className="text-[#5C0612] hover:text-[#42040B] transition-colors">
                                           Save
                                         </button>
                                       </div>
@@ -583,7 +576,7 @@ export default function NewsfeedView({ session }) {
 
                         <form onSubmit={(e) => handleSendComment(e, item.feed_id)} className="flex items-center gap-2 pt-1">
                           <div className="w-7 h-7 rounded-full bg-[#5C0612] text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 select-none border border-black/5 shadow-inner">
-                            {currentUserEmail.substring(0, 2) || 'CU'}
+                            {(currentUserEmail || 'CU').substring(0, 2)}
                           </div>
                           <div className="flex-1 relative flex items-center">
                             <input
@@ -593,10 +586,7 @@ export default function NewsfeedView({ session }) {
                               placeholder="Write a comment..."
                               className="w-full bg-[#E4E6EB] border border-transparent rounded-full pl-4 pr-14 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-slate-300 transition-all placeholder-slate-500 shadow-inner"
                             />
-                            <button
-                              type="submit"
-                              className="absolute right-1 bg-black hover:bg-neutral-800 text-white font-bold text-[9px] uppercase px-2.5 py-1 rounded-full transition-all shadow-sm tracking-wider"
-                            >
+                            <button type="submit" className="absolute right-1 bg-black hover:bg-neutral-800 text-white font-bold text-[9px] uppercase px-2.5 py-1 rounded-full transition-all shadow-sm tracking-wider">
                               Send
                             </button>
                           </div>
