@@ -52,6 +52,14 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     return ALLOWED_LOCATIONS[targetIndex];
   };
 
+  // ── NEW HELPER ENGINE: COMPUTE TEXT BADGE COLORS FOR IMMUNIZATION LEVELS ──
+  const getVaccinationBadgeStyles = (statusStr) => {
+    const s = statusStr || '';
+    if (s === 'Fully Vaccinated') return 'bg-green-50 text-green-800 border-green-200';
+    if (s === 'Partially Vaccinated') return 'bg-yellow-50 text-yellow-800 border-yellow-200';
+    return 'bg-red-50 text-red-800 border-red-200'; // Default / Not Vaccinated
+  };
+
   const handleRowClick = async (petId) => {
     if (isEditingId) return;
     if (expandedPetId === petId) {
@@ -184,7 +192,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
 
   const totalNeuteredCount = activePets.filter(p => p.spayed_neutered === true || String(p.spayed_neutered).toLowerCase() === 'true').length;
   
-  // ── CHANGED: Isolated custom tracking counters for each explicit vaccination tier status node ──
   const totalFullyVaccinatedCount = activePets.filter(p => p.vaccination_status === 'Fully Vaccinated').length;
   const totalPartiallyVaccinatedCount = activePets.filter(p => p.vaccination_status === 'Partially Vaccinated').length;
   const totalNotVaccinatedCount = activePets.filter(p => p.vaccination_status === 'Not Vaccinated').length;
@@ -197,7 +204,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   const partiallyVaccinatedPercentage = totalPetsCount > 0 ? (totalPartiallyVaccinatedCount / totalPetsCount) * 100 : 0;
   const notVaccinatedPercentage = totalPetsCount > 0 ? (totalNotVaccinatedCount / totalPetsCount) * 100 : 0;
 
-  // ── STRIPPED ADOPTED ANIMALS FROM ZONE OCCUPANCY CALCULATION MATRIX TO ENSURE FIELD ACCURACY ──
+  // ── STRIPPED ADOPTED ANIMALS FROM ZONE OCCUPANCY CALCULATION MATRIX ──
   const locationCounts = ALLOWED_LOCATIONS.reduce((acc, loc) => {
     acc[loc] = 0;
     return acc;
@@ -271,8 +278,12 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                     <td className="p-4 text-slate-600">{pet.species} &bull; {pet.breed || 'Mix'}</td>
                     <td className="p-4 font-mono text-slate-500">{pet.weight || 'N/A'}</td>
                     <td className="p-4 text-slate-600 truncate max-w-[140px]">{getNormalizedLocation(pet.found_near, pet.pet_id)}</td>
+                    
+                    {/* ── CHANGED: Injected structural style mapping to color rows status tokens dynamically ── */}
                     <td className="p-4 text-center">
-                      <span className="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/60">{pet.vaccination_status}</span>
+                      <span className={`inline-block px-2.5 py-0.5 rounded-md text-[10px] font-semibold border ${getVaccinationBadgeStyles(pet.vaccination_status)}`}>
+                        {pet.vaccination_status}
+                      </span>
                     </td>
                   </tr>
                   
@@ -467,57 +478,57 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
             </div>
           </div>
 
-          {/* ── CHANGED: Coded explicit tracking segments for vaccination breakdown using Green, Yellow, and Red tracks ── */}
+          {/* Chart Card 3: Population Control Target Markers Progress */}
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between text-left md:col-span-2 lg:col-span-1">
             <div>
-              <h5 className="font-bold text-slate-900 tracking-tight font-sans text-xs">Population Health Metrics Performance</h5>
-              <p className="text-[10px] text-slate-400 mt-0.5">Active monitoring metrics for core immunization status layers and spay stabilization tracks.</p>
+              <h5 className="font-bold text-slate-900 tracking-tight font-sans text-xs">Population Control Performance</h5>
+              <p className="text-[10px] text-slate-400 mt-0.5">Active monitoring metrics for medical clinical stabilization goals.</p>
             </div>
 
-            <div className="my-2 space-y-2.5">
-              <div className="space-y-0.5">
+            <div className="my-3 space-y-3">
+              <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
                   <span>Sterilization Rate (TNR)</span>
                   <span className="text-purple-700">{totalNeuteredCount}/{totalPetsCount} ({Math.round(neuteredPercentage)}%)</span>
                 </div>
-                <div className="w-full h-2 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
-                  <div style={{ width: `${neuteredPercentage}%` }} className="h-full bg-purple-600 transition-all duration-500" />
+                <div className="w-full h-2.5 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
+                  <div style={{ width: `${neuteredPercentage}%` }} className="h-full bg-purple-600 transition-all duration-500 ease-out" />
                 </div>
               </div>
 
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
                   <span>Fully Vaccinated</span>
                   <span className="text-green-700">{totalFullyVaccinatedCount}/{totalPetsCount} ({Math.round(fullyVaccinatedPercentage)}%)</span>
                 </div>
-                <div className="w-full h-2 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
-                  <div style={{ width: `${fullyVaccinatedPercentage}%` }} className="h-full bg-green-600 transition-all duration-500" />
+                <div className="w-full h-2.5 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
+                  <div style={{ width: `${fullyVaccinatedPercentage}%` }} className="h-full bg-green-600 transition-all duration-500 ease-out" />
                 </div>
               </div>
 
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
                   <span>Partially Vaccinated</span>
                   <span className="text-yellow-600">{totalPartiallyVaccinatedCount}/{totalPetsCount} ({Math.round(partiallyVaccinatedPercentage)}%)</span>
                 </div>
-                <div className="w-full h-2 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
-                  <div style={{ width: `${partiallyVaccinatedPercentage}%` }} className="h-full bg-yellow-500 transition-all duration-500" />
+                <div className="w-full h-2.5 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
+                  <div style={{ width: `${partiallyVaccinatedPercentage}%` }} className="h-full bg-yellow-500 transition-all duration-500 ease-out" />
                 </div>
               </div>
 
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
                   <span>Not Vaccinated</span>
                   <span className="text-red-700">{totalNotVaccinatedCount}/{totalPetsCount} ({Math.round(notVaccinatedPercentage)}%)</span>
                 </div>
-                <div className="w-full h-2 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
-                  <div style={{ width: `${notVaccinatedPercentage}%` }} className="h-full bg-red-600 transition-all duration-500" />
+                <div className="w-full h-2.5 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
+                  <div style={{ width: `${notVaccinatedPercentage}%` }} className="h-full bg-red-600 transition-all duration-500 ease-out" />
                 </div>
               </div>
             </div>
 
             <div className="text-[9px] font-mono text-slate-400 border-t pt-2 mt-1">
-              Target Stability Level: <span className="font-sans font-bold text-purple-700">100% Secure Safety Depth</span>
+              Target Stability Level: <span className="font-sans font-bold text-purple-700">100% Non-Breeding Goal</span>
             </div>
           </div>
 
