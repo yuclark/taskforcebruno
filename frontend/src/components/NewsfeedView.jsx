@@ -19,7 +19,6 @@ export default function NewsfeedView({ session }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedComments, setExpandedComments] = useState({});
 
-  // ── NEW FEAT STATES: COMMENT SYSTEM SELECTION PARAMETERS ──
   const [activeCommentDropdownId, setActiveCommentDropdownId] = useState(null);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState('');
@@ -42,11 +41,10 @@ export default function NewsfeedView({ session }) {
     fetchStreamData();
   }, []);
 
-  // Closes dropdown menus when clicking anywhere else on the view screen
   useEffect(() => {
     const handleOutsideClick = () => {
       setActiveDropdownId(null);
-      setActiveCommentDropdownId(null); // Resets comment operations drawers
+      setActiveCommentDropdownId(null);
     };
     window.addEventListener('click', handleOutsideClick);
     return () => window.removeEventListener('click', handleOutsideClick);
@@ -94,7 +92,6 @@ export default function NewsfeedView({ session }) {
     }
   };
 
-  // ── NEW FEAT METHOD: COMMITS COMMENT MUTATION ENTRIES TO DISK ──
   const handleSaveCommentEdit = async (commentId) => {
     if (!editCommentText.trim()) return;
     try {
@@ -119,7 +116,6 @@ export default function NewsfeedView({ session }) {
     }
   };
 
-  // ── NEW FEAT METHOD: TRANSMITS COMMENT ERASURE COMMAND UPSTREAM ──
   const handleDeleteComment = async (commentId) => {
     if (!window.confirm("Are you sure you want to permanently delete your comment?")) return;
     try {
@@ -320,6 +316,7 @@ export default function NewsfeedView({ session }) {
                             </svg>
                           </button>
 
+                          {/* ── CHANGED: Stripped out all emojis for professional panel alignment ── */}
                           {activeDropdownId === item.feed_id && (
                             <div className="absolute right-0 mt-1 w-36 bg-white border border-slate-200 rounded-xl shadow-lg py-1 z-30 animate-fade-in">
                               {!isSystemAutomatedFeed && (
@@ -328,7 +325,7 @@ export default function NewsfeedView({ session }) {
                                   onClick={() => { startEditingWorkflow(item); setActiveDropdownId(null); }}
                                   className="w-full text-left px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50/60 transition-colors flex items-center gap-2"
                                 >
-                                  <span>✏️</span> Edit Post
+                                  Edit Post
                                 </button>
                               )}
                               <button
@@ -336,7 +333,7 @@ export default function NewsfeedView({ session }) {
                                 onClick={() => { setItemToDelete(item.feed_id); setActiveDropdownId(null); }}
                                 className="w-full text-left px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50/60 transition-colors flex items-center gap-2"
                               >
-                                <span>🗑️</span> Delete Post
+                                Delete Post
                               </button>
                             </div>
                           )}
@@ -426,7 +423,6 @@ export default function NewsfeedView({ session }) {
                     {isCommentsOpen && (
                       <div className="bg-[#F0F2F5]/60 px-3 sm:px-4 py-3 space-y-2.5 border-t border-slate-100 animate-fade-in">
                         {item.comments && item.comments.map((comm) => {
-                          // ── NEW FEAT LOGIC: CONDITIONAL RENDERING VARIABLES FOR INDIVIDUAL COMMENTS ──
                           const isCurrentlyEditingThisComment = editingCommentId === comm.comment_id;
                           const isMyComment = comm.user_email === currentUserEmail;
 
@@ -436,7 +432,6 @@ export default function NewsfeedView({ session }) {
                                 {comm.user_email.substring(0, 2)}
                               </div>
                               
-                              {/* ── MODIFIED: Layout wrap architecture supports inline comment operations dropdowns ── */}
                               <div className="flex-1 min-w-0 flex items-center gap-1.5 max-w-[85%] sm:max-w-[88%]">
                                 <div className="bg-[#E4E6EB] rounded-2xl px-3 py-1.5 shadow-sm break-words flex-1 min-w-0">
                                   <p className="font-bold text-slate-900 text-[10px] sm:text-[11px] leading-tight mb-0.5 hover:underline cursor-pointer truncate max-w-full">
@@ -461,7 +456,7 @@ export default function NewsfeedView({ session }) {
                                   )}
                                 </div>
 
-                                {/* ── NEW FEAT UI: Localized 3-Dot Dropdown Panel for Individual Comments ── */}
+                                {/* ── CHANGED: Stripped out emojis to render text-only drop-downs cleanly ── */}
                                 {isMyComment && !isCurrentlyEditingThisComment && (
                                   <div className="shrink-0 relative" onClick={(e) => e.stopPropagation()}>
                                     <button
@@ -479,16 +474,16 @@ export default function NewsfeedView({ session }) {
                                         <button
                                           type="button"
                                           onClick={() => { setEditingCommentId(comm.comment_id); setEditCommentText(comm.comment_text); setActiveCommentDropdownId(null); }}
-                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-amber-700 hover:bg-amber-50/60 transition-colors flex items-center gap-1"
+                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-amber-700 hover:bg-amber-50/60 transition-colors"
                                         >
-                                          ✏️ Edit
+                                          Edit
                                         </button>
                                         <button
                                           type="button"
                                           onClick={() => { handleDeleteComment(comm.comment_id); setActiveCommentDropdownId(null); }}
-                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-rose-700 hover:bg-rose-50/60 transition-colors flex items-center gap-1"
+                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-rose-700 hover:bg-rose-50/60 transition-colors"
                                         >
-                                          🗑️ Delete
+                                          Delete
                                         </button>
                                       </div>
                                     )}
@@ -499,7 +494,6 @@ export default function NewsfeedView({ session }) {
                           );
                         })}
 
-                        {/* Form Input Capsule Input Row */}
                         <form onSubmit={(e) => handleSendComment(e, item.feed_id)} className="flex items-center gap-2 pt-1">
                           <div className="w-7 h-7 rounded-full bg-[#5C0612] text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 select-none border border-black/5 shadow-inner">
                             {currentUserEmail.substring(0, 2)}

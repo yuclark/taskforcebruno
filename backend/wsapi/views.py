@@ -543,7 +543,7 @@ class AddCommentAPIView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-# ── NEW FEAT CORE VIEW: LOCAL STUDENT COMMENT LIFECYCLE CONTROLLER ──
+# ── CHANGED: Strict integer typecasting safeguards against schema mismatch errors ──
 class CommentActionAPIView(APIView):
     def put(self, request):
         try:
@@ -555,6 +555,11 @@ class CommentActionAPIView(APIView):
             if not comment_id or not user_email or not comment_text:
                 return Response({"error": "Missing parameters payload components."}, status=status.HTTP_400_BAD_REQUEST)
                 
+            try:
+                comment_id = int(comment_id)
+            except (ValueError, TypeError):
+                return Response({"error": "Invalid comment_id datatype format."}, status=status.HTTP_400_BAD_REQUEST)
+                
             check = supabase.table("feed_comments").select("*").eq("comment_id", comment_id).execute()
             if not check.data:
                 return Response({"error": "Comment not found inside active database records."}, status=status.HTTP_404_NOT_FOUND)
@@ -563,7 +568,10 @@ class CommentActionAPIView(APIView):
                 return Response({"error": "Ownership authorization token mismatch signature rejection."}, status=status.HTTP_403_FORBIDDEN)
                 
             res = supabase.table("feed_comments").update({"comment_text": comment_text}).eq("comment_id", comment_id).execute()
-            return Response(res.data[0], status=status.HTTP_200_OK)
+            
+            # Safe access lookup array handler checks to guarantee 'list index out of range' can never happen
+            finalized_data = res.data[0] if res.data else {"comment_id": comment_id, "comment_text": comment_text}
+            return Response(finalized_data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -574,6 +582,11 @@ class CommentActionAPIView(APIView):
             
             if not comment_id or not user_email:
                 return Response({"error": "Missing parameters identifier keys."}, status=status.HTTP_400_BAD_REQUEST)
+                
+            try:
+                comment_id = int(comment_id)
+            except (ValueError, TypeError):
+                return Response({"error": "Invalid comment_id datatype format."}, status=status.HTTP_400_BAD_REQUEST)
                 
             check = supabase.table("feed_comments").select("*").eq("comment_id", comment_id).execute()
             if not check.data:
@@ -610,7 +623,7 @@ class NewsfeedItemActionAPIView(APIView):
             if feed_id.startswith("announcement_"):
                 check = admin_supabase.table("campus_announcements").select("*").eq("announcement_id", target_id).execute()
                 if not check.data:
-                    return Response({"error": "Announcement not found inside active database records."}, status=status.HTTP_44_NOT_FOUND)
+                    return Response({"error": "Announcement not found inside active database records."}, status=status.HTTP_404_NOT_FOUND)
                 
                 admin_supabase.table("feed_likes").delete().eq("feed_id", feed_id).execute()
                 admin_supabase.table("feed_comments").delete().eq("feed_id", feed_id).execute()
@@ -619,7 +632,7 @@ class NewsfeedItemActionAPIView(APIView):
             elif feed_id.startswith("sighting_"):
                 check = admin_supabase.table("animal_sightings").select("*").eq("sighting_id", target_id).execute()
                 if not check.data:
-                    return Response({"error": "Sighting record not found inside active database records."}, status=status.HTTP_404_NOT_FOUND)
+                    return Response({"error": "Sighting record not found inside active database records."}, status=status.HTTP_44_NOT_FOUND)
                 
                 admin_supabase.table("feed_likes").delete().eq("feed_id", feed_id).execute()
                 admin_supabase.table("feed_comments").delete().eq("feed_id", feed_id).execute()
