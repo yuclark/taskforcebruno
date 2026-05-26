@@ -36,7 +36,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
 
   const startEditing = (pet) => {
     setIsEditingId(pet.pet_id);
-    // Strip text tracking characters to map a clean numeric float/integer back into the form field
     const numericWeight = pet.weight ? pet.weight.replace(/[^0-9.]/g, '') : '';
     setEditFormData({ ...pet, weight: numericWeight });
   };
@@ -50,7 +49,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     e.preventDefault();
     setErrorMessage('');
 
-    // Re-bind unit designators explicitly prior to transmission to match database column specifications
     const finalizedPayload = {
       ...editFormData,
       weight: editFormData.weight ? `${editFormData.weight.toString().trim()} kg` : 'N/A'
@@ -97,7 +95,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     }
   };
 
-  // ── SORTING ALGORITHM TRACER CONTROLLER ──
   const requestSortAction = (columnKey) => {
     let direction = 'asc';
     if (sortConfig.key === columnKey && sortConfig.direction === 'asc') {
@@ -131,14 +128,12 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     return sortConfig.direction === 'asc' ? <span className="text-[#5C0612] ml-1">▲</span> : <span className="text-[#5C0612] ml-1">▼</span>;
   };
 
-  // ── SEPARATION INTERFACES: SEPARATING DATA SETS BY PIPELINE STAGE STAGES ──
   const activeUnadoptedPets = pets.filter(p => p.adoption_status !== 'Adopted');
   const adoptedAlumniPets = pets.filter(p => p.adoption_status === 'Adopted');
 
   const sortedActiveCollection = applySortingMatrix(activeUnadoptedPets);
   const sortedAdoptedCollection = applySortingMatrix(adoptedAlumniPets);
 
-  // Sub-table render mapping handler to maintain design uniformity
   const generateRenderedTableBlock = (titleBlockLabel, collectionDataStream) => (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden text-xs text-slate-700">
       <div className="bg-slate-100/60 px-5 py-3 border-b border-slate-200 text-left">
@@ -169,11 +164,20 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                       <span>{pet.pet_id}</span>
                     </td>
                     <td className="p-4 font-semibold text-slate-950 text-sm">{pet.name}</td>
+                    
+                    {/* ── CHANGED: Dynamic Status Classification Badge Engine ── */}
                     <td className="p-4 font-mono">
-                      <span className={`px-2 py-0.5 rounded font-bold text-[9px] ${pet.pet_type === 'For Adoption' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-purple-50 text-purple-800 border border-purple-200'}`}>
-                        {pet.pet_type || 'Campus Pet'}
+                      <span className={`px-2 py-0.5 rounded font-bold text-[9px] border ${
+                        pet.adoption_status === 'Adopted'
+                          ? 'bg-slate-100 text-slate-700 border-slate-300 shadow-sm'
+                          : pet.pet_type === 'For Adoption' 
+                          ? 'bg-amber-50 text-amber-800 border-amber-200' 
+                          : 'bg-purple-50 text-purple-800 border-purple-200'
+                      }`}>
+                        {pet.adoption_status === 'Adopted' ? 'Adopted' : (pet.pet_type || 'Campus Pet')}
                       </span>
                     </td>
+                    
                     <td className="p-4 text-slate-600">{pet.species} &bull; {pet.breed || 'Mix'}</td>
                     <td className="p-4 font-mono text-slate-500">{pet.weight || 'N/A'}</td>
                     <td className="p-4 text-slate-600 truncate max-w-[140px]">{pet.found_near}</td>
@@ -198,7 +202,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Gender</label><select name="gender" value={editFormData.gender || 'Male'} onChange={handleEditChange} className="w-full p-2 border rounded-lg"><option value="Male">Male</option><option value="Female">Female</option></select></div>
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Age</label><input type="text" name="age" value={editFormData.age || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none" /></div>
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Size Scale</label><select name="size" value={editFormData.size || 'Small'} onChange={handleEditChange} className="w-full p-2 border rounded-lg"><option value="Small">Small</option><option value="Medium">Medium</option><option value="Large">Large</option></select></div>
-                              {/* ── MODIFIED: Numerical Weight input constraint box with absolute metric labeling context ── */}
                               <div>
                                 <label className="block text-[9px] font-bold text-[#5C0612] uppercase mb-0.5">Weight (in kg) *</label>
                                 <div className="relative flex items-center">
@@ -287,7 +290,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   return (
     <div className="w-full space-y-6">
       
-      {/* Dynamic Error Messaging Alert Bar Frame */}
       {errorMessage && (
         <div className="w-full p-3.5 bg-rose-50 border border-rose-200 text-rose-900 font-medium text-center rounded-xl animate-fade-in relative flex items-center justify-between text-xs font-sans">
           <span className="flex-1 truncate">{errorMessage}</span>
@@ -295,13 +297,9 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
         </div>
       )}
 
-      {/* RENDER VIEW GRID A: ACTIVE & FOR ADOPTION HOUSING LOGS */}
       {generateRenderedTableBlock("Active & Available Campus Companions", sortedActiveCollection)}
-
-      {/* RENDER VIEW GRID B: ADOPTED HOMES ALUMNI ROSTER */}
       {generateRenderedTableBlock("Adopted Alumni Companions Registry", sortedAdoptedCollection)}
 
-      {/* ================= INJECTED CUSTOM STATE-DRIVEN MODAL OVERLAY ================= */}
       {petIdToPurge && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in font-sans">
           <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-6 text-center animate-scale-up">
