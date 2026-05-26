@@ -48,6 +48,7 @@ export default function DashboardContainer({ session, onLogout }) {
             </div>
 
 
+
             {/* MOBILE CLOSE BUTTON */}
             <button 
               onClick={() => setIsMobileOpen(false)} 
@@ -56,6 +57,7 @@ export default function DashboardContainer({ session, onLogout }) {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
+
 
 
           <nav className="p-4 space-y-1.5 overflow-y-auto max-h-[calc(100vh-180px)]">
@@ -78,11 +80,13 @@ export default function DashboardContainer({ session, onLogout }) {
             </button>
 
 
+
             <button onClick={() => { setCurrentTab('report'); setActivePetId(null); setIsMobileOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${currentTab === 'report' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'}`}>
               Report Animal Sighting
             </button>
           </nav>
         </div>
+
 
 
         <div className="p-4 border-t border-white/10 bg-black/10">
@@ -98,6 +102,7 @@ export default function DashboardContainer({ session, onLogout }) {
           </button>
         </div>
       </aside>
+
 
 
       {/* MAIN APPS WORKSPACE ROUTER CONTAINER */}
@@ -116,6 +121,7 @@ export default function DashboardContainer({ session, onLogout }) {
             </button>
 
 
+
             <span className="text-xs font-bold font-mono text-[#5C0612] uppercase tracking-wider">
               {currentTab.replace('-', ' ')} Module
             </span>
@@ -126,7 +132,7 @@ export default function DashboardContainer({ session, onLogout }) {
         </header>
 
 
-        {/* IMPORTANT: remove center alignment so the newsfeed can use full width/height */}
+
         <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gradient-to-br from-slate-50 via-stone-50 to-slate-100 relative">
           <div className="absolute inset-0 z-0 pointer-events-none opacity-40 overflow-hidden">
             <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
@@ -140,7 +146,8 @@ export default function DashboardContainer({ session, onLogout }) {
           </div>
 
 
-          <div className="relative z-10 w-full min-h-full flex justify-center items-start">
+
+          <div className="relative z-10 w-full min-h-full">
             {currentTab === 'newsfeed' && <NewsfeedView session={session} />}
             {currentTab === 'report' && <ReportSightingView session={session} />}
             {currentTab === 'adoption' && <AdoptionGallery session={session} />}
@@ -154,6 +161,7 @@ export default function DashboardContainer({ session, onLogout }) {
           </div>
         </div>
       </main>
+
 
 
     </div>
