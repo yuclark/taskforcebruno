@@ -26,7 +26,10 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   const [petIdToPurge, setPetIdToPurge] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // ── CHANGED: Highly accurate keyword-matching location parsing matrix engine ──
+  // Local state tracking layout expansion toggle for density breakdown matrix
+  const [isLocationsExpanded, setIsLocationsExpanded] = useState(false);
+
+  // ── KEYWORD-MATCHING LOCATION PARSING MATRIX ENGINE ──
   const getNormalizedLocation = (locStr, petId) => {
     if (!locStr) return ALLOWED_LOCATIONS[0];
     const s = locStr.toLowerCase().trim();
@@ -40,7 +43,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     if (s.includes("sal")) return "SAL Building";
     if (s.includes("gym") || s.includes("gymnasium")) return "CIT-U Gymnasium";
     
-    // Fallback deterministic lookup hash mapping if string signature is completely custom
     let hash = 0;
     const trackingKey = petId || locStr;
     for (let i = 0; i < trackingKey.length; i++) {
@@ -173,7 +175,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   const sortedAdoptedCollection = applySortingMatrix(adoptedAlumniPets);
   const sortedStrayCollection = applySortingMatrix(strayPetsCollection);
 
-  // ── CHANGED: STRIPPED ADOPTED PETS FROM ECOSYSTEM REPRODUCTIVE & POPULATION STATISTICS COUNTERS ──
+  // ── DATA AGGREGATION REPRODUCTIVE & POPULATION STATISTICS COUNTERS ──
   const activePets = pets.filter(p => p.adoption_status !== 'Adopted');
   
   const totalPetsCount = activePets.length;
@@ -183,13 +185,12 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   const totalNeuteredCount = activePets.filter(p => p.spayed_neutered === true || String(p.spayed_neutered).toLowerCase() === 'true').length;
   const totalVaccinatedCount = activePets.filter(p => p.vaccination_status === 'Fully Vaccinated').length;
 
-  // Safe percentage ratio calculation fallbacks based on unadopted assets exclusively
   const catPercentage = totalPetsCount > 0 ? (totalCatsCount / totalPetsCount) * 100 : 0;
   const dogPercentage = totalPetsCount > 0 ? (totalDogsCount / totalPetsCount) * 100 : 0;
   const neuteredPercentage = totalPetsCount > 0 ? (totalNeuteredCount / totalPetsCount) * 100 : 0;
   const vaccinatedPercentage = totalPetsCount > 0 ? (totalVaccinatedCount / totalPetsCount) * 100 : 0;
 
-  // ── CHANGED: STRIPPED ADOPTED ANIMALS FROM ZONE OCCUPANCY CALCULATION MATRIX TO ENSURE FIELD ACCURACY ──
+  // ── STRIPPED ADOPTED ANIMALS FROM ZONE OCCUPANCY CALCULATION MATRIX TO ENSURE FIELD ACCURACY ──
   const locationCounts = ALLOWED_LOCATIONS.reduce((acc, loc) => {
     acc[loc] = 0;
     return acc;
@@ -207,6 +208,15 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     locationCounts[a] >= locationCounts[b] ? a : b, 
     ALLOWED_LOCATIONS[0]
   );
+
+  // ── CHANGED: Sort location structures directly from highest count density down to lowest order execution ──
+  const sortedLocationsData = ALLOWED_LOCATIONS.map(loc => ({
+    name: loc,
+    count: locationCounts[loc] || 0
+  })).sort((a, b) => b.count - a.count);
+
+  // Show only top 4 items initially if contraction state toggle is active
+  const displayedLocations = isLocationsExpanded ? sortedLocationsData : sortedLocationsData.slice(0, 4);
 
   const generateRenderedTableBlock = (titleBlockLabel, collectionDataStream) => (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden text-xs text-slate-700">
@@ -412,21 +422,21 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
             </div>
           </div>
 
-          {/* ── CHANGED: Removed max-h restricts and hidden scrollbar modifiers to ensure complete visibility of all 8 rows ── */}
+          {/* ── CHANGED: Enforced highest-to-lowest count layout sort order, killed native scrollbars entirely, and deployed clean conditional state expansion toggles ── */}
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between text-left">
             <div>
               <h5 className="font-bold text-slate-900 tracking-tight font-sans text-xs">Colony Zone Occupancy Density</h5>
-              <p className="text-[10px] text-slate-400 mt-0.5">Active population concentration metrics mapped across campus hot spots.</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Active population concentration metrics mapped across campus hot spots from highest to lowest.</p>
             </div>
 
-            <div className="my-3 space-y-2.5 pr-1 overflow-y-auto max-h-[140px]">
-              {ALLOWED_LOCATIONS.map(loc => {
-                const zoneCount = locationCounts[loc] || 0;
+            <div className="my-3 space-y-2.5 pr-1">
+              {displayedLocations.map(locObj => {
+                const zoneCount = locObj.count;
                 const progressWidth = (zoneCount / maxZoneCount) * 100;
                 return (
-                  <div key={loc} className="space-y-0.5">
+                  <div key={locObj.name} className="space-y-0.5">
                     <div className="flex justify-between items-center text-[10px] font-sans font-medium text-slate-600">
-                      <span className="truncate pr-2">{loc}</span>
+                      <span className="truncate pr-2">{locObj.name}</span>
                       <span className="font-mono font-bold text-slate-900 shrink-0">{zoneCount}</span>
                     </div>
                     <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200/20">
@@ -436,6 +446,16 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                 );
               })}
             </div>
+
+            {sortedLocationsData.length > 4 && (
+              <button
+                type="button"
+                onClick={() => setIsLocationsExpanded(!isLocationsExpanded)}
+                className="text-[10px] font-mono font-bold uppercase text-indigo-600 hover:text-indigo-800 transition-colors mb-2 text-right block w-full focus:outline-none"
+              >
+                {isLocationsExpanded ? "Show Less Less ▲" : "Expand All Zones ▼"}
+              </button>
+            )}
 
             <div className="text-[9px] font-mono text-slate-400 border-t pt-2 mt-1 truncate">
               Highest Density Node: <span className="font-sans font-bold text-indigo-600">{densestZoneNode}</span>
