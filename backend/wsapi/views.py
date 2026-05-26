@@ -606,85 +606,219 @@ class CommentActionAPIView(APIView):
 # =====================================================================
 
 class NewsfeedItemActionAPIView(APIView):
+
     def delete(self, request):
         try:
             feed_id = request.query_params.get("feed_id") or request.data.get("feed_id")
+
             if not feed_id:
-                return Response({"error": "Missing feed_id."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "Missing feed_id."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-            admin_supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            admin_supabase = create_client(
+                settings.SUPABASE_URL,
+                settings.SUPABASE_KEY
+            )
 
-            raw_id = feed_id.replace("announcement_", "").replace("sighting_", "").replace("pet_", "")
+            raw_id = (
+                feed_id
+                .replace("announcement_", "")
+                .replace("sighting_", "")
+                .replace("pet_", "")
+            )
+
             try:
                 target_id = int(raw_id)
             except ValueError:
                 target_id = raw_id
 
+            # =====================================================
+            # DELETE ANNOUNCEMENT
+            # =====================================================
             if feed_id.startswith("announcement_"):
-                check = admin_supabase.table("campus_announcements").select("*").eq("announcement_id", target_id).execute()
-                if not check.data:
-                    return Response({"error": "Announcement not found inside active database records."}, status=status.HTTP_404_NOT_FOUND)
-                
-                admin_supabase.table("feed_likes").delete().eq("feed_id", feed_id).execute()
-                admin_supabase.table("feed_comments").delete().eq("feed_id", feed_id).execute()
-                admin_supabase.table("campus_announcements").delete().eq("announcement_id", target_id).execute()
 
+                check = (
+                    admin_supabase
+                    .table("campus_announcements")
+                    .select("*")
+                    .eq("announcement_id", target_id)
+                    .execute()
+                )
+
+                if not check.data:
+                    return Response(
+                        {"error": "Announcement not found."},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+                admin_supabase.table("feed_likes").delete().eq(
+                    "feed_id", feed_id
+                ).execute()
+
+                admin_supabase.table("feed_comments").delete().eq(
+                    "feed_id", feed_id
+                ).execute()
+
+                admin_supabase.table("campus_announcements").delete().eq(
+                    "announcement_id", target_id
+                ).execute()
+
+            # =====================================================
+            # DELETE SIGHTING
+            # =====================================================
             elif feed_id.startswith("sighting_"):
-                check = admin_supabase.table("animal_sightings").select("*").eq("sighting_id", target_id).execute()
-                if not check.data:
-                    return Response({"error": "Sighting record not found inside active database records."}, status=status.HTTP_44_NOT_FOUND)
-                
-                admin_supabase.table("feed_likes").delete().eq("feed_id", feed_id).execute()
-                admin_supabase.table("feed_comments").delete().eq("feed_id", feed_id).execute()
-                admin_supabase.table("animal_sightings").delete().eq("sighting_id", target_id).execute()
 
+                check = (
+                    admin_supabase
+                    .table("animal_sightings")
+                    .select("*")
+                    .eq("sighting_id", target_id)
+                    .execute()
+                )
+
+                if not check.data:
+                    return Response(
+                        {"error": "Sighting record not found."},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+                admin_supabase.table("feed_likes").delete().eq(
+                    "feed_id", feed_id
+                ).execute()
+
+                admin_supabase.table("feed_comments").delete().eq(
+                    "feed_id", feed_id
+                ).execute()
+
+                admin_supabase.table("animal_sightings").delete().eq(
+                    "sighting_id", target_id
+                ).execute()
+
+            # =====================================================
+            # DELETE PET
+            # =====================================================
             elif feed_id.startswith("pet_"):
-                check = admin_supabase.table("pets").select("*").eq("pet_id", target_id).execute()
-                if not check.data:
-                    return Response({"error": "Pet tracking profile not found inside active database records."}, status=status.HTTP_404_NOT_FOUND)
-                
-                admin_supabase.table("feed_likes").delete().eq("feed_id", feed_id).execute()
-                admin_supabase.table("feed_comments").delete().eq("feed_id", feed_id).execute()
-                admin_supabase.table("pets").delete().eq("pet_id", target_id).execute()
-            else:
-                return Response({"error": "Unsupported structural feed element type."}, status=status.HTTP_400_BAD_REQUEST)
 
-            return Response({"message": "Scrubbed logging entities successfully completed."}, status=status.HTTP_200_OK)
+                check = (
+                    admin_supabase
+                    .table("pets")
+                    .select("*")
+                    .eq("pet_id", target_id)
+                    .execute()
+                )
+
+                if not check.data:
+                    return Response(
+                        {"error": "Pet profile not found."},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+                admin_supabase.table("feed_likes").delete().eq(
+                    "feed_id", feed_id
+                ).execute()
+
+                admin_supabase.table("feed_comments").delete().eq(
+                    "feed_id", feed_id
+                ).execute()
+
+                admin_supabase.table("pets").delete().eq(
+                    "pet_id", target_id
+                ).execute()
+
+            else:
+                return Response(
+                    {"error": "Unsupported feed type."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            return Response(
+                {"message": "Feed item deleted successfully."},
+                status=status.HTTP_200_OK
+            )
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            print("DELETE NEWSFEED ERROR:", str(e))
+            traceback.print_exc()
+
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     def put(self, request):
         try:
             d = request.data
+
             feed_id = d.get("feed_id")
+
             if not feed_id:
-                return Response({"error": "Missing feed_id."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "Missing feed_id."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
+            # =====================================================
+            # ONLY ANNOUNCEMENTS CAN BE EDITED
+            # =====================================================
             if not feed_id.startswith("announcement_"):
-                return Response({"error": "Only announcements can be edited."}, status=status.HTTP_403_FORBIDDEN)
+                return Response(
+                    {"error": "Only announcements can be edited."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
-            admin_supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            admin_supabase = create_client(
+                settings.SUPABASE_URL,
+                settings.SUPABASE_KEY
+            )
 
             raw_id = feed_id.replace("announcement_", "")
+
             try:
                 target_id = int(raw_id)
             except ValueError:
                 target_id = raw_id
 
-            check = admin_supabase.table("campus_announcements").select("*").eq("announcement_id", target_id).execute()
-            if not check.data:
-                return Response({"error": "Target announcement context row missing from data tables."}, status=status.HTTP_404_NOT_FOUND)
+            check = (
+                admin_supabase
+                .table("campus_announcements")
+                .select("*")
+                .eq("announcement_id", target_id)
+                .execute()
+            )
 
-            if check.data[0].get("author_email") == "mdc.operations@cit.edu":
-                return Response({"error": "Automated system adoption cards reject text editing modifications."}, status=status.HTTP_403_FORBIDDEN)
+            if not check.data:
+                return Response(
+                    {"error": "Announcement not found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
             payload = {
                 "title": d.get("title"),
                 "content": d.get("body")
             }
-            admin_supabase.table("campus_announcements").update(payload).eq("announcement_id", target_id).execute()
-            return Response({"message": "Updated administrative bulletin content cleanly."}, status=status.HTTP_200_OK)
+
+            update_res = (
+                admin_supabase
+                .table("campus_announcements")
+                .update(payload)
+                .eq("announcement_id", target_id)
+                .execute()
+            )
+
+            return Response(
+                update_res.data[0] if update_res.data else {
+                    "message": "Announcement updated."
+                },
+                status=status.HTTP_200_OK
+            )
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            print("EDIT NEWSFEED ERROR:", str(e))
+            traceback.print_exc()
+
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
