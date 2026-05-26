@@ -25,8 +25,9 @@ export default function NewsfeedView({ session }) {
 
   const [commentToDelete, setCommentToDelete] = useState(null);
 
-  const currentUserEmail = session?.email || 'anonymous@cit.edu';
-  const isStaffClearance = session?.role === 'staff' || currentUserEmail.includes('staff') || currentUserEmail.includes('test');
+  const currentUserEmail = (session?.email || 'anonymous@cit.edu').trim().toLowerCase();
+  const currentUserRole = (session?.role || 'user').trim().toLowerCase();
+  const isStaffClearance = currentUserRole === 'staff' || currentUserEmail.includes('staff') || currentUserEmail.includes('test');
 
   const fetchStreamData = async () => {
     try {
@@ -103,6 +104,7 @@ export default function NewsfeedView({ session }) {
         body: JSON.stringify({
           comment_id: commentId,
           user_email: currentUserEmail,
+          user_role: currentUserRole,
           comment_text: editCommentText.trim()
         })
       });
@@ -121,7 +123,7 @@ export default function NewsfeedView({ session }) {
   const handleExecuteDeleteComment = async () => {
     if (!commentToDelete) return;
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}&user_email=${encodeURIComponent(currentUserEmail)}`, {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}&user_email=${encodeURIComponent(currentUserEmail)}&user_role=${encodeURIComponent(currentUserRole)}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -426,7 +428,8 @@ export default function NewsfeedView({ session }) {
                       <div className="bg-[#F0F2F5]/60 px-3 sm:px-4 py-3 space-y-2.5 border-t border-slate-100 animate-fade-in">
                         {item.comments && item.comments.map((comm) => {
                           const isCurrentlyEditingThisComment = editingCommentId === comm.comment_id;
-                          const isMyComment = comm.user_email === currentUserEmail;
+                          const isMyComment = (comm.user_email || '').trim().toLowerCase() === currentUserEmail;
+                          const canManageComment = isMyComment || isStaffClearance;
 
                           return (
                             <div key={comm.comment_id} className="flex gap-2 text-left items-start group relative">
@@ -458,7 +461,7 @@ export default function NewsfeedView({ session }) {
                                   )}
                                 </div>
 
-                                {isMyComment && !isCurrentlyEditingThisComment && (
+                                {canManageComment && !isCurrentlyEditingThisComment && (
                                   <div className="shrink-0 relative" onClick={(e) => e.stopPropagation()}>
                                     <button
                                       type="button"
@@ -475,14 +478,14 @@ export default function NewsfeedView({ session }) {
                                         <button
                                           type="button"
                                           onClick={() => { setEditingCommentId(comm.comment_id); setEditCommentText(comm.comment_text); setActiveCommentDropdownId(null); }}
-                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-amber-700 hover:bg-amber-50/60 transition-colors"
+                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-sky-700 hover:bg-sky-50/80 transition-colors"
                                         >
                                           Edit
                                         </button>
                                         <button
                                           type="button"
                                           onClick={() => { setCommentToDelete(comm.comment_id); setActiveCommentDropdownId(null); }}
-                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-rose-700 hover:bg-rose-50/60 transition-colors"
+                                          className="w-full text-left px-3 py-1.5 text-[10px] font-bold text-red-700 hover:bg-red-50/80 transition-colors"
                                         >
                                           Delete
                                         </button>
@@ -642,7 +645,7 @@ export default function NewsfeedView({ session }) {
             <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">Are you absolutely sure you want to permanently delete your comment? This action cannot be undone.</p>
             <div className="flex gap-3 justify-center font-mono text-[10px] font-bold uppercase">
               <button type="button" onClick={() => setCommentToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">Cancel</button>
-              <button type="button" onClick={handleExecuteDeleteComment} className="px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-xl transition-all shadow-sm tracking-wider">Delete</button>
+              <button type="button" onClick={handleExecuteDeleteComment} className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl transition-all shadow-sm tracking-wider">Delete</button>
             </div>
           </div>
         </div>
