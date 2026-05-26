@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import QRScannerView from './QRScannerView';
 import PetProfileView from './PetProfileView';
 import SupplyLogistics from './SupplyLogistics';
@@ -7,9 +7,18 @@ import ReportSightingView from './ReportSightingView';
 import NewsfeedView from './NewsfeedView';
 
 export default function DashboardContainer({ session, onLogout }) {
-  const [currentTab, setCurrentTab] = useState('newsfeed');
+  // ── MODIFIED: Hydrate current tab position from disk parameters on bootup loop ──
+  const [currentTab, setCurrentTab] = useState(() => {
+    return localStorage.getItem('tfb_user_tab') || 'newsfeed';
+  });
+  
   const [activePetId, setActivePetId] = useState(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  // ── MODIFIED: Save current tab layout configuration dynamically upon mutation ──
+  useEffect(() => {
+    localStorage.setItem('tfb_user_tab', currentTab);
+  }, [currentTab]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex text-slate-800 font-sans antialiased relative overflow-hidden">
