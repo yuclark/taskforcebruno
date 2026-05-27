@@ -19,6 +19,9 @@ export default function AdoptionGallery({ session }) {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
+  // ── NEW STATE: CUSTOM REACT COMPONENT OVERLAY FOR CANCELLATIONS ──
+  const [cancelModal, setCancelModal] = useState({ isOpen: false, appId: null });
+
   const [applicationForm, setApplicationForm] = useState({
     fullName: '', 
     email: session?.email || '', 
@@ -59,7 +62,7 @@ export default function AdoptionGallery({ session }) {
       .then((res) => res.json())
       .then((data) => {
         setMyApplications(Array.isArray(data) ? data : []);
-        setLoadingTracking(false);
+        setLoadingTracking(false)
       })
       .catch((err) => {
         console.error('Tracking log error:', err);
@@ -148,16 +151,22 @@ export default function AdoptionGallery({ session }) {
     }
   };
 
-  // ── NEW FEAT TRIGGER: DISPATCH CANCELLATION PURGE REQUEST BACKEND COMMAND ──
-  const handleCancelApplication = async (appId) => {
-    if (!window.confirm("Are you absolutely sure you want to withdraw and cancel this adoption request file? This action is permanent.")) return;
-    
+  // ── CHANGED: Swapped window.confirm out for secure custom state triggers ──
+  const openCancelModal = (appId) => {
+    setCancelModal({ isOpen: true, appId });
+  };
+
+  const confirmCancelApplication = async () => {
+    const { appId } = cancelModal;
+    if (!appId) return;
+
     try {
       const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/applications/${appId}/`, {
         method: 'DELETE'
       });
       
       if (res.ok) {
+        setCancelModal({ isOpen: false, appId: null });
         fetchAvailablePlacements();
         fetchMyTrackingLogs();
       } else {
@@ -326,12 +335,12 @@ export default function AdoptionGallery({ session }) {
                       </div>
                     )}
 
-                    {/* ── CHANGED: Injected interactive cancel button visible strictly during Pending review state thresholds ── */}
+                    {/* ── MODIFIED: Buttons now call custom tracking state modifiers instead of raw window dialog closures ── */}
                     {isPending && (
                       <button
                         type="button"
-                        onClick={() => handleCancelApplication(app.application_id)}
-                        className="w-full mt-1 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-mono font-bold text-[9px] uppercase tracking-wider rounded-lg border border-rose-200 transition-all text-center focus:outline-none"
+                        onClick={() => openCancelModal(app.application_id)}
+                        className="w-full mt-1 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-mono font-bold text-[9px] uppercase tracking-wider rounded-lg border border-rose-200 transition-all text-center focus:outline-none cursor-pointer"
                       >
                         Cancel Application File
                       </button>
@@ -443,6 +452,39 @@ export default function AdoptionGallery({ session }) {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── NEW MODULE: DYNAMIC TRANSITION OVERLAY MODAL FOR APPLICATION WITHDRAWALS ── */}
+      {cancelModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in text-left">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 animate-scale-up text-center">
+            <div className="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-rose-100">
+              <svg className="w-6 h-6 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+            </div>
+            <h3 className="text-base font-black text-slate-900 mb-2">Withdraw Application</h3>
+            <p className="text-[11px] text-slate-500 mb-6 font-normal">
+              Are you absolutely sure you want to withdraw and cancel this adoption request file? This action is permanent and cannot be undone.
+            </p>
+            <div className="flex gap-2 font-mono text-[10px] font-bold uppercase select-none">
+              <button 
+                type="button" 
+                onClick={() => setCancelModal({ isOpen: false, appId: null })} 
+                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all cursor-pointer focus:outline-none tracking-wide"
+              >
+                Abort
+              </button>
+              <button 
+                type="button" 
+                onClick={confirmCancelApplication} 
+                className="flex-1 py-2 bg-[#5C0612] hover:bg-[#42040B] text-white rounded-xl transition-all shadow-md cursor-pointer focus:outline-none tracking-wide border-b border-[#D4AF37]/40"
+              >
+                Withdraw File
+              </button>
+            </div>
           </div>
         </div>
       )}
