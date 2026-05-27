@@ -857,3 +857,7 @@ class NewsfeedItemActionAPIView(APIView):
                 {"error": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+class HealthCheckAPIView(APIView):
+    def get(self, request):
+        return Response({"status": "healthy", "message": "Task Force Bruno Node is awake."}, status=status.HTTP_200_OK)

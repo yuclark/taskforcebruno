@@ -37,4 +37,5 @@ urlpatterns = [
     path('newsfeed/comment/action/', CommentActionAPIView.as_view(), name='feed-comment-action'),
     
     path('newsfeed/action/', NewsfeedItemActionAPIView.as_view(), name='newsfeed-item-action'),
+    path('health/', HealthCheckAPIView.as_view(), name='health-check'),
 ]
