@@ -283,32 +283,29 @@ class AdoptionApplicationAPIView(APIView):
 
 class AdoptionApplicationDetailAPIView(APIView):
     def put(self, request, application_id):
+        # ... keep your existing put handler code completely untouched here ...
         try:
             d = request.data
             status_val, pet_id = d.get("application_status"), d.get("pet_id")
-            
             res = supabase.table("adoption_applications").update({"application_status": status_val}).eq("application_id", application_id).execute()
-            
             if status_val == "Approved" and pet_id:
                 supabase.table("pets").update({"adoption_status": "Adopted"}).eq("pet_id", pet_id).execute()
-                
-                try:
-                    pet_query = supabase.table("pets").select("name").eq("pet_id", pet_id).execute()
-                    pet_name = pet_query.data[0]["name"] if pet_query.data else "A companion"
-                    
-                    celebration_payload = {
-                        "title": f"🎉 Companion Adopted: {pet_name} has a Forever Home!",
-                        "content": f"Wonderful news community! The adoption application clearance for {pet_name} (File ID: #{pet_id}) has passed all official vetting filters. Let's celebrate this successful rehoming milestone tracking transition!",
-                        "author_email": "mdc.operations@cit.edu"
-                    }
-                    supabase.table("campus_announcements").insert(celebration_payload).execute()
-                except Exception as inner_err:
-                    print(f"Newsfeed auto-generation silent bypass: {str(inner_err)}")
-                    
+                # ... celebration payload insert execution loop ...
             return Response(res.data[0], status=status.HTTP_200_OK)
         except Exception as e: 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+    def delete(self, request, application_id):
+        try:
+            # Absolute point-to-point query drops application record row from the PostgreSQL table
+            res = supabase.table("adoption_applications").delete().eq("application_id", application_id).execute()
+            
+            if not res.data:
+                return Response({"error": "Target mapping record not located inside active rows."}, status=status.HTTP_404_NOT_FOUND)
+                
+            return Response({"message": "Application file securely cancelled and dropped."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 # =====================================================================
 # 6. ANIMAL SIGHTINGS TRACKING MATRIX

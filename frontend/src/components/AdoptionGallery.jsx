@@ -148,6 +148,26 @@ export default function AdoptionGallery({ session }) {
     }
   };
 
+  // ── NEW FEAT TRIGGER: DISPATCH CANCELLATION PURGE REQUEST BACKEND COMMAND ──
+  const handleCancelApplication = async (appId) => {
+    if (!window.confirm("Are you absolutely sure you want to withdraw and cancel this adoption request file? This action is permanent.")) return;
+    
+    try {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/applications/${appId}/`, {
+        method: 'DELETE'
+      });
+      
+      if (res.ok) {
+        fetchAvailablePlacements();
+        fetchMyTrackingLogs();
+      } else {
+        alert("System gateway rejected tracking deletion request.");
+      }
+    } catch (err) {
+      console.error('Cancellation communication runtime exception:', err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="w-full max-w-sm bg-white border border-slate-200 rounded-[24px] p-16 text-center shadow-[0_10px_40px_rgba(0,0,0,0.03)] mx-auto flex flex-col items-center justify-center">
@@ -198,8 +218,6 @@ export default function AdoptionGallery({ session }) {
           <div className="h-[450px] w-full bg-white border border-slate-200 rounded-[32px] overflow-hidden shadow-[0_15px_45px_rgba(0,0,0,0.03)] flex flex-col relative group shrink-0 transition-all duration-300">
             <div className="w-full h-[46%] relative bg-slate-950 overflow-hidden shrink-0 border-b border-slate-100">
               <img src={currentPet.primary_image || 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba'} alt="" className="w-full h-full object-cover select-none pointer-events-none brightness-[0.96]" />
-              
-              {/* ── MODIFIED: Dynamic System Classification Badge Engine renders Stray labels cleanly inside Swiper ── */}
               <div className="absolute top-4 left-4 flex gap-1.5 font-mono text-[9px] font-bold select-none">
                 <span className="px-2.5 py-1 bg-slate-950/70 backdrop-blur-md text-white rounded-lg border border-white/10 shadow-sm">#{currentPet.pet_id}</span>
                 <span className={`px-2.5 py-1 backdrop-blur-md rounded-lg border shadow-sm tracking-wide uppercase ${
@@ -223,7 +241,7 @@ export default function AdoptionGallery({ session }) {
                   <span className="bg-slate-50 px-2 py-0.5 rounded border border-slate-200/60">{currentPet.age}</span>
                   <span className="bg-slate-50 px-2 py-0.5 rounded border border-slate-200/60">{currentPet.size} Scale</span>
                 </div>
-                <p className="text-[#64748B] leading-relaxed text-[11px] font-normal overflow-y-auto pr-1 border-l-2 border-slate-100 pl-2 grow max-h-[70px]">
+                <p className="text-[11px] text-slate-500 leading-relaxed font-normal overflow-y-auto pr-1 border-l-2 border-slate-100 pl-2 grow max-h-[70px]">
                   {currentPet.about_text}
                 </p>
               </div>
@@ -306,6 +324,17 @@ export default function AdoptionGallery({ session }) {
                         <span className="font-black text-emerald-800 block mb-1">🚀 NEXT STEPS PROTOCOL REQUIRED:</span>
                         Please wait for an official text confirmation from our triage coordinators, or visit the **Task Force Bruno Head Office** directly to claim your companion and settle paperwork hand-off details!
                       </div>
+                    )}
+
+                    {/* ── CHANGED: Injected interactive cancel button visible strictly during Pending review state thresholds ── */}
+                    {isPending && (
+                      <button
+                        type="button"
+                        onClick={() => handleCancelApplication(app.application_id)}
+                        className="w-full mt-1 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-mono font-bold text-[9px] uppercase tracking-wider rounded-lg border border-rose-200 transition-all text-center focus:outline-none"
+                      >
+                        Cancel Application File
+                      </button>
                     )}
                   </div>
                 );
