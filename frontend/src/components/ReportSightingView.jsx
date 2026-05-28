@@ -91,7 +91,7 @@ export default function ReportSightingView({ session }) {
             <div>
               <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider mb-1.5">Animal Classification Tier *</label>
               <div className="flex gap-2 font-mono text-[10px] font-bold">
-                {['Cat', 'Dog', 'Unknown'].map((type) => (
+                {['Cat', 'Dog', 'Others'].map((type) => (
                   <button 
                     type="button" 
                     key={type} 

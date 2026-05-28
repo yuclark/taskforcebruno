@@ -288,8 +288,14 @@ class AdoptionApplicationDetailAPIView(APIView):
             status_val = d.get("application_status")
             pet_id = d.get("pet_id")
             
-            # 1. Update the status row to 'Cancelled' natively in Supabase
-            res = supabase.table("adoption_applications").update({"application_status": status_val}).eq("application_id", application_id).execute()
+            # Defensive casting: Ensure application_id matches integer types if your DB requires it
+            try:
+                target_id = int(application_id)
+            except ValueError:
+                target_id = application_id
+
+            # 1. Update the status of the adoption application row itself
+            res = supabase.table("adoption_applications").update({"application_status": status_val}).eq("application_id", target_id).execute()
             
             # Guard clause against index execution on empty tables
             if not res.data:
@@ -300,6 +306,7 @@ class AdoptionApplicationDetailAPIView(APIView):
                 supabase.table("pets").update({"adoption_status": "Adopted"}).eq("pet_id", pet_id).execute()
                 
                 try:
+                    # Query BOTH the name and the visual photo link out of the pets table
                     pet_query = supabase.table("pets").select("name, primary_image").eq("pet_id", pet_id).execute()
                     if pet_query.data:
                         pet_name = pet_query.data[0].get("name", "A companion")
@@ -308,6 +315,7 @@ class AdoptionApplicationDetailAPIView(APIView):
                         pet_name = "A companion"
                         pet_image = None
                     
+                    # Inject the extracted pet image URL straight into the bulletin record payload
                     celebration_payload = {
                         "title": f"🎉 Companion Adopted: {pet_name} has a Forever Home!",
                         "content": f"Wonderful news community! The adoption application clearance for {pet_name} (File ID: #{pet_id}) has passed all official vetting filters.",
@@ -318,9 +326,13 @@ class AdoptionApplicationDetailAPIView(APIView):
                 except Exception as inner_err:
                     print(f"Newsfeed auto-generation bypass: {str(inner_err)}")
                     
+            # Safely return the updated record now that we confirmed data exists
             return Response(res.data[0], status=status.HTTP_200_OK)
+            
         except Exception as e: 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 # =====================================================================
 # 6. ANIMAL SIGHTINGS TRACKING MATRIX
 # =====================================================================
@@ -667,6 +679,8 @@ class CommentActionAPIView(APIView):
             print("[COMMENT DELETE] ERROR:", str(e))
             traceback.print_exc()
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 # =====================================================================
 # 8. ADMINISTRATIVE SOCIAL TIMELINE MODERATION CORE
 # =====================================================================
