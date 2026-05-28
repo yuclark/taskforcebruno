@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import jsQR from 'jsqr';
 
+/**
+ * ARCHITECTURAL DESIGN BOUNDARY NOTICE:
+ * This component is strictly an internal telemetry lookup node for scanning or typing 
+ * asset IDs (PET-XXXX / STRAY-XXXX) to load profile/medical contexts. 
+ * Do NOT introduce adoption application submission fields, forms, or POST handles here.
+ */
 export default function QRScannerView({ onProfileIdentified }) {
   const [manualId, setManualId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -86,7 +92,6 @@ export default function QRScannerView({ onProfileIdentified }) {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     
-    // Draw visual framework bounds onto calculation array context
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
     
@@ -96,7 +101,7 @@ export default function QRScannerView({ onProfileIdentified }) {
 
     if (qrCode) {
       const rawDecodedText = qrCode.data.trim();
-      const assetMatch = rawDecodedText.match(/PET-\d+/i);
+      const assetMatch = rawDecodedText.match(/(PET|STRAY)-\d+/i);
       
       stopCameraStream();
       if (assetMatch) {
@@ -105,7 +110,6 @@ export default function QRScannerView({ onProfileIdentified }) {
         onProfileIdentified(rawDecodedText);
       }
     } else {
-      // Loop execution recursively across the next animation interval
       animationFrameRef.current = requestAnimationFrame(tickScanLoop);
     }
   };
@@ -139,7 +143,7 @@ export default function QRScannerView({ onProfileIdentified }) {
 
           if (qrCode) {
             const rawDecodedText = qrCode.data.trim();
-            const assetMatch = rawDecodedText.match(/PET-\d+/i);
+            const assetMatch = rawDecodedText.match(/(PET|STRAY)-\d+/i);
             
             if (assetMatch) {
               onProfileIdentified(assetMatch[0].toUpperCase());
@@ -168,7 +172,7 @@ export default function QRScannerView({ onProfileIdentified }) {
   return (
     <div className="w-full min-h-[500px] md:min-h-[650px] flex items-center justify-center relative p-3 sm:p-8 bg-gradient-to-br from-slate-200 via-zinc-200 to-stone-300 rounded-3xl overflow-hidden shadow-inner">
       
-      {/* 1. OUTER BACKGROUND CANVAS: Engineering Blueprint Grid & Ambient Backglow */}
+      {/* 1. OUTER BACKGROUND CANVAS */}
       <div className="absolute inset-0 z-0 pointer-events-none select-none">
         <svg className="w-full h-full opacity-100" xmlns="http://www.w3.org/2000/svg">
           <defs>
@@ -182,10 +186,9 @@ export default function QRScannerView({ onProfileIdentified }) {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 md:w-[550px] h-72 md:h-[550px] bg-[#5C0612]/10 rounded-full blur-[60px] md:blur-[100px]"></div>
       </div>
 
-      {/* 2. DEVICE INTERFACE PANEL DOCK - Responsive Width Adjustments */}
+      {/* 2. DEVICE INTERFACE PANEL DOCK */}
       <div className="w-full max-w-md bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-[28px] md:rounded-[32px] overflow-hidden shadow-[0_30px_70px_-15px_rgba(56,4,10,0.4)] border-4 border-[#5C0612] p-4 sm:p-6 text-white flex flex-col justify-between relative transition-all duration-300 z-10 min-h-[550px] md:min-h-[580px]">
         
-        {/* Internal Blueprint Matrix Mesh */}
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none z-0">
           <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -206,23 +209,21 @@ export default function QRScannerView({ onProfileIdentified }) {
           <span>MATRIX_v1.3</span>
         </div>
 
-        {/* Center Target Box */}
+        {/* Center Optical Capture Frame Box */}
         <div className="my-auto flex flex-col items-center z-10 w-full">
           <span className="text-[#D4AF37] text-[10px] uppercase font-bold tracking-widest mb-1.5 bg-[#D4AF37]/5 px-2.5 py-0.5 rounded-md border border-[#D4AF37]/10">
             Optical Scanner Node
           </span>
           <h3 className="text-sm md:text-base font-medium tracking-tight text-slate-200 mb-5 text-center px-2">Scan or Upload Collar Matrix</h3>
 
-          {/* Viewfinder Frame Container */}
           <div className="w-48 h-48 sm:w-52 sm:h-52 rounded-3xl border border-white/10 bg-slate-950 relative flex items-center justify-center overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.6)] border-b-2 border-[#D4AF37]/20">
             
-            {/* Live Native Stream Elements */}
             <video 
               ref={videoRef} 
               className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${isActiveCamera ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
             />
 
-            {/* Target Crosshairs */}
+            {/* Viewfinder Target Crosshairs */}
             <div className="absolute top-3 left-3 w-6 h-6 border-t-4 border-l-4 border-[#D4AF37] rounded-tl shadow-[0_0_8px_rgba(212,175,55,0.3)] z-20"></div>
             <div className="absolute top-3 right-3 w-6 h-6 border-t-4 border-r-4 border-[#D4AF37] rounded-tr shadow-[0_0_8px_rgba(212,175,55,0.3)] z-20"></div>
             <div className="absolute bottom-3 left-3 w-6 h-6 border-b-4 border-l-4 border-[#D4AF37] rounded-bl shadow-[0_0_8px_rgba(212,175,55,0.3)] z-20"></div>
@@ -248,7 +249,6 @@ export default function QRScannerView({ onProfileIdentified }) {
                 </span>
               </button>
             ) : (
-              /* Scanning Indicator overlays when stream running */
               <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none z-20">
                 <span className="text-[9px] bg-slate-950/80 text-[#D4AF37] border border-[#D4AF37]/20 px-2 py-0.5 rounded font-mono uppercase tracking-widest animate-pulse font-bold">
                   FEEDING LAYER...
@@ -256,11 +256,9 @@ export default function QRScannerView({ onProfileIdentified }) {
               </div>
             )}
 
-            {/* Laser Scanning Optic Beam Line */}
             <div className="absolute left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent shadow-[0_0_10px_#D4AF37] top-0 animate-[bounce_2s_infinite] z-20"></div>
           </div>
 
-          {/* Toggle Cancel Action Trigger if Camera Active */}
           {isActiveCamera && (
             <button 
               onClick={stopCameraStream} 
@@ -270,7 +268,6 @@ export default function QRScannerView({ onProfileIdentified }) {
             </button>
           )}
 
-          {/* Separated independent logical blocks to fix parsing error */}
           {errorMessage && (
             <div className="text-[10px] text-rose-400 font-medium bg-rose-950/30 border border-rose-900/40 px-3 py-1.5 rounded-xl mt-4 max-w-[224px] text-center shadow-sm">
               {errorMessage}
@@ -283,7 +280,7 @@ export default function QRScannerView({ onProfileIdentified }) {
             </div>
           )}
 
-          {/* Integrated Document Upload Trigger */}
+          {/* Document Upload Option */}
           <div className="w-full px-2 mt-4">
             <input 
               type="file" 
@@ -307,7 +304,7 @@ export default function QRScannerView({ onProfileIdentified }) {
           </div>
         </div>
 
-        {/* Terminal Override Console Input Area */}
+        {/* Terminal Manual Override (Pure ID Lookup - No applications submitted here) */}
         <div className="bg-slate-950/90 p-3.5 rounded-2xl border border-white/5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] z-10 mt-4">
           <label className="block text-[9px] uppercase font-bold tracking-widest text-slate-500 mb-2 text-center font-mono">
             Terminal Override Console
