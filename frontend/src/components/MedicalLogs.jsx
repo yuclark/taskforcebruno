@@ -264,7 +264,7 @@ export default function MedicalLogs({ pets }) {
                   <input type="date" required value={medDate} onChange={(e) => setMedDate(e.target.value)} className="w-full p-1.5 bg-white border rounded-lg focus:outline-none font-mono text-[11px]" />
                 </div>
                 <div>
-                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Patient Mass</label>
+                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Pet's Mass</label>
                   <input type="text" placeholder="Ex: 5.1 kg" value={medWeight} onChange={(e) => setMedWeight(e.target.value)} className="w-full p-1.5 bg-white border rounded-lg focus:outline-none" />
                 </div>
               </div>

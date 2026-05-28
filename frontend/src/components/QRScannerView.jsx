@@ -1,11 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import jsQR from 'jsqr';
 
 export default function QRScannerView({ onProfileIdentified }) {
   const [manualId, setManualId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isActiveCamera, setIsActiveCamera] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const animationFrameRef = useRef(null);
+
+  // Clean up streaming channels if the user navigates away abruptly
+  useEffect(() => {
+    return () => stopCameraStream();
+  }, []);
 
   const handleManualSubmit = (e) => {
     e.preventDefault();
@@ -13,21 +24,97 @@ export default function QRScannerView({ onProfileIdentified }) {
     onProfileIdentified(manualId.trim().toUpperCase());
   };
 
-  const simulateCameraScan = () => {
-    setIsProcessing(true);
-    setStatusMessage('Capturing optical feed...');
+  const startCameraStream = async () => {
     setErrorMessage('');
-    
-    setTimeout(() => {
+    setIsProcessing(true);
+    setStatusMessage('Requesting camera permissions...');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 640 } }
+      });
+      
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute('playsinline', 'true'); // Prevents iOS Safari fullscreen hijacking
+        videoRef.current.play();
+      }
+      
+      setIsActiveCamera(true);
       setIsProcessing(false);
-      onProfileIdentified('PET-2041');
-    }, 950);
+      setStatusMessage('Scanning visual matrix elements...');
+      animationFrameRef.current = requestAnimationFrame(tickScanLoop);
+    } catch (err) {
+      console.error('Optical capture error:', err);
+      setIsProcessing(false);
+      setErrorMessage('Camera access denied or device interface unavailable.');
+    }
+  };
+
+  const stopCameraStream = () => {
+    setIsActiveCamera(false);
+    setStatusMessage('');
+    
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  const tickScanLoop = () => {
+    if (!videoRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA) {
+      animationFrameRef.current = requestAnimationFrame(tickScanLoop);
+      return;
+    }
+
+    const video = videoRef.current;
+    let canvas = canvasRef.current;
+    
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvasRef.current = canvas;
+    }
+
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    // Draw visual framework bounds onto calculation array context
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    
+    const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: 'dontInvert',
+    });
+
+    if (qrCode) {
+      const rawDecodedText = qrCode.data.trim();
+      const assetMatch = rawDecodedText.match(/PET-\d+/i);
+      
+      stopCameraStream();
+      if (assetMatch) {
+        onProfileIdentified(assetMatch[0].toUpperCase());
+      } else {
+        onProfileIdentified(rawDecodedText);
+      }
+    } else {
+      // Loop execution recursively across the next animation interval
+      animationFrameRef.current = requestAnimationFrame(tickScanLoop);
+    }
   };
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    stopCameraStream();
     setIsProcessing(true);
     setStatusMessage('Decoding matrix arrays...');
     setErrorMessage('');
@@ -79,28 +166,24 @@ export default function QRScannerView({ onProfileIdentified }) {
   };
 
   return (
-    <div className="w-full h-full min-h-[600px] flex items-center justify-center relative p-8 bg-gradient-to-br from-slate-200 via-zinc-200 to-stone-300 rounded-3xl overflow-hidden shadow-inner">
+    <div className="w-full min-h-[500px] md:min-h-[650px] flex items-center justify-center relative p-3 sm:p-8 bg-gradient-to-br from-slate-200 via-zinc-200 to-stone-300 rounded-3xl overflow-hidden shadow-inner">
       
-      {/* 1. OUTER BACKGROUND CANVAS: Crisp Engineering Blueprint Grid & Dynamic Ambient Backglow */}
+      {/* 1. OUTER BACKGROUND CANVAS: Engineering Blueprint Grid & Ambient Backglow */}
       <div className="absolute inset-0 z-0 pointer-events-none select-none">
         <svg className="w-full h-full opacity-100" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="outer-scanner-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              {/* Distinct cross-hatch layout lines */}
               <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(92, 6, 18, 0.12)" strokeWidth="1" />
               <circle cx="40" cy="40" r="1.5" fill="rgba(212, 175, 55, 0.4)" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#outer-scanner-grid)" />
         </svg>
-        
-        {/* Deep high-visibility backglow targets directly under the terminal card */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-[#5C0612]/10 rounded-full blur-[100px]"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] bg-[#D4AF37]/15 rounded-full blur-[80px]"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 md:w-[550px] h-72 md:h-[550px] bg-[#5C0612]/10 rounded-full blur-[60px] md:blur-[100px]"></div>
       </div>
 
-      {/* 2. DEVICE INTERFACE PANEL DOCK */}
-      <div className="max-w-sm w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-[32px] overflow-hidden shadow-[0_30px_70px_-15px_rgba(56,4,10,0.4)] border-4 border-[#5C0612] p-6 text-white aspect-[9/16] flex flex-col justify-between relative transition-all z-10">
+      {/* 2. DEVICE INTERFACE PANEL DOCK - Responsive Width Adjustments */}
+      <div className="w-full max-w-md bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-[28px] md:rounded-[32px] overflow-hidden shadow-[0_30px_70px_-15px_rgba(56,4,10,0.4)] border-4 border-[#5C0612] p-4 sm:p-6 text-white flex flex-col justify-between relative transition-all duration-300 z-10 min-h-[550px] md:min-h-[580px]">
         
         {/* Internal Blueprint Matrix Mesh */}
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none z-0">
@@ -115,12 +198,12 @@ export default function QRScannerView({ onProfileIdentified }) {
         </div>
 
         {/* Top Status Indicators */}
-        <div className="flex justify-between items-center text-[10px] opacity-40 font-mono tracking-widest z-10">
+        <div className="flex justify-between items-center text-[10px] opacity-40 font-mono tracking-widest z-10 mb-4">
           <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>SYS_FEED_ONLINE</span>
+            <span className={`w-1.5 h-1.5 rounded-full ${isActiveCamera ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+            <span>{isActiveCamera ? 'FEED_LIVE_DECODING' : 'SYS_FEED_STANDBY'}</span>
           </div>
-          <span>MATRIX_v1.2</span>
+          <span>MATRIX_v1.3</span>
         </div>
 
         {/* Center Target Box */}
@@ -128,28 +211,32 @@ export default function QRScannerView({ onProfileIdentified }) {
           <span className="text-[#D4AF37] text-[10px] uppercase font-bold tracking-widest mb-1.5 bg-[#D4AF37]/5 px-2.5 py-0.5 rounded-md border border-[#D4AF37]/10">
             Optical Scanner Node
           </span>
-          <h3 className="text-base font-medium tracking-tight text-slate-200 mb-5 text-center">Scan or Upload Collar Matrix</h3>
+          <h3 className="text-sm md:text-base font-medium tracking-tight text-slate-200 mb-5 text-center px-2">Scan or Upload Collar Matrix</h3>
 
           {/* Viewfinder Frame Container */}
-          <div className="w-52 h-52 rounded-3xl border border-white/10 bg-slate-950/70 relative flex items-center justify-center overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.6)] border-b-2 border-[#D4AF37]/20">
+          <div className="w-48 h-48 sm:w-52 sm:h-52 rounded-3xl border border-white/10 bg-slate-950 relative flex items-center justify-center overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.6)] border-b-2 border-[#D4AF37]/20">
             
-            {/* Target Crosshairs */}
-            <div className="absolute top-3 left-3 w-6 h-6 border-t-4 border-l-4 border-[#D4AF37] rounded-tl shadow-[0_0_8px_rgba(212,175,55,0.3)]"></div>
-            <div className="absolute top-3 right-3 w-6 h-6 border-t-4 border-r-4 border-[#D4AF37] rounded-tr shadow-[0_0_8px_rgba(212,175,55,0.3)]"></div>
-            <div className="absolute bottom-3 left-3 w-6 h-6 border-b-4 border-l-4 border-[#D4AF37] rounded-bl shadow-[0_0_8px_rgba(212,175,55,0.3)]"></div>
-            <div className="absolute bottom-3 right-3 w-6 h-6 border-b-4 border-r-4 border-[#D4AF37] rounded-br shadow-[0_0_8px_rgba(212,175,55,0.3)]"></div>
+            {/* Live Native Stream Elements */}
+            <video 
+              ref={videoRef} 
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${isActiveCamera ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
+            />
 
-            {isProcessing ? (
+            {/* Target Crosshairs */}
+            <div className="absolute top-3 left-3 w-6 h-6 border-t-4 border-l-4 border-[#D4AF37] rounded-tl shadow-[0_0_8px_rgba(212,175,55,0.3)] z-20"></div>
+            <div className="absolute top-3 right-3 w-6 h-6 border-t-4 border-r-4 border-[#D4AF37] rounded-tr shadow-[0_0_8px_rgba(212,175,55,0.3)] z-20"></div>
+            <div className="absolute bottom-3 left-3 w-6 h-6 border-b-4 border-l-4 border-[#D4AF37] rounded-bl shadow-[0_0_8px_rgba(212,175,55,0.3)] z-20"></div>
+            <div className="absolute bottom-3 right-3 w-6 h-6 border-b-4 border-r-4 border-[#D4AF37] rounded-br shadow-[0_0_8px_rgba(212,175,55,0.3)] z-20"></div>
+
+            {isProcessing && !isActiveCamera ? (
               <div className="text-center space-y-2.5 z-10 px-4 animate-pulse">
                 <div className="w-7 h-7 border-2 border-t-transparent border-[#D4AF37] rounded-full animate-spin mx-auto"></div>
-                <span className="text-[9px] text-[#D4AF37] font-mono tracking-widest block uppercase font-bold">
-                  {statusMessage}
-                </span>
+                <span className="text-[9px] text-[#D4AF37] font-mono tracking-widest block uppercase font-bold">{statusMessage}</span>
               </div>
-            ) : (
+            ) : !isActiveCamera ? (
               <button 
-                onClick={simulateCameraScan}
-                className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 group hover:bg-white/[0.02] active:bg-white/[0.04] transition-all focus:outline-none"
+                onClick={startCameraStream}
+                className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 group hover:bg-white/[0.02] active:bg-white/[0.04] transition-all focus:outline-none z-10"
               >
                 <div className="p-3 bg-slate-900/80 rounded-2xl border border-white/5 text-slate-400 group-hover:text-[#D4AF37] group-hover:border-[#D4AF37]/20 group-hover:shadow-[0_0_15px_rgba(212,175,55,0.1)] transition-all">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
@@ -157,18 +244,39 @@ export default function QRScannerView({ onProfileIdentified }) {
                   </svg>
                 </div>
                 <span className="text-[10px] text-slate-400 group-hover:text-white font-medium tracking-wide transition-colors">
-                  Simulate Camera Optic
+                  Initialize Lens Context
                 </span>
               </button>
+            ) : (
+              /* Scanning Indicator overlays when stream running */
+              <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none z-20">
+                <span className="text-[9px] bg-slate-950/80 text-[#D4AF37] border border-[#D4AF37]/20 px-2 py-0.5 rounded font-mono uppercase tracking-widest animate-pulse font-bold">
+                  FEEDING LAYER...
+                </span>
+              </div>
             )}
 
             {/* Laser Scanning Optic Beam Line */}
-            <div className="absolute left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent shadow-[0_0_10px_#D4AF37] top-0 animate-[bounce_2.5s_infinite]"></div>
+            <div className="absolute left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent shadow-[0_0_10px_#D4AF37] top-0 animate-[bounce_2s_infinite] z-20"></div>
           </div>
+
+          {/* Toggle Cancel Action Trigger if Camera Active */}
+          {isActiveCamera && (
+            <button 
+              onClick={stopCameraStream} 
+              className="mt-3 px-3 py-1 bg-rose-950/40 border border-rose-900/60 rounded-lg text-[9px] font-mono uppercase font-bold tracking-widest text-rose-300 hover:bg-rose-900/40 transition-colors focus:outline-none"
+            >
+              Terminate Feed
+            </button>
+          )}
 
           {errorMessage && (
             <div className="text-[10px] text-rose-400 font-medium bg-rose-950/30 border border-rose-900/40 px-3 py-1.5 rounded-xl mt-4 max-w-[224px] text-center shadow-sm">
               {errorMessage}
+            </div>
+          ) : statusMessage && isActiveCamera && (
+            <div className="text-[9px] text-slate-400 font-mono tracking-widest uppercase mt-4 animate-pulse">
+              {statusMessage}
             </div>
           )}
 
@@ -197,7 +305,7 @@ export default function QRScannerView({ onProfileIdentified }) {
         </div>
 
         {/* Terminal Override Console Input Area */}
-        <div className="bg-slate-950/90 p-3.5 rounded-2xl border border-white/5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] z-10">
+        <div className="bg-slate-950/90 p-3.5 rounded-2xl border border-white/5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] z-10 mt-4">
           <label className="block text-[9px] uppercase font-bold tracking-widest text-slate-500 mb-2 text-center font-mono">
             Terminal Override Console
           </label>
@@ -207,18 +315,18 @@ export default function QRScannerView({ onProfileIdentified }) {
               value={manualId}
               onChange={(e) => setManualId(e.target.value)}
               placeholder="SYS_REF_ID (Ex: PET-2041)"
-              className="flex-1 bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#D4AF37] focus:border-transparent font-mono tracking-wider text-white placeholder-slate-700 shadow-inner"
+              className="flex-1 bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#D4AF37] focus:border-transparent font-mono tracking-wider text-white placeholder-slate-700 shadow-inner min-w-0"
             />
             <button 
               type="submit" 
               className="bg-[#5C0612] hover:bg-[#42040B] px-3.5 py-2 rounded-xl text-xs font-bold tracking-wider border border-[#D4AF37]/30 hover:border-[#D4AF37]/60 active:scale-95 transition-all text-white shrink-0 shadow-md font-mono"
             >
               LOAD
-          </button>
-        </form>
-      </div>
+            </button>
+          </form>
+        </div>
 
-    </div>
+      </div>
       
     </div>
   );
