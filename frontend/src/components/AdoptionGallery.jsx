@@ -161,8 +161,11 @@ export default function AdoptionGallery({ session }) {
     if (!appId) return;
 
     try {
+      // Swapped method to PUT and passed the 'Denied' status string to match backend view rules
       const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/applications/${appId}/`, {
-        method: 'DELETE'
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ application_status: 'Denied' })
       });
       
       if (res.ok) {
