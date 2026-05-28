@@ -270,11 +270,14 @@ export default function QRScannerView({ onProfileIdentified }) {
             </button>
           )}
 
+          {/* Separated independent logical blocks to fix parsing error */}
           {errorMessage && (
             <div className="text-[10px] text-rose-400 font-medium bg-rose-950/30 border border-rose-900/40 px-3 py-1.5 rounded-xl mt-4 max-w-[224px] text-center shadow-sm">
               {errorMessage}
             </div>
-          ) : statusMessage && isActiveCamera && (
+          )}
+
+          {statusMessage && isActiveCamera && (
             <div className="text-[9px] text-slate-400 font-mono tracking-widest uppercase mt-4 animate-pulse">
               {statusMessage}
             </div>
