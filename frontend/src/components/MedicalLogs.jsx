@@ -22,6 +22,44 @@ export default function MedicalLogs({ pets }) {
   const [vacAdminBy, setVacAdminBy] = useState('');
   const [formMessage, setFormMessage] = useState({ target: '', type: '', text: '' });
 
+  // --- DYNAMIC FORM CONFIGURATIONS BY SCENARIO ---
+  const formConfigs = {
+    'Check-up': {
+      notesLabel: "Symptom Findings & Routine Notes *",
+      notesPlaceholder: "Describe general physical condition, behavior, coat quality, and baseline vital inspection notes...",
+      prescriptionLabel: "Prescribed Preventatives / Vitamins / Supplements",
+      prescriptionPlaceholder: "Ex: Multivitamins, Dewormer tablet dosage tracks",
+      followupLabel: "Next Routine Evaluation Date",
+      themeClass: "border-slate-200"
+    },
+    'Clinical Treatment': {
+      notesLabel: "Diagnosis & Clinical Treatment Notes *",
+      notesPlaceholder: "Specify medical diagnosis, clinical pathology state, and operational medical procedures executed...",
+      prescriptionLabel: "Prescribed Pharmacotherapy Treatment Plan",
+      prescriptionPlaceholder: "Ex: Amoxicillin 250mg 2x/day for 7 days split loops",
+      followupLabel: "Clinical Re-check Return Date",
+      themeClass: "border-blue-200"
+    },
+    'Bite Incident': {
+      notesLabel: "Incident Details, Severity & Quarantine Protocol *",
+      notesPlaceholder: "Specify victim category (e.g., student/staff ID), exposure classification (Grade I-III), bite location, and active 14-day quarantine parameters...",
+      prescriptionLabel: "Wound Management & Post-Exposure Prophylaxis Given",
+      prescriptionPlaceholder: "Ex: Immediate antiseptic flushing log, anti-rabies booster recommended",
+      followupLabel: "Quarantine Clearance / Observation Release Date",
+      themeClass: "border-rose-300 bg-rose-50/10"
+    },
+    'Scratch Incident': {
+      notesLabel: "Incident Context & Wound Disinfection Tracking *",
+      notesPlaceholder: "Detail scratch tracking depth, anatomical location, victim category, and immediate sterilization protocol markers implemented...",
+      prescriptionLabel: "Antiseptic / Prophylactic Treatment Protocol Administered",
+      prescriptionPlaceholder: "Ex: Topical mupirocin application, tetanus toxoid evaluation reference",
+      followupLabel: "Wound Healing / Infection Monitoring Re-check Date",
+      themeClass: "border-orange-200 bg-orange-50/10"
+    }
+  };
+
+  const activeConfig = formConfigs[medType] || formConfigs['Check-up'];
+
   const fetchMedicalLogsForTarget = async (id) => {
     if (!id) return;
     try {
@@ -47,7 +85,6 @@ export default function MedicalLogs({ pets }) {
     }
   }, [selectedMedicalPetId]);
 
-  // --- SUBMITTER NODE A: RECONCILED CLINICAL CASE SHEET ---
   const handleAddMedicalRecord = async (e) => {
     e.preventDefault();
     if (!medNotes.trim()) return;
@@ -82,7 +119,6 @@ export default function MedicalLogs({ pets }) {
     }
   };
 
-  // --- SUBMITTER NODE B: RECONCILED ACCREDITED IMMUNIZATION DOSAGE ---
   const handleAddVaccine = async (e) => {
     e.preventDefault();
     if (!vacName.trim()) return;
@@ -211,11 +247,12 @@ export default function MedicalLogs({ pets }) {
               <div className={`p-2.5 border text-[11px] rounded-xl ${formMessage.type === 'success' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-rose-50 text-rose-900 border-rose-200'}`}>{formMessage.text}</div>
             )}
 
-            <form onSubmit={handleAddMedicalRecord} className="space-y-3 bg-slate-50/60 p-3 sm:p-3.5 border rounded-xl">
+            {/* Form dynamically re-themes border borders based on selected option */}
+            <form onSubmit={handleAddMedicalRecord} className={`space-y-3 bg-slate-50/60 p-3 sm:p-3.5 border rounded-xl transition-all duration-300 ${activeConfig.themeClass}`}>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div>
                   <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Case Type</label>
-                  <select value={medType} onChange={(e) => setMedType(e.target.value)} className="w-full p-1.5 bg-white border rounded-lg focus:outline-none font-medium text-slate-900">
+                  <select value={medType} onChange={(e) => { setMedType(e.target.value); setMedNotes(''); setMedPrescription(''); }} className="w-full p-1.5 bg-white border rounded-lg focus:outline-none font-medium text-slate-900">
                     <option value="Check-up">Routine Check-up</option>
                     <option value="Clinical Treatment">Clinical Treatment</option>
                     <option value="Bite Incident">Bite Incident Log</option>
@@ -232,18 +269,21 @@ export default function MedicalLogs({ pets }) {
                 </div>
               </div>
 
+              {/* Dynamic Notes Field Section */}
               <div>
-                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Symptom Findings & Procedural Notes *</label>
-                <input type="text" required value={medNotes} onChange={(e) => setMedNotes(e.target.value)} placeholder="Describe bite/scratch details, quarantine protocols, or clinical physical findings..." className="w-full px-3 py-2 bg-white border rounded-lg focus:outline-none text-xs" />
+                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5 transition-colors duration-200">{activeConfig.notesLabel}</label>
+                <textarea rows="2" required value={medNotes} onChange={(e) => setMedNotes(e.target.value)} placeholder={activeConfig.notesPlaceholder} className="w-full px-3 py-2 bg-white border rounded-lg focus:outline-none text-xs font-sans leading-relaxed text-slate-800" />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {/* Dynamic Treatment/Prescription Field Section */}
                 <div>
-                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Prescribed Pharmacotherapy Treatment</label>
-                  <input type="text" placeholder="Ex: Amoxicillin, Rabies post-exposure drops" value={medPrescription} onChange={(e) => setMedPrescription(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border rounded-lg focus:outline-none" />
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">{activeConfig.prescriptionLabel}</label>
+                  <input type="text" value={medPrescription} onChange={(e) => setMedPrescription(e.target.value)} placeholder={activeConfig.prescriptionPlaceholder} className="w-full px-2.5 py-1.5 bg-white border rounded-lg focus:outline-none" />
                 </div>
+                {/* Dynamic Followup/Due Date Section */}
                 <div>
-                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Return Follow-up Date</label>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">{activeConfig.followupLabel}</label>
                   <input type="date" value={medFollowup} onChange={(e) => setMedFollowup(e.target.value)} className="w-full p-1.5 bg-white border rounded-lg focus:outline-none font-mono text-[11px]" />
                 </div>
               </div>
