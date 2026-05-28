@@ -52,8 +52,8 @@ export default function Login({ onLoginSuccess, togglePage }) {
 
         <div className="relative z-10 my-auto max-w-md">
           <h1 className="text-4xl font-bold text-white tracking-tight leading-tight">
-            Wildcat Welfare <br />
-            <span className="text-[#D4AF37]">Portal</span>
+            TASK FORCE <br />
+            <span className="text-[#D4AF37]">BRUNO</span>
           </h1>
           <p className="text-stone-200 text-sm mt-4 font-light leading-relaxed">
             Dedicated to campus pet care management, health logging, and community animal welfare coordination.
