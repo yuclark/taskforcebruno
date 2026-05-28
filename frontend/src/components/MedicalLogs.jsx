@@ -59,7 +59,7 @@ export default function MedicalLogs({ pets }) {
       medication_prescribed: medPrescription.trim() || 'None',
       next_followup_date: medFollowup || null,
       weight_at_log: medWeight.trim() || 'N/A',
-      veterinarian: medVet.trim() || 'MDC Staff vete'
+      veterinarian: medVet.trim() || 'MDC Staff Veterinarian'
     };
 
     try {
@@ -167,7 +167,6 @@ export default function MedicalLogs({ pets }) {
                 </div>
               </div>
 
-              {/* MODIFIED: Re-arranged text fields to stack vertically on phone screens */}
               <div className="flex flex-col sm:flex-row gap-2 pt-1">
                 <input type="text" placeholder="Administered by (Attendant or Vet Clinician)" value={vacAdminBy} onChange={(e) => setVacAdminBy(e.target.value)} className="w-full sm:flex-1 px-3 py-1.5 bg-white border rounded-lg focus:outline-none text-xs" />
                 <button type="submit" className="w-full sm:w-auto px-4 py-2 bg-[#5C0612] text-white rounded-lg font-bold border-b-2 border-[#D4AF37] hover:bg-[#42040B] transition-all shrink-0 text-center whitespace-nowrap">LOG DOSAGE</button>
@@ -216,7 +215,12 @@ export default function MedicalLogs({ pets }) {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div>
                   <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Case Type</label>
-                  <select value={medType} onChange={(e) => setMedType(e.target.value)} className="w-full p-1.5 bg-white border rounded-lg focus:outline-none font-medium"><option value="Check-up">Routine Check-up</option><option value="Incident log">Incident Log</option><option value="Clinical Treatment">Clinical Treatment</option></select>
+                  <select value={medType} onChange={(e) => setMedType(e.target.value)} className="w-full p-1.5 bg-white border rounded-lg focus:outline-none font-medium text-slate-900">
+                    <option value="Check-up">Routine Check-up</option>
+                    <option value="Clinical Treatment">Clinical Treatment</option>
+                    <option value="Bite Incident">Bite Incident Log</option>
+                    <option value="Scratch Incident">Scratch Incident Log</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Session Date *</label>
@@ -230,13 +234,13 @@ export default function MedicalLogs({ pets }) {
 
               <div>
                 <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Symptom Findings & Procedural Notes *</label>
-                <input type="text" required value={medNotes} onChange={(e) => setMedNotes(e.target.value)} placeholder="Describe physical findings, trauma context, or status notes..." className="w-full px-3 py-2 bg-white border rounded-lg focus:outline-none text-xs" />
+                <input type="text" required value={medNotes} onChange={(e) => setMedNotes(e.target.value)} placeholder="Describe bite/scratch details, quarantine protocols, or clinical physical findings..." className="w-full px-3 py-2 bg-white border rounded-lg focus:outline-none text-xs" />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Prescribed Pharmacotherapy Treatment</label>
-                  <input type="text" placeholder="Ex: Amoxicillin 250mg 2x/day" value={medPrescription} onChange={(e) => setMedPrescription(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border rounded-lg focus:outline-none" />
+                  <input type="text" placeholder="Ex: Amoxicillin, Rabies post-exposure drops" value={medPrescription} onChange={(e) => setMedPrescription(e.target.value)} className="w-full px-2.5 py-1.5 bg-white border rounded-lg focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Return Follow-up Date</label>
@@ -244,7 +248,6 @@ export default function MedicalLogs({ pets }) {
                 </div>
               </div>
 
-              {/* MODIFIED: Stack signature block field and buttons horizontally on desktop, vertically on phone viewport sizes */}
               <div className="flex flex-col sm:flex-row gap-2 pt-1">
                 <input type="text" placeholder="Executing Medical Officer / Veterinarian" value={medVet} onChange={(e) => setMedVet(e.target.value)} className="w-full sm:flex-1 px-3 py-1.5 bg-white border rounded-lg focus:outline-none text-xs" />
                 <button type="submit" className="w-full sm:w-auto px-4 py-2 bg-[#5C0612] text-white rounded-lg font-bold border-b-2 border-[#D4AF37] hover:bg-[#42040B] transition-all text-center whitespace-nowrap">COMMIT ENTIRE BLOCK</button>
@@ -260,8 +263,10 @@ export default function MedicalLogs({ pets }) {
                 <div key={m.record_id} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 space-y-2 shadow-inner hover:bg-white transition-colors">
                   <div className="flex justify-between items-start font-mono text-[10px] gap-2">
                     <span className={`px-2 py-0.5 rounded font-bold text-[8px] uppercase tracking-wider border ${
-                      m.record_type === 'Incident log' 
-                        ? 'bg-rose-50 border-rose-200 text-rose-700 animate-pulse' 
+                      m.record_type === 'Bite Incident'
+                        ? 'bg-rose-100 border-rose-300 text-rose-800 font-black animate-pulse'
+                        : m.record_type === 'Scratch Incident'
+                        ? 'bg-orange-50 border-orange-200 text-orange-700 font-bold'
                         : m.record_type === 'Clinical Treatment' 
                         ? 'bg-blue-50 border-blue-200 text-blue-700' 
                         : 'bg-slate-100 border-slate-200 text-slate-700'
