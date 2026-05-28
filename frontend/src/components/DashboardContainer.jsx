@@ -7,7 +7,7 @@ import ReportSightingView from './ReportSightingView';
 import NewsfeedView from './NewsfeedView';
 
 export default function DashboardContainer({ session, onLogout }) {
-  // ── MODIFIED: Hydrate current tab position from disk parameters on bootup loop ──
+  // Hydrate current tab position from disk parameters on bootup loop
   const [currentTab, setCurrentTab] = useState(() => {
     return localStorage.getItem('tfb_user_tab') || 'newsfeed';
   });
@@ -15,7 +15,7 @@ export default function DashboardContainer({ session, onLogout }) {
   const [activePetId, setActivePetId] = useState(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // ── MODIFIED: Save current tab layout configuration dynamically upon mutation ──
+  // Save current tab layout configuration dynamically upon mutation
   useEffect(() => {
     localStorage.setItem('tfb_user_tab', currentTab);
   }, [currentTab]);
@@ -244,6 +244,7 @@ export default function DashboardContainer({ session, onLogout }) {
               <defs>
                 <pattern
                   id="user-grid"
+                  width="40"
                   width="40"
                   height="40"
                   patternUnits="userSpaceOnUse"

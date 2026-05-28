@@ -3,9 +3,6 @@ import React, { useState, useEffect } from 'react';
 export default function PetProfileView({ petId, onBackToScanner }) {
   const [petData, setPetData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showApplyForm, setShowApplyForm] = useState(false);
-  const [applicationForm, setApplicationForm] = useState({ fullName: '', contactNum: '', address: '', experience: 'Beginner' });
-  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     if (!petId) return;
@@ -21,16 +18,6 @@ export default function PetProfileView({ petId, onBackToScanner }) {
         setLoading(false);
       });
   }, [petId]);
-
-  const handleApplySubmit = (e) => {
-    e.preventDefault();
-    setSuccessMessage(`Application for ${petData.name} successfully transmitted to the review board!`);
-    setTimeout(() => {
-      setSuccessMessage('');
-      setShowApplyForm(false);
-      setApplicationForm({ fullName: '', contactNum: '', address: '', experience: 'Beginner' });
-    }, 3000);
-  };
 
   if (loading) {
     return (
@@ -52,12 +39,10 @@ export default function PetProfileView({ petId, onBackToScanner }) {
     );
   }
 
-  const isEligibleForAdoption = petData.pet_type === 'For Adoption' && petData.adoption_status === 'Available';
-
   return (
     <div className="max-w-md w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-[32px] overflow-hidden shadow-[0_30px_70px_-15px_rgba(56,4,10,0.4)] border-4 border-[#5C0612] p-5 text-white flex flex-col justify-between relative h-[680px] animate-fade-in mx-auto">
       
-      {/* Top System Header — MODIFIED: Checks for Adopted Status mapping */}
+      {/* Top System Header */}
       <div className="flex justify-between items-center text-[10px] opacity-40 font-mono tracking-widest border-b border-white/5 pb-2.5 mb-3 shrink-0">
         <span>DECRYPTED_NODE: #{petData.pet_id}</span>
         <span className="uppercase text-[#D4AF37] font-bold">
@@ -68,7 +53,7 @@ export default function PetProfileView({ petId, onBackToScanner }) {
       {/* COMPREHENSIVE FULL DATA WORKSPACE (Scrollable for mobile support) */}
       <div className="space-y-4 flex-1 overflow-y-auto pr-1 mb-3 text-left">
         
-        {/* Media Frame Container — MODIFIED: Dynamic badge rendering alignment with clean dark mode slate accents */}
+        {/* Media Frame Container */}
         <div className="w-full h-40 bg-slate-900 border border-white/10 rounded-2xl overflow-hidden relative shadow-inner shrink-0">
           <img src={petData.primary_image || 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba'} alt="" className="w-full h-full object-cover" />
           <span className={`absolute bottom-3 left-3 px-2 py-0.5 rounded text-[8px] font-mono font-bold tracking-widest border uppercase ${
@@ -133,18 +118,9 @@ export default function PetProfileView({ petId, onBackToScanner }) {
 
       {/* Context Actions Base Footer */}
       <div className="space-y-2 pt-2 border-t border-white/5 shrink-0">
-        {isEligibleForAdoption ? (
-          <button 
-            onClick={() => setShowApplyForm(true)} 
-            className="w-full py-2.5 bg-[#5C0612] hover:bg-[#42040B] text-white font-bold tracking-widest rounded-xl border-b-2 border-[#D4AF37] transition-all text-center text-[10px] uppercase shadow-md"
-          >
-            Submit Placement Application
-          </button>
-        ) : (
-          <div className="w-full py-2.5 bg-slate-900/40 border border-white/5 text-slate-500 rounded-xl text-[10px] font-mono tracking-wider uppercase text-center select-none font-semibold">
-            {petData.adoption_status === 'Adopted' ? 'Alumni Companion Protected Record' : 'Institutional Protected Animal Asset'}
-          </div>
-        )}
+        <div className="w-full py-2.5 bg-slate-900/40 border border-white/5 text-slate-500 rounded-xl text-[10px] font-mono tracking-wider uppercase text-center select-none font-semibold">
+          {petData.adoption_status === 'Adopted' ? 'Alumni Companion Protected Record' : 'Institutional Protected Animal Asset'}
+        </div>
 
         <button 
           onClick={onBackToScanner} 
@@ -153,51 +129,6 @@ export default function PetProfileView({ petId, onBackToScanner }) {
           Disconnect Asset Session
         </button>
       </div>
-
-      {/* OVERLAY APPLICATION FORM */}
-      {showApplyForm && isEligibleForAdoption && (
-        <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md p-5 flex flex-col justify-between z-40 rounded-[28px] animate-fade-in text-left">
-          <div className="space-y-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-200">Placement Application Form</h3>
-              <p className="text-[10px] text-slate-500 font-mono mt-0.5">Target Companion Entity: {petData.name}</p>
-            </div>
-
-            {successMessage ? (
-              <div className="p-4 bg-emerald-950/40 border border-emerald-800 text-emerald-400 rounded-xl text-center font-medium animate-pulse font-sans mt-12 text-xs leading-relaxed shadow-inner">
-                {successMessage}
-              </div>
-            ) : (
-              <form onSubmit={handleApplySubmit} className="space-y-2 text-[11px]">
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5 font-mono">Full Applicant Name</label>
-                  <input type="text" required value={applicationForm.fullName} onChange={(e) => setApplicationForm({...applicationForm, fullName: e.target.value})} placeholder="Vince Clark Lanticse" className="w-full px-3 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-white text-xs focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5 font-mono">Contact Number</label>
-                  <input type="text" required value={applicationForm.contactNum} onChange={(e) => setApplicationForm({...applicationForm, contactNum: e.target.value})} placeholder="09---------" className="w-full px-3 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-white text-xs font-mono focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5 font-mono">Residential Address</label>
-                  <input type="text" required value={applicationForm.address} onChange={(e) => setApplicationForm({...applicationForm, address: e.target.value})} placeholder="Mandaue City, Cebu" className="w-full px-3 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-white text-xs focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5 font-mono">Caretaking Background</label>
-                  <select value={applicationForm.experience} onChange={(e) => setApplicationForm({...applicationForm, experience: e.target.value})} className="w-full p-1.5 bg-slate-900 border border-white/10 rounded-lg text-slate-300 text-xs focus:outline-none">
-                    <option value="Beginner">First-time Companion Caretaker</option>
-                    <option value="Intermediate">Have managed 1-2 pets previously</option>
-                    <option value="Expert">Experienced Multi-Animal Caretaker</option>
-                  </select>
-                </div>
-                <div className="flex gap-2 pt-4">
-                  <button type="button" onClick={() => setShowApplyForm(false)} className="flex-1 py-2 bg-slate-900 hover:bg-slate-850 text-slate-400 font-semibold rounded-xl border border-white/5 font-mono text-[10px]">CANCEL</button>
-                  <button type="submit" className="flex-1 py-2 bg-[#5C0612] text-white font-bold border-b-2 border-[#D4AF37] rounded-xl font-mono text-[10px]">TRANSMIT</button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
 
     </div>
   );
