@@ -285,45 +285,42 @@ class AdoptionApplicationDetailAPIView(APIView):
     def put(self, request, application_id):
         try:
             d = request.data
-            status_val, pet_id = d.get("application_status"), d.get("pet_id")
+            status_val = d.get("application_status")
+            pet_id = d.get("pet_id")
             
-            # 1. Update the status of the adoption application row itself
+            # 1. Update the status row to 'Cancelled' natively in Supabase
             res = supabase.table("adoption_applications").update({"application_status": status_val}).eq("application_id", application_id).execute()
             
-            # 2. If approved, process the cascading infrastructure mutations
+            # Guard clause against index execution on empty tables
+            if not res.data:
+                return Response({"error": "Application tracking file not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+            # 2. Structural checks: Cascading mutations ONLY run for 'Approved' cases
             if status_val == "Approved" and pet_id:
-                # Flag the animal's profile status as Adopted to clear it from public galleries
                 supabase.table("pets").update({"adoption_status": "Adopted"}).eq("pet_id", pet_id).execute()
                 
                 try:
-                    # ── MODIFIED: Query BOTH the name and the visual photo link out of the pets table ──
                     pet_query = supabase.table("pets").select("name, primary_image").eq("pet_id", pet_id).execute()
-                    
                     if pet_query.data:
                         pet_name = pet_query.data[0].get("name", "A companion")
-                        pet_image = pet_query.data[0].get("primary_image", None) # Extract visual asset url
+                        pet_image = pet_query.data[0].get("primary_image", None)
                     else:
                         pet_name = "A companion"
                         pet_image = None
                     
-                    # ── MODIFIED: Inject the extracted pet image URL straight into the bulletin record payload ──
                     celebration_payload = {
                         "title": f"🎉 Companion Adopted: {pet_name} has a Forever Home!",
-                        "content": f"Wonderful news community! The adoption application clearance for {pet_name} (File ID: #{pet_id}) has passed all official vetting filters. Let's celebrate this successful rehoming milestone tracking transition!",
+                        "content": f"Wonderful news community! The adoption application clearance for {pet_name} (File ID: #{pet_id}) has passed all official vetting filters.",
                         "author_email": "mdc.operations@cit.edu",
-                        "image_url": pet_image # <--- This maps the pet's photo to the announcement card automatically!
+                        "image_url": pet_image
                     }
-                    
-                    # Insert the milestone celebration row into your campus announcements table
                     supabase.table("campus_announcements").insert(celebration_payload).execute()
-                    
                 except Exception as inner_err:
-                    print(f"Newsfeed auto-generation silent bypass: {str(inner_err)}")
+                    print(f"Newsfeed auto-generation bypass: {str(inner_err)}")
                     
             return Response(res.data[0], status=status.HTTP_200_OK)
         except Exception as e: 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 # =====================================================================
 # 6. ANIMAL SIGHTINGS TRACKING MATRIX
 # =====================================================================

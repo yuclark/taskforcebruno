@@ -19,7 +19,7 @@ export default function AdoptionGallery({ session }) {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  // ── NEW STATE: CUSTOM REACT COMPONENT OVERLAY FOR CANCELLATIONS ──
+  // Custom modal state trigger for cancellations
   const [cancelModal, setCancelModal] = useState({ isOpen: false, appId: null });
 
   const [applicationForm, setApplicationForm] = useState({
@@ -151,7 +151,6 @@ export default function AdoptionGallery({ session }) {
     }
   };
 
-  // ── CHANGED: Swapped window.confirm out for secure custom state triggers ──
   const openCancelModal = (appId) => {
     setCancelModal({ isOpen: true, appId });
   };
@@ -162,7 +161,9 @@ export default function AdoptionGallery({ session }) {
 
     try {
       const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/applications/${appId}/`, {
-        method: 'DELETE'
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ application_status: 'Cancelled' }) // Transmits native Cancelled keyword
       });
       
       if (res.ok) {
@@ -170,7 +171,7 @@ export default function AdoptionGallery({ session }) {
         fetchAvailablePlacements();
         fetchMyTrackingLogs();
       } else {
-        alert("System gateway rejected tracking deletion request.");
+        alert("System gateway rejected tracking cancellation request.");
       }
     } catch (err) {
       console.error('Cancellation communication runtime exception:', err);
@@ -304,6 +305,8 @@ export default function AdoptionGallery({ session }) {
               {myApplications.map((app) => {
                 const isPending = app.application_status === 'Pending';
                 const isApproved = app.application_status === 'Approved';
+                // Evaluates the updated status row trigger cleanly
+                const isCancelled = app.application_status === 'Cancelled'; 
                 
                 return (
                   <div key={app.application_id} className="p-4 border rounded-xl bg-slate-50/60 flex flex-col gap-3 shadow-sm hover:bg-slate-50 transition-colors text-left">
@@ -318,9 +321,11 @@ export default function AdoptionGallery({ session }) {
                       </div>
 
                       <div className="shrink-0 text-right">
+                        {/* Maps precise color layout indicators across all five supported constraint parameters */}
                         <span className={`inline-block px-3 py-1 text-[9px] font-black tracking-widest uppercase rounded-lg border shadow-sm ${
                           isApproved ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
                           isPending ? 'bg-amber-50 border-amber-200 text-amber-700 animate-pulse' :
+                          isCancelled ? 'bg-slate-50 border-slate-200 text-slate-500' : 
                           'bg-rose-50 border-rose-200 text-rose-700'
                         }`}>
                           {app.application_status}
@@ -335,7 +340,6 @@ export default function AdoptionGallery({ session }) {
                       </div>
                     )}
 
-                    {/* ── MODIFIED: Buttons now call custom tracking state modifiers instead of raw window dialog closures ── */}
                     {isPending && (
                       <button
                         type="button"
@@ -379,7 +383,7 @@ export default function AdoptionGallery({ session }) {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Full Legal Name *</label>
-                      <input type="text" name="fullName" required value={applicationForm.fullName} onChange={handleInputChange} placeholder="Vince Clark Bajenting" className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl focus:outline-none" />
+                      <input type="text" name="fullName" required value={applicationForm.fullName} onChange={handleInputChange} placeholder="Vince Clark" className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl focus:outline-none" />
                     </div>
                     <div>
                       <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Registered Email Address</label>
@@ -456,7 +460,7 @@ export default function AdoptionGallery({ session }) {
         </div>
       )}
 
-      {/* ── NEW MODULE: DYNAMIC TRANSITION OVERLAY MODAL FOR APPLICATION WITHDRAWALS ── */}
+      {/* DYNAMIC TRANSITION OVERLAY MODAL FOR APPLICATION WITHDRAWALS */}
       {cancelModal.isOpen && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in text-left">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 animate-scale-up text-center">
