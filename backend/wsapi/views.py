@@ -872,3 +872,56 @@ class NewsfeedItemActionAPIView(APIView):
 class HealthCheckAPIView(APIView):
     def get(self, request):
         return Response({"status": "healthy", "message": "Task Force Bruno Node is awake."}, status=status.HTTP_200_OK)
+
+# Add this endpoint view class near your other Adoption/Pet views in views.py
+class PetAISearchAPIView(APIView):
+    def post(self, request):
+        try:
+            description_query = request.data.get("description", "").strip().lower()
+            if not description_query:
+                return Response({"error": "Null search constraint parameters."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # 1. Fetch all active pet assets out of the Supabase register database
+            all_pets = supabase.table("pets").select("pet_id, name, species, breed, about_text, primary_image, found_near, current_conditions").execute().data or []
+            
+            # 2. Tokenize user natural description text input parameters
+            query_tokens = [t for t in re.split(r'\W+', description_query) if len(t) > 2] # filters out filler small words
+
+            scored_candidates = []
+            for pet in all_pets:
+                score = 0
+                
+                # Combine lookup text anchors
+                searchable_blob = f"{pet.get('name', '')} {pet.get('species', '')} {pet.get('breed', '')} {pet.get('about_text', '')} {pet.get('found_near', '')} {pet.get('current_conditions', '')}".lower()
+                
+                # High-weight strict category matching anchors
+                species_val = str(pet.get("species", "")).lower()
+                breed_val = str(pet.get("breed", "")).lower()
+                origin_val = str(pet.get("found_near", "")).lower()
+
+                for token in query_tokens:
+                    # Specific high-weight bonuses
+                    if token in species_val:
+                        score += 15  # Heavy structural weight for matching species ('cat', 'dog')
+                    if token in breed_val:
+                        score += 10  # Weight anchor for matching breeds ('tabby', 'husky')
+                    if token in origin_val:
+                        score += 8   # Weight anchor for campus geographical match indicators
+                    
+                    # Baseline substring scan match tracking accumulation loop
+                    if token in searchable_blob:
+                        score += 3
+                        
+                if score > 0:
+                    pet["search_affinity_score"] = score
+                    scored_candidates.append(pet)
+            
+            # 3. Sort structural matches descending by high matching priority metrics
+            scored_candidates.sort(key=lambda x: x["search_affinity_score"], reverse=True)
+            
+            # Limit array scale matrix return parameters to top 5 candidates
+            final_top_hits = scored_candidates[:5]
+            
+            return Response(final_top_hits, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
