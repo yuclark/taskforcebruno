@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 
-// ── CONSTANT REGISTRY: 8 PRE-DEFINED CAMPUS COLONY LOCATIONS FOR DROPDOWN ENFORCEMENT ──
 const ALLOWED_LOCATIONS = [
   "Wildcat Innovation Labs",
   "NGE Building 1st Floor",
@@ -27,11 +26,12 @@ export default function AddNewPet({ onRefresh }) {
     vaccination_status: 'Fully Vaccinated',
     spayed_neutered: true,
     adoption_status: 'Available',
-    found_near: 'Wildcat Innovation Labs', // Initialize with the first valid selection
+    found_near: 'Wildcat Innovation Labs', 
     rescue_date: new Date().toISOString().split('T')[0],
     current_conditions: 'None',
     behavior_notes: '',
-    about_text: ''
+    about_text: '',
+    description: '' // Appended database attribute key
   });
   
   const [imageFile, setImageFile] = useState(null);
@@ -62,7 +62,6 @@ export default function AddNewPet({ onRefresh }) {
     let finalizedPetType = newPetForm.pet_type;
     let finalizedName = newPetForm.name.trim();
 
-    // ── AUTOMATED STRAY GENERATION SEQUENCE ENGINE ──
     if (isStrayMode) {
       finalizedPetId = `STRAY-${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`;
       finalizedPetType = 'For Adoption';
@@ -104,6 +103,7 @@ export default function AddNewPet({ onRefresh }) {
     multiPartFormPayload.append('current_conditions', newPetForm.current_conditions.trim() || 'None');
     multiPartFormPayload.append('behavior_notes', newPetForm.behavior_notes.trim() || 'Stable baseline parameters.');
     multiPartFormPayload.append('about_text', newPetForm.about_text.trim());
+    multiPartFormPayload.append('description', newPetForm.description.trim()); // Dispatches field value straight to API views
 
     if (imageFile) {
       multiPartFormPayload.append('image', imageFile);
@@ -121,7 +121,7 @@ export default function AddNewPet({ onRefresh }) {
           pet_id: '', name: '', species: 'Cat', pet_type: 'Campus Pet', breed: '', gender: 'Male', age: '', weight: '', size: 'Small',
           vaccination_status: 'Fully Vaccinated', spayed_neutered: true, adoption_status: 'Available',
           found_near: 'Wildcat Innovation Labs', rescue_date: new Date().toISOString().split('T')[0], current_conditions: 'None',
-          behavior_notes: '', about_text: ''
+          behavior_notes: '', about_text: '', description: ''
         });
         setImageFile(null);
         if (e.target) e.target.reset();
@@ -234,7 +234,6 @@ export default function AddNewPet({ onRefresh }) {
 
         {/* Colony Context, Diagnostic & Asset Row Grid Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* ── CHANGED: Swapped standard text input field wrapper out for explicit drop down location zone matching filters ── */}
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Rescue Colony Zone *</label>
             <select 
@@ -267,9 +266,16 @@ export default function AddNewPet({ onRefresh }) {
         </div>
 
         {/* Narrative Description Background Summary */}
-        <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Narrative Profile Summary Biography</label>
-          <textarea name="about_text" rows="3" value={newPetForm.about_text} onChange={handleCreateChange} placeholder="Describe unique traits, habits, or special administrative logs details..." className="w-full px-3 py-2 border rounded-xl focus:outline-none text-slate-800 leading-relaxed font-sans resize-none"></textarea>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Narrative Profile Summary Biography</label>
+            <textarea name="about_text" rows="3" value={newPetForm.about_text} onChange={handleCreateChange} placeholder="Describe unique traits, habits, or special administrative logs details..." className="w-full px-3 py-2 border rounded-xl focus:outline-none text-slate-800 leading-relaxed font-sans resize-none"></textarea>
+          </div>
+          {/* ── NEW FIELD BLOCK: AI MATCHING TRAIT MARKERS DESCRIPTION ── */}
+          <div>
+            <label className="block text-[10px] font-bold text-[#5C0612] uppercase mb-1">Physical Search Description (AI Engine Match Key) *</label>
+            <textarea name="description" required rows="3" value={newPetForm.description} onChange={handleCreateChange} placeholder="Input distinct visual traits used by the scanner fallback description lookups... (Ex: ginger coat, white paws, torn left ear)" className="w-full px-3 py-2 border rounded-xl focus:outline-none text-slate-800 leading-relaxed font-sans resize-none"></textarea>
+          </div>
         </div>
 
         <button type="submit" className="w-full py-3.5 bg-[#5C0612] text-white font-bold tracking-widest rounded-xl border-b-4 border-[#D4AF37] hover:bg-[#42040B] transition-all uppercase shadow-md text-xs">Synchronize Asset Parameters</button>

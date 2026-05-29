@@ -875,14 +875,18 @@ class HealthCheckAPIView(APIView):
 
 # Add this endpoint view class near your other Adoption/Pet views in views.py
 class PetAISearchAPIView(APIView):
+    """
+    AI Predictive Search Engine: Performs token phrase matching over multi-field string
+    blobs, placing heavy priority scoring weights on the new native description attribute.
+    """
     def post(self, request):
         try:
             description_query = request.data.get("description", "").strip().lower()
             if not description_query:
                 return Response({"error": "Null search constraint parameters."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # 1. Fetch all active pet assets out of the Supabase register database
-            all_pets = supabase.table("pets").select("pet_id, name, species, breed, about_text, primary_image, found_near, current_conditions").execute().data or []
+            # 1. Fetch active pet assets including the new description column out of Supabase
+            all_pets = supabase.table("pets").select("pet_id, name, species, breed, about_text, description, primary_image, found_near, current_conditions").execute().data or []
             
             # 2. Tokenize user natural description text input parameters
             query_tokens = [t for t in re.split(r'\W+', description_query) if len(t) > 2] # filters out filler small words
@@ -891,18 +895,21 @@ class PetAISearchAPIView(APIView):
             for pet in all_pets:
                 score = 0
                 
-                # Combine lookup text anchors
-                searchable_blob = f"{pet.get('name', '')} {pet.get('species', '')} {pet.get('breed', '')} {pet.get('about_text', '')} {pet.get('found_near', '')} {pet.get('current_conditions', '')}".lower()
+                # Combine lookup text anchors including the new explicit physical traits column
+                searchable_blob = f"{pet.get('name', '')} {pet.get('species', '')} {pet.get('breed', '')} {pet.get('about_text', '')} {pet.get('description', '')} {pet.get('found_near', '')} {pet.get('current_conditions', '')}".lower()
                 
                 # High-weight strict category matching anchors
                 species_val = str(pet.get("species", "")).lower()
                 breed_val = str(pet.get("breed", "")).lower()
                 origin_val = str(pet.get("found_near", "")).lower()
+                explicit_desc = str(pet.get("description", "")).lower()
 
                 for token in query_tokens:
                     # Specific high-weight bonuses
                     if token in species_val:
                         score += 15  # Heavy structural weight for matching species ('cat', 'dog')
+                    if token in explicit_desc:
+                        score += 12  # Premium match weight if query token hits explicit physical markers
                     if token in breed_val:
                         score += 10  # Weight anchor for matching breeds ('tabby', 'husky')
                     if token in origin_val:

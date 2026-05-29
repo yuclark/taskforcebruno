@@ -7,7 +7,7 @@ from .views import (
     AnimalSightingAPIView, AnimalSightingDetailAPIView,
     CampusAnnouncementAPIView, UnifiedNewsfeedAPIView,
     ToggleLikeAPIView, AddCommentAPIView, CommentActionAPIView,
-    NewsfeedItemActionAPIView  
+    NewsfeedItemActionAPIView, PetAISearchAPIView  # Added PetAISearchAPIView import
 )
 
 urlpatterns = [
@@ -21,7 +21,8 @@ urlpatterns = [
     
     # Master Animal File Directories
     path('pets/', PetListAPIView.as_view(), name='pet-list'),
-    path('pets/<str:pet_id>/', PetDetailAPIView.as_view(), name='pet-detail'), # Added trailing slash to match frontend hydration loops
+    path('pets/ai-search/', PetAISearchAPIView.as_view(), name='pet-ai-search'),  # Registered AI Search route before variable slug lines
+    path('pets/<str:pet_id>/', PetDetailAPIView.as_view(), name='pet-detail'), 
     
     # Clinical Journals & Medical Timelines
     path('medical/<str:pet_id>/', MedicalRecordsAPIView.as_view(), name='medical-logs'),

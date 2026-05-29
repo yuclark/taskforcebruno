@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 
-// ── CONSTANT REGISTRY: 8 PRE-DEFINED CAMPUS COLONY LOCATIONS ──
 const ALLOWED_LOCATIONS = [
   "Wildcat Innovation Labs",
   "NGE Building 1st Floor",
@@ -18,18 +17,11 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [isEditingId, setIsEditingId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
-
-  // Sorting Management Configuration State
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
-
-  // Local state tracking parameters for custom UI moderation modal overlays
   const [petIdToPurge, setPetIdToPurge] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
-
-  // Local state tracking layout expansion toggle for density breakdown matrix
   const [isLocationsExpanded, setIsLocationsExpanded] = useState(false);
 
-  // ── KEYWORD-MATCHING LOCATION PARSING MATRIX ENGINE ──
   const getNormalizedLocation = (locStr, petId) => {
     if (!locStr) return ALLOWED_LOCATIONS[0];
     const s = locStr.toLowerCase().trim();
@@ -52,12 +44,11 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     return ALLOWED_LOCATIONS[targetIndex];
   };
 
-  // ── NEW HELPER ENGINE: COMPUTE TEXT BADGE COLORS FOR IMMUNIZATION LEVELS ──
   const getVaccinationBadgeStyles = (statusStr) => {
     const s = statusStr || '';
     if (s === 'Fully Vaccinated') return 'bg-green-50 text-green-800 border-green-200';
     if (s === 'Partially Vaccinated') return 'bg-yellow-50 text-yellow-800 border-yellow-200';
-    return 'bg-red-50 text-red-800 border-red-200'; // Default / Not Vaccinated
+    return 'bg-red-50 text-red-800 border-red-200';
   };
 
   const handleRowClick = async (petId) => {
@@ -174,7 +165,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     return sortConfig.direction === 'asc' ? <span className="text-[#5C0612] ml-1">▲</span> : <span className="text-[#5C0612] ml-1">▼</span>;
   };
 
-  // ── SEPARATION INTERFACES: THREE DYNAMIC RECORD TRAILING SECTIONS ──
   const adoptedAlumniPets = pets.filter(p => p.adoption_status === 'Adopted');
   const strayPetsCollection = pets.filter(p => p.adoption_status !== 'Adopted' && p.pet_id?.startsWith('STRAY-'));
   const activeUnadoptedPets = pets.filter(p => p.adoption_status !== 'Adopted' && !p.pet_id?.startsWith('STRAY-'));
@@ -183,13 +173,10 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   const sortedAdoptedCollection = applySortingMatrix(adoptedAlumniPets);
   const sortedStrayCollection = applySortingMatrix(strayPetsCollection);
 
-  // ── DATA AGGREGATION REPRODUCTIVE & POPULATION STATISTICS COUNTERS ──
   const activePets = pets.filter(p => p.adoption_status !== 'Adopted');
-  
   const totalPetsCount = activePets.length;
   const totalCatsCount = activePets.filter(p => p.species?.toLowerCase() === 'cat').length;
   const totalDogsCount = activePets.filter(p => p.species?.toLowerCase() === 'dog').length;
-
   const totalNeuteredCount = activePets.filter(p => p.spayed_neutered === true || String(p.spayed_neutered).toLowerCase() === 'true').length;
   
   const totalFullyVaccinatedCount = activePets.filter(p => p.vaccination_status === 'Fully Vaccinated').length;
@@ -204,7 +191,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   const partiallyVaccinatedPercentage = totalPetsCount > 0 ? (totalPartiallyVaccinatedCount / totalPetsCount) * 100 : 0;
   const notVaccinatedPercentage = totalPetsCount > 0 ? (totalNotVaccinatedCount / totalPetsCount) * 100 : 0;
 
-  // ── STRIPPED ADOPTED ANIMALS FROM ZONE OCCUPANCY CALCULATION MATRIX ──
   const locationCounts = ALLOWED_LOCATIONS.reduce((acc, loc) => {
     acc[loc] = 0;
     return acc;
@@ -260,7 +246,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                       <span>{pet.pet_id}</span>
                     </td>
                     <td className="p-4 font-semibold text-slate-950 text-sm">{pet.name}</td>
-                    
                     <td className="p-4 font-mono">
                       <span className={`px-2 py-0.5 rounded font-bold text-[9px] border ${
                         pet.adoption_status === 'Adopted'
@@ -274,12 +259,9 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                         {pet.adoption_status === 'Adopted' ? 'Adopted' : pet.pet_id?.startsWith('STRAY-') ? 'Stray Animal' : (pet.pet_type || 'Campus Pet')}
                       </span>
                     </td>
-                    
                     <td className="p-4 text-slate-600">{pet.species} &bull; {pet.breed || 'Mix'}</td>
                     <td className="p-4 font-mono text-slate-500">{pet.weight || 'N/A'}</td>
                     <td className="p-4 text-slate-600 truncate max-w-[140px]">{getNormalizedLocation(pet.found_near, pet.pet_id)}</td>
-                    
-                    {/* ── CHANGED: Injected structural style mapping to color rows status tokens dynamically ── */}
                     <td className="p-4 text-center">
                       <span className={`inline-block px-2.5 py-0.5 rounded-md text-[10px] font-semibold border ${getVaccinationBadgeStyles(pet.vaccination_status)}`}>
                         {pet.vaccination_status}
@@ -304,9 +286,9 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Age</label><input type="text" name="age" value={editFormData.age || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none" /></div>
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Size Scale</label><select name="size" value={editFormData.size || 'Small'} onChange={handleEditChange} className="w-full p-2 border rounded-lg"><option value="Small">Small</option><option value="Medium">Medium</option><option value="Large">Large</option></select></div>
                               <div>
-                                <label className="block text-[9px] font-bold text-[#5C0612] uppercase mb-0.5">Weight (in kg) *</label>
+                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Weight (in kg) *</label>
                                 <div className="relative flex items-center">
-                                  <input type="number" step="0.01" name="weight" placeholder="Ex: 4.5" value={editFormData.weight || ''} onChange={handleEditChange} className="w-full p-2 pr-8 border rounded-lg focus:outline-none focus:border-[#5C0612] font-mono" required />
+                                  <input type="number" step="0.01" name="weight" placeholder="Ex: 4.5" value={editFormData.weight || ''} onChange={handleEditChange} className="w-full p-2 pr-8 border rounded-lg focus:outline-none font-mono" required />
                                   <span className="absolute right-3 text-slate-400 font-mono font-bold text-[10px]">kg</span>
                                 </div>
                               </div>
@@ -326,12 +308,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               <div>
                                 <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Rescue Colony Zone *</label>
-                                <select 
-                                  name="found_near" 
-                                  value={editFormData.found_near || ALLOWED_LOCATIONS[0]} 
-                                  onChange={handleEditChange} 
-                                  className="w-full p-2 border bg-white rounded-lg focus:outline-none text-xs font-sans font-medium text-slate-800"
-                                >
+                                <select name="found_near" value={editFormData.found_near || ALLOWED_LOCATIONS[0]} onChange={handleEditChange} className="w-full p-2 border bg-white rounded-lg focus:outline-none text-xs font-sans font-medium text-slate-800">
                                   {ALLOWED_LOCATIONS.map(loc => (
                                     <option key={loc} value={loc}>{loc}</option>
                                   ))}
@@ -346,7 +323,12 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                             </div>
 
                             <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Profile Photo Asset URL</label><input type="url" name="primary_image" value={editFormData.primary_image || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg font-mono text-[11px] focus:outline-none" /></div>
-                            <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Narrative biography Summary</label><textarea name="about_text" rows="2" value={editFormData.about_text || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg text-slate-800 leading-relaxed focus:outline-none resize-none"></textarea></div>
+                            
+                            {/* Two-Column split layout for biography summary and physical search description updates */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Narrative biography Summary</label><textarea name="about_text" rows="2" value={editFormData.about_text || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg text-slate-800 leading-relaxed focus:outline-none resize-none"></textarea></div>
+                              <div><label className="block text-[9px] font-bold text-[#5C0612] uppercase mb-0.5">Physical Search Description (AI Match Key) *</label><textarea name="description" rows="2" value={editFormData.description || ''} onChange={handleEditChange} placeholder="Input clear trait tokens (e.g. gray stripes, cropped tail, red collar)..." className="w-full p-2 border rounded-lg text-slate-800 leading-relaxed focus:outline-none resize-none" required></textarea></div>
+                            </div>
 
                             <div className="flex gap-2 justify-end pt-2 text-[10px] font-mono font-bold uppercase">
                               <button type="button" onClick={() => setIsEditingId(null)} className="px-3 py-1.5 bg-slate-100 rounded-lg text-slate-600">Abort</button>
@@ -377,9 +359,17 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                                 <div className="col-span-3 text-blue-900">Behavior Evaluation: <span className="text-slate-700 font-medium">{expandedPetData?.behavior_notes || 'Stable baseline.'}</span></div>
                               </div>
 
-                              <p className="bg-slate-50 p-3 rounded-xl border italic text-slate-600 text-[11px] font-normal leading-relaxed">
-                                "{expandedPetData?.about_text || 'No narrative biography logged inside active archives.'}"
-                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+                                <div className="bg-slate-50 p-3 rounded-xl border leading-relaxed">
+                                  <span className="block text-[9px] font-mono font-bold uppercase text-slate-400 mb-1">Biography Summary:</span>
+                                  <p className="italic text-slate-600 text-[11px] font-normal">"{expandedPetData?.about_text || 'No narrative biography logged inside active archives.'}"</p>
+                                </div>
+                                {/* Reads explicit physical search descriptions natively from columns inside read-only grids */}
+                                <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-200 leading-relaxed">
+                                  <span className="block text-[9px] font-mono font-bold uppercase text-amber-700 mb-1">AI Search Target Markers:</span>
+                                  <p className="text-slate-700 text-[11px] font-normal">"{expandedPetData?.description || 'No specialized trait tags indexed for descriptive loops yet.'}"</p>
+                                </div>
+                              </div>
                               
                               <div className="flex gap-2 justify-end mt-2 text-[10px] font-mono font-bold uppercase">
                                 <button onClick={() => startEditing(pet)} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-semibold shadow-sm transition-all">Modify Entire Record</button>
@@ -410,11 +400,8 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
         </div>
       )}
 
-      {/* Analytics dashboard dock layout configuration into a balanced 3-column row grid */}
       {!loadingPets && totalPetsCount > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in select-none">
-          
-          {/* Chart Card 1: Species Distribution Metric */}
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between text-left">
             <div>
               <h5 className="font-bold text-slate-900 tracking-tight font-sans text-xs">Ecosystem Species Density Breakdown</h5>
@@ -438,7 +425,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
             </div>
           </div>
 
-          {/* Chart Card 2: Coded Location density breakdown from highest density down to lowest execution */}
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between text-left">
             <div>
               <h5 className="font-bold text-slate-900 tracking-tight font-sans text-xs">Colony Zone Occupancy Density</h5>
@@ -456,7 +442,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                       <span className="font-mono font-bold text-slate-900 shrink-0">{zoneCount}</span>
                     </div>
                     <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200/20">
-                      <div style={{ width: `${progressWidth}%` }} className="h-full bg-indigo-500 transition-all duration-500" />
+                      <div style={{ width: `${progressWidth}%` }} className="h-full bg-indigo-505 transition-all duration-500" />
                     </div>
                   </div>
                 );
@@ -469,16 +455,15 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                 onClick={() => setIsLocationsExpanded(!isLocationsExpanded)}
                 className="text-[10px] font-mono font-bold uppercase text-indigo-600 hover:text-indigo-800 transition-colors mb-2 text-right block w-full focus:outline-none"
               >
-                {isLocationsExpanded ? "Show Less Less ▲" : "Expand All Zones ▼"}
+                {isLocationsExpanded ? "Show Less ▲" : "Expand All Zones ▼"}
               </button>
             )}
 
             <div className="text-[9px] font-mono text-slate-400 border-t pt-2 mt-1 truncate">
-              Highest Density Node: <span className="font-sans font-bold text-indigo-600">{densestZoneNode}</span>
+              Highest Density Zone: <span className="font-sans font-bold text-indigo-600">{densestZoneNode}</span>
             </div>
           </div>
 
-          {/* Chart Card 3: Population Control Target Markers Progress */}
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between text-left md:col-span-2 lg:col-span-1">
             <div>
               <h5 className="font-bold text-slate-900 tracking-tight font-sans text-xs">Population Control Performance</h5>
@@ -509,7 +494,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
               <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
                   <span>Partially Vaccinated</span>
-                  <span className="text-yellow-600">{totalPartiallyVaccinatedCount}/{totalPetsCount} ({Math.round(partiallyVaccinatedPercentage)}%)</span>
+                  <span className="text-yellow-700">{totalPartiallyVaccinatedCount}/{totalPetsCount} ({Math.round(partiallyVaccinatedPercentage)}%)</span>
                 </div>
                 <div className="w-full h-2.5 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
                   <div style={{ width: `${partiallyVaccinatedPercentage}%` }} className="h-full bg-yellow-500 transition-all duration-500 ease-out" />
@@ -531,10 +516,10 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
               Target Stability Level: <span className="font-sans font-bold text-purple-700">100% Non-Breeding Goal</span>
             </div>
           </div>
-
         </div>
       )}
 
+      {/* Tables Mapping Sequence Block */}
       {loadingPets ? (
         <div className="p-12 text-center text-slate-400 font-mono animate-pulse">COMPILING DATA GRIDS...</div>
       ) : (
@@ -545,6 +530,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
         </>
       )}
 
+      {/* Confirmation Purge Dialog Overlay Modal */}
       {petIdToPurge && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in font-sans">
           <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-6 text-center animate-scale-up">
