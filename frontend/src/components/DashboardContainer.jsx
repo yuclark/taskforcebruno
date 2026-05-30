@@ -11,7 +11,7 @@ export default function DashboardContainer({ session, onLogout }) {
   const [currentTab, setCurrentTab] = useState(() => {
     return localStorage.getItem('tfb_user_tab') || 'newsfeed';
   });
-  
+
   const [activePetId, setActivePetId] = useState(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -94,75 +94,45 @@ export default function DashboardContainer({ session, onLogout }) {
             </span>
 
             <button
-              onClick={() => {
-                setCurrentTab('newsfeed');
-                setActivePetId(null);
-                setIsMobileOpen(false);
-              }}
+              onClick={() => { setCurrentTab('newsfeed'); setActivePetId(null); setIsMobileOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                currentTab === 'newsfeed'
-                  ? 'bg-white text-[#5C0612] font-semibold shadow-md'
-                  : 'text-stone-200 hover:bg-white/5'
+                currentTab === 'newsfeed' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
               Community Newsfeed
             </button>
 
             <button
-              onClick={() => {
-                setCurrentTab('scanner');
-                setActivePetId(null);
-                setIsMobileOpen(false);
-              }}
+              onClick={() => { setCurrentTab('scanner'); setActivePetId(null); setIsMobileOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                currentTab === 'scanner'
-                  ? 'bg-white text-[#5C0612] font-semibold shadow-md'
-                  : 'text-stone-200 hover:bg-white/5'
+                currentTab === 'scanner' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
               Collar QR Scanner
             </button>
 
             <button
-              onClick={() => {
-                setCurrentTab('adoption');
-                setActivePetId(null);
-                setIsMobileOpen(false);
-              }}
+              onClick={() => { setCurrentTab('adoption'); setActivePetId(null); setIsMobileOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                currentTab === 'adoption'
-                  ? 'bg-white text-[#5C0612] font-semibold shadow-md'
-                  : 'text-stone-200 hover:bg-white/5'
+                currentTab === 'adoption' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
               Adoption Placement Portal
             </button>
 
             <button
-              onClick={() => {
-                setCurrentTab('resources');
-                setActivePetId(null);
-                setIsMobileOpen(false);
-              }}
+              onClick={() => { setCurrentTab('resources'); setActivePetId(null); setIsMobileOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                currentTab === 'resources'
-                  ? 'bg-white text-[#5C0612] font-semibold shadow-md'
-                  : 'text-stone-200 hover:bg-white/5'
+                currentTab === 'resources' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
               Supply Logistics Hub
             </button>
 
             <button
-              onClick={() => {
-                setCurrentTab('report');
-                setActivePetId(null);
-                setIsMobileOpen(false);
-              }}
+              onClick={() => { setCurrentTab('report'); setActivePetId(null); setIsMobileOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                currentTab === 'report'
-                  ? 'bg-white text-[#5C0612] font-semibold shadow-md'
-                  : 'text-stone-200 hover:bg-white/5'
+                currentTab === 'report' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
               Report Animal Sighting
@@ -180,7 +150,6 @@ export default function DashboardContainer({ session, onLogout }) {
               <p className="text-xs font-semibold text-white leading-none truncate">
                 Campus User
               </p>
-
               <span className="text-[9px] text-stone-300 font-mono mt-1 block truncate">
                 {session?.email || 'Loading profile...'}
               </span>
@@ -197,6 +166,8 @@ export default function DashboardContainer({ session, onLogout }) {
       </aside>
 
       {/* MAIN */}
+      {/* FIX 1: h-screen overflow-hidden on main so newsfeed can manage its own scroll,
+          while scanner/other tabs get a scrollable content area below */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative min-w-0">
 
         {/* HEADER */}
@@ -231,20 +202,17 @@ export default function DashboardContainer({ session, onLogout }) {
           </div>
         </header>
 
-        {/* CONTENT */}
-        <div
-          className={`flex-1 overflow-x-hidden relative min-h-0 ${
-            currentTab === 'newsfeed'
-              ? 'overflow-hidden p-4 md:p-8'
-              : 'overflow-y-auto p-4 md:p-8'
-          } bg-gradient-to-br from-slate-50 via-stone-50 to-slate-100`}
-        >
-          <div className="absolute inset-0 z-0 pointer-events-none opacity-40 overflow-hidden">
+        {/* CONTENT AREA */}
+        {/* FIX 2: Removed the single shared content div with conflicting conditional classes.
+            Each tab now renders inside its own correctly-scoped layout shell. */}
+
+        {/* Background grid layer — shared across all tabs */}
+        <div className="flex-1 relative min-h-0 bg-gradient-to-br from-slate-50 via-stone-50 to-slate-100 overflow-hidden">
+          <div className="absolute inset-0 z-0 pointer-events-none opacity-40">
             <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
               <defs>
                 <pattern
                   id="user-grid"
-                  width="40"
                   width="40"
                   height="40"
                   patternUnits="userSpaceOnUse"
@@ -257,31 +225,25 @@ export default function DashboardContainer({ session, onLogout }) {
                   />
                 </pattern>
               </defs>
-
               <rect width="100%" height="100%" fill="url(#user-grid)" />
             </svg>
           </div>
 
-          <div className="relative z-10 w-full h-full flex items-start justify-start min-h-0">
+          {/* NEWSFEED — manages its own internal scroll, no outer padding overflow */}
+          {currentTab === 'newsfeed' && (
+            <div className="relative z-10 w-full h-full min-h-0 p-4 md:p-8 overflow-hidden">
+              <NewsfeedView session={session} />
+            </div>
+          )}
 
-            {currentTab === 'newsfeed' && (
-              <div className="w-full h-full min-h-0">
-                <NewsfeedView session={session} />
-              </div>
-            )}
-
-            {currentTab === 'report' && <ReportSightingView session={session} />}
-
-            {currentTab === 'adoption' && <AdoptionGallery session={session} />}
-
-            {currentTab === 'resources' && <SupplyLogistics />}
-
-            {currentTab === 'scanner' && (
-              <div className="w-full h-full flex items-center justify-center animate-fade-in">
+          {/* SCANNER — FIX 3: overflow-y-auto here (not on QRScannerView wrapper),
+              centered horizontally and vertically on desktop via flex,
+              aligns to top on mobile so it scrolls naturally */}
+          {currentTab === 'scanner' && (
+            <div className="relative z-10 w-full h-full overflow-y-auto">
+              <div className="min-h-full flex items-start md:items-center justify-center p-4 md:p-8">
                 {!activePetId ? (
-                  <QRScannerView
-                    onProfileIdentified={(id) => setActivePetId(id)}
-                  />
+                  <QRScannerView onProfileIdentified={(id) => setActivePetId(id)} />
                 ) : (
                   <PetProfileView
                     petId={activePetId}
@@ -289,10 +251,31 @@ export default function DashboardContainer({ session, onLogout }) {
                   />
                 )}
               </div>
-            )}
+            </div>
+          )}
 
-          </div>
+          {/* REPORT — scrollable, top-aligned */}
+          {currentTab === 'report' && (
+            <div className="relative z-10 w-full h-full overflow-y-auto p-4 md:p-8">
+              <ReportSightingView session={session} />
+            </div>
+          )}
+
+          {/* ADOPTION — scrollable, top-aligned */}
+          {currentTab === 'adoption' && (
+            <div className="relative z-10 w-full h-full overflow-y-auto p-4 md:p-8">
+              <AdoptionGallery session={session} />
+            </div>
+          )}
+
+          {/* RESOURCES — scrollable, top-aligned */}
+          {currentTab === 'resources' && (
+            <div className="relative z-10 w-full h-full overflow-y-auto p-4 md:p-8">
+              <SupplyLogistics />
+            </div>
+          )}
         </div>
+
       </main>
     </div>
   );
