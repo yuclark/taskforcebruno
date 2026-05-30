@@ -1,10 +1,5 @@
 # 🐾 Task Force Bruno: Integrated Campus Pet Management System
 
-[
-[
-[
-[
-
 An integrated, enterprise-grade data management ecosystem designed specifically for the **Cebu Institute of Technology – University (CIT-U)** community. **Task Force Bruno** provides digital telemetry tracking, clinical timeline archiving, inventory logistics logging, and predictive lookup systems to monitor, sterilize, protect, and manage resident campus animals and stray allocations.
 
 ***
@@ -155,7 +150,7 @@ npm run dev
 | Field | Details |
 | :--- | :--- |
 | **Institution** | Cebu Institute of Technology – University (CIT-U) |
-| **Course Track** | Software Quality Assurance Engineering (SQAE) & Capstone Core |
+| **Course Track** | Capstone Core |
 | **System Status** | ✅ Production Environment Clean |
 
 Developed with dedication by the **Task Force Bruno** project engineering unit to elevate the standard of campus companion care and support animal welfare initiatives at CIT-U.
