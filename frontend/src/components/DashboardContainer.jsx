@@ -240,19 +240,19 @@ export default function DashboardContainer({ session, onLogout }) {
               centered horizontally and vertically on desktop via flex,
               aligns to top on mobile so it scrolls naturally */}
           {currentTab === 'scanner' && (
-            <div className="relative z-10 w-full h-full overflow-y-auto">
-              <div className="min-h-full flex items-start md:items-center justify-center p-4 md:p-8">
-                {!activePetId ? (
-                  <QRScannerView onProfileIdentified={(id) => setActivePetId(id)} />
-                ) : (
-                  <PetProfileView
-                    petId={activePetId}
-                    onBackToScanner={() => setActivePetId(null)}
-                  />
-                )}
-              </div>
-            </div>
-          )}
+  <div className="relative z-10 w-full h-full overflow-y-auto">
+    <div className="min-h-full h-full flex items-start md:items-center justify-center p-4 md:p-8">
+      {!activePetId ? (
+        <QRScannerView onProfileIdentified={(id) => setActivePetId(id)} />
+      ) : (
+        <PetProfileView
+          petId={activePetId}
+          onBackToScanner={() => setActivePetId(null)}
+        />
+      )}
+    </div>
+  </div>
+)}
 
           {/* REPORT — scrollable, top-aligned */}
           {currentTab === 'report' && (
