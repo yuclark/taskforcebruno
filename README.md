@@ -1,9 +1,3 @@
-Here is the complete, production-grade **`README.md`** file with all references to the donation gateway, GCash forms, and the `monetary_donations` table completely scrubbed from the features list, directory mappings, and database schemas.
-
-It is 100% ready to be copied and pasted directly into your root project directory.
-
----
-
 ```markdown
 # 🐾 Task Force Bruno: Integrated Campus Pet Management System
 
