@@ -3,8 +3,8 @@ import jsQR from 'jsqr';
 
 /**
  * ARCHITECTURAL DESIGN BOUNDARY NOTICE:
- * This component is strictly an internal telemetry lookup node for scanning or typing 
- * asset IDs (PET-XXXX / STRAY-XXXX) to load profile/medical contexts. 
+ * This component is strictly an internal telemetry lookup node for scanning or typing
+ * asset IDs (PET-XXXX / STRAY-XXXX) to load profile/medical contexts.
  * Do NOT introduce adoption application submission fields, forms, or POST handles here.
  */
 export default function QRScannerView() {
@@ -70,14 +70,14 @@ export default function QRScannerView() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 640 } }
       });
-      
+
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute('playsinline', 'true');
         videoRef.current.play();
       }
-      
+
       setIsActiveCamera(true);
       setIsQrProcessing(false);
       setQrStatusMessage('Scanning visual matrix elements...');
@@ -92,7 +92,7 @@ export default function QRScannerView() {
   const stopCameraStream = () => {
     setIsActiveCamera(false);
     setQrStatusMessage('');
-    
+
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
@@ -113,7 +113,7 @@ export default function QRScannerView() {
 
     const video = videoRef.current;
     let canvas = canvasRef.current;
-    
+
     if (!canvas) {
       canvas = document.createElement('canvas');
       canvasRef.current = canvas;
@@ -122,10 +122,10 @@ export default function QRScannerView() {
     const context = canvas.getContext('2d', { willReadFrequently: true });
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    
+
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-    
+
     const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
       inversionAttempts: 'dontInvert',
     });
@@ -133,7 +133,7 @@ export default function QRScannerView() {
     if (qrCode) {
       const rawDecodedText = qrCode.data.trim();
       const assetMatch = rawDecodedText.match(/(PET|STRAY)-\d+/i);
-      
+
       stopCameraStream();
       const resolvedId = assetMatch ? assetMatch[0].toUpperCase() : rawDecodedText.toUpperCase();
       resolveCard1Profile(resolvedId);
@@ -161,7 +161,7 @@ export default function QRScannerView() {
           canvas.width = image.width;
           canvas.height = image.height;
           context.drawImage(image, 0, 0, image.width, image.height);
-          
+
           const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
           const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
             inversionAttempts: 'dontInvert',
@@ -250,15 +250,15 @@ export default function QRScannerView() {
   const renderEmbeddedProfile = (petData, onDisconnect) => (
     <div className="flex flex-col justify-between h-full w-full animate-fade-in text-left">
       <div className="space-y-3.5 flex-1 overflow-y-auto pr-1 mb-3">
-        
+
         {/* Media Frame Container */}
         <div className="w-full h-36 bg-slate-900 border border-white/10 rounded-2xl overflow-hidden relative shadow-inner shrink-0">
           <img src={petData.primary_image || 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba'} alt="" className="w-full h-full object-cover" />
           <span className={`absolute bottom-3 left-3 px-2 py-0.5 rounded text-[8px] font-mono font-bold tracking-widest border uppercase ${
             petData.adoption_status === 'Adopted'
               ? 'bg-slate-800 text-slate-200 border-slate-700'
-              : petData.pet_type === 'For Adoption' 
-              ? 'bg-amber-500 text-slate-950 border-amber-400' 
+              : petData.pet_type === 'For Adoption'
+              ? 'bg-amber-500 text-slate-950 border-amber-400'
               : 'bg-[#5C0612] text-[#D4AF37] border-[#D4AF37]/30'
           }`}>
             {petData.adoption_status === 'Adopted' ? 'Adopted' : (petData.pet_type || 'Campus Pet')}
@@ -283,7 +283,7 @@ export default function QRScannerView() {
         <div className="bg-slate-950/40 p-2.5 rounded-xl border border-white/5 space-y-1 font-sans text-[10px] text-slate-400">
           <span className="text-[8px] font-bold font-mono text-slate-500 uppercase tracking-wider block">Environmental Rescue Tracking:</span>
           <div className="flex justify-between gap-2"><span className="truncate">Colony Zone:</span><strong className="text-slate-200 font-mono font-normal truncate max-w-[150px]">{petData.found_near}</strong></div>
-          <div className="flex justify-between"><span className="taruncate">Pipeline Stage:</span><strong className="text-slate-200 font-mono font-normal">{petData.adoption_status}</strong></div>
+          <div className="flex justify-between"><span className="truncate">Pipeline Stage:</span><strong className="text-slate-200 font-mono font-normal">{petData.adoption_status}</strong></div>
         </div>
 
         {/* Clinical Variables */}
@@ -317,8 +317,10 @@ export default function QRScannerView() {
   );
 
   return (
-    <div className="w-full min-h-screen md:min-h-0 flex flex-col items-center justify-start md:justify-center relative p-3 sm:p-6 bg-gradient-to-br from-slate-200 via-zinc-200 to-stone-300 rounded-2xl md:rounded-3xl overflow-hidden shadow-inner">
-      
+    // FIX 1: Changed overflow-hidden → overflow-y-auto so mobile can scroll,
+    // and removed md:min-h-0 / md:justify-center to avoid height conflicts on tablet.
+    <div className="w-full min-h-screen flex flex-col items-center justify-start relative p-3 sm:p-6 bg-gradient-to-br from-slate-200 via-zinc-200 to-stone-300 rounded-2xl md:rounded-3xl overflow-y-auto shadow-inner">
+
       {/* BACKGROUND GRAPHIC INTERFACES */}
       <div className="absolute inset-0 z-0 pointer-events-none select-none">
         <svg className="w-full h-full opacity-100" xmlns="http://www.w3.org/2000/svg">
@@ -334,13 +336,15 @@ export default function QRScannerView() {
       </div>
 
       {/* DUAL COMPONENT VIEWPORT GRID RENDER MATRIX */}
-      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 relative z-10">
+      {/* FIX 2: Added pb-4 so bottom card doesn't get clipped on mobile */}
+      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 relative z-10 pb-4">
 
         {/* =========================================================
             CARD 1: HARDWARE OPTICAL SCANNER & MANUAL OVERRIDE
            ========================================================= */}
-        <div className="w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-[28px] md:rounded-[32px] overflow-hidden shadow-2xl border-4 border-[#5C0612] p-4 sm:p-5 text-white flex flex-col justify-between relative min-h-[500px] md:min-h-[590px]">
-          
+        {/* FIX 3: Removed min-h fixed values; let content drive height naturally */}
+        <div className="w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-[28px] md:rounded-[32px] overflow-hidden shadow-2xl border-4 border-[#5C0612] p-4 sm:p-5 text-white flex flex-col justify-between relative">
+
           <div className="absolute inset-0 opacity-[0.02] pointer-events-none z-0">
             <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
               <pattern id="inner-mesh" width="16" height="16" patternUnits="userSpaceOnUse">
@@ -366,13 +370,14 @@ export default function QRScannerView() {
           ) : card1PetData ? (
             renderEmbeddedProfile(card1PetData, () => { setCard1PetData(null); setManualId(''); })
           ) : (
-            <div className="flex-1 flex flex-col justify-between h-full w-full">
-              <div className="flex flex-col items-center justify-center z-10 w-full space-y-4 flex-1 py-4">
+            <div className="flex flex-col gap-4 w-full">
+              <div className="flex flex-col items-center z-10 w-full gap-4 py-2">
                 <span className="text-[#D4AF37] text-[10px] uppercase font-bold tracking-widest bg-[#D4AF37]/5 px-2.5 py-0.5 rounded-md border border-[#D4AF37]/10 shrink-0">
                   Collar Lens Reader
                 </span>
-                
-                <div className="w-36 h-36 sm:w-44 sm:h-44 rounded-3xl border border-white/10 bg-slate-950 relative flex items-center justify-center overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.6)] border-b-2 border-[#D4AF37]/20 shrink-0">
+
+                {/* FIX 4: Camera box uses w-full max-w so it scales on narrow screens */}
+                <div className="w-full max-w-[200px] aspect-square rounded-3xl border border-white/10 bg-slate-950 relative flex items-center justify-center overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.6)] border-b-2 border-[#D4AF37]/20 shrink-0">
                   <video ref={videoRef} className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${isActiveCamera ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} />
 
                   <div className="absolute top-3 left-3 w-5 h-5 border-t-4 border-l-4 border-[#D4AF37] rounded-tl z-20" />
@@ -407,7 +412,7 @@ export default function QRScannerView() {
                 )}
 
                 {qrErrorMessage && (
-                  <div className="text-[10px] text-rose-400 font-medium bg-rose-950/30 border border-rose-900/40 px-3 py-1.5 rounded-xl max-w-xs text-center shadow-sm">{qrErrorMessage}</div>
+                  <div className="text-[10px] text-rose-400 font-medium bg-rose-950/30 border border-rose-900/40 px-3 py-1.5 rounded-xl w-full text-center shadow-sm">{qrErrorMessage}</div>
                 )}
 
                 {qrStatusMessage && isActiveCamera && (
@@ -415,10 +420,11 @@ export default function QRScannerView() {
                 )}
 
                 {/* Matrix File Input Vector */}
-                <div className="w-full px-2 max-w-[260px]">
+                {/* FIX 5: Removed max-w-[260px] constraint and px-2 so it fills the card naturally */}
+                <div className="w-full">
                   <input type="file" id="qr-file-input" accept="image/*" onChange={handleFileUpload} disabled={isQrProcessing} className="hidden" />
                   <label htmlFor="qr-file-input" className={`w-full flex items-center justify-center gap-2 border-2 border-dashed border-white/10 hover:border-[#D4AF37]/40 bg-white/[0.02] hover:bg-white/[0.05] py-2 px-4 rounded-xl text-xs font-medium tracking-wide transition-all cursor-pointer text-center group ${isQrProcessing ? 'opacity-30 pointer-events-none' : ''}`}>
-                    <svg className="w-4 h-4 text-slate-400 group-hover:text-[#D4AF37] transition-colors" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-slate-400 group-hover:text-[#D4AF37] transition-colors shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
                     </svg>
                     <span className="text-slate-300 group-hover:text-white">Upload Digital QR File</span>
@@ -427,13 +433,25 @@ export default function QRScannerView() {
               </div>
 
               {/* Terminal Manual Override Input Console */}
-              <div className="bg-slate-950/90 p-3 sm:p-3.5 rounded-2xl border border-white/5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] z-10 mt-auto text-left shrink-0 w-full">
-                <label className="block text-[9px] uppercase font-bold tracking-widest text-slate-500 mb-2 text-center Richmond font-mono">
+              <div className="bg-slate-950/90 p-3 sm:p-3.5 rounded-2xl border border-white/5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] z-10 w-full">
+                <label className="block text-[9px] uppercase font-bold tracking-widest text-slate-500 mb-2 text-center font-mono">
                   SYS_MANUAL_OVERRIDE_CONSOLE
                 </label>
-                <form onSubmit={handleManualSubmit} className="flex flex-col sm:flex-row gap-2">
-                  <input type="text" value={manualId} onChange={(e) => setManualId(e.target.value)} placeholder="SYS_REF_ID (Ex: PET-1001)" className="w-full sm:flex-1 bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#D4AF37] font-mono tracking-wider text-white placeholder-slate-700 shadow-inner min-w-0" />
-                  <button type="submit" className="w-full sm:w-auto bg-[#5C0612] hover:bg-[#42040B] px-4 py-2 rounded-xl text-xs font-bold tracking-wider border border-[#D4AF37]/30 hover:border-[#D4AF37]/60 active:scale-95 transition-all text-white shrink-0 shadow-md font-mono">LOAD</button>
+                {/* FIX 6: Always row layout; input uses min-w-0 to prevent overflow; button is fixed width */}
+                <form onSubmit={handleManualSubmit} className="flex flex-row gap-2">
+                  <input
+                    type="text"
+                    value={manualId}
+                    onChange={(e) => setManualId(e.target.value)}
+                    placeholder="SYS_REF_ID (Ex: PET-1001)"
+                    className="flex-1 min-w-0 bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#D4AF37] font-mono tracking-wider text-white placeholder-slate-700 shadow-inner"
+                  />
+                  <button
+                    type="submit"
+                    className="shrink-0 bg-[#5C0612] hover:bg-[#42040B] px-4 py-2 rounded-xl text-xs font-bold tracking-wider border border-[#D4AF37]/30 hover:border-[#D4AF37]/60 active:scale-95 transition-all text-white shadow-md font-mono"
+                  >
+                    LOAD
+                  </button>
                 </form>
               </div>
             </div>
@@ -443,8 +461,9 @@ export default function QRScannerView() {
         {/* =========================================================
             CARD 2: AI DESCRIPTIVE MARKS SEARCH ENGINE
            ========================================================= */}
-        <div className="w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-[28px] md:rounded-[32px] overflow-hidden shadow-2xl border-4 border-[#5C0612] p-4 sm:p-5 text-white flex flex-col justify-between relative min-h-[500px] md:min-h-[590px]">
-          
+        {/* FIX 3 (same): Removed fixed min-h */}
+        <div className="w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-[28px] md:rounded-[32px] overflow-hidden shadow-2xl border-4 border-[#5C0612] p-4 sm:p-5 text-white flex flex-col justify-between relative">
+
           <div className="absolute inset-0 opacity-[0.02] pointer-events-none z-0">
             <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
               <pattern id="inner-mesh-2" width="16" height="16" patternUnits="userSpaceOnUse">
@@ -470,28 +489,29 @@ export default function QRScannerView() {
           ) : card2PetData ? (
             renderEmbeddedProfile(card2PetData, () => { setCard2PetData(null); setAiCandidates([]); setPetDescription(''); })
           ) : (
-            <div className="flex-1 flex flex-col justify-between h-full w-full">
-              <div className="flex flex-col justify-start items-center z-10 w-full space-y-3 flex-1 pt-1 overflow-hidden">
+            <div className="flex flex-col gap-4 w-full">
+              <div className="flex flex-col justify-start items-center z-10 w-full gap-3">
                 <span className="text-[#D4AF37] text-[10px] uppercase font-bold tracking-widest bg-[#D4AF37]/5 px-2.5 py-0.5 rounded-md border border-[#D4AF37]/10 shrink-0">
                   AI Trait-matching Engine
                 </span>
 
                 {aiCandidates.length > 0 ? (
-                  <div className="w-full space-y-2 animate-fade-in flex flex-col flex-1 overflow-hidden min-h-0">
-                    <div className="flex justify-between items-baseline shrink-0">
+                  <div className="w-full space-y-2 animate-fade-in">
+                    <div className="flex justify-between items-baseline">
                       <span className="text-slate-400 font-mono text-[9px] uppercase tracking-wider">Top Structured Predictions</span>
                       <button onClick={() => { setAiCandidates([]); setPetDescription(''); }} className="text-[9px] font-mono font-bold text-rose-400 hover:text-rose-300 uppercase tracking-wider focus:outline-none">Flush Table</button>
                     </div>
-                    
-                    <div className="space-y-2 overflow-y-auto pr-1 border border-white/5 rounded-2xl p-1.5 bg-slate-950/60 flex-1 w-full max-h-[220px] md:max-h-none">
+
+                    {/* FIX 7: Removed max-h on mobile; let list expand naturally and card scrolls */}
+                    <div className="space-y-2 border border-white/5 rounded-2xl p-1.5 bg-slate-950/60 w-full">
                       {aiCandidates.map((candidate, idx) => (
                         <div key={candidate.pet_id} className="p-2 border border-white/5 bg-slate-900/50 rounded-xl flex items-center justify-between gap-3 shadow-inner hover:bg-slate-900 transition-colors">
-                          <div className="flex items-center gap-2.5 truncate flex-1 text-left">
+                          <div className="flex items-center gap-2.5 truncate flex-1 text-left min-w-0">
                             <img src={candidate.primary_image || 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba'} alt="" className="w-9 h-9 object-cover rounded-lg border border-white/10 shrink-0 select-none pointer-events-none" />
-                            <div className="truncate text-xs">
+                            <div className="truncate text-xs min-w-0">
                               <div className="font-black text-slate-100 truncate flex items-center gap-1.5">
                                 {candidate.name}
-                                <span className="font-mono text-[8px] bg-slate-800 text-[#D4AF37] px-1 rounded-sm font-bold">Rank {idx + 1}</span>
+                                <span className="font-mono text-[8px] bg-slate-800 text-[#D4AF37] px-1 rounded-sm font-bold shrink-0">Rank {idx + 1}</span>
                               </div>
                               <div className="text-[9px] text-slate-500 font-mono truncate uppercase font-bold mt-0.5">{candidate.species} &bull; {candidate.breed}</div>
                             </div>
@@ -502,31 +522,44 @@ export default function QRScannerView() {
                     </div>
                   </div>
                 ) : (
-                  <div className="w-full flex-1 flex flex-col items-center justify-center text-center p-4 border border-dashed border-white/5 rounded-2xl bg-slate-950/30 text-slate-500 italic font-sans text-[11px] min-h-[160px] md:min-h-[200px]">
+                  // FIX 8: Replaced fixed min-h with natural padding so text doesn't overflow
+                  <div className="w-full flex flex-col items-center justify-center text-center px-4 py-8 border border-dashed border-white/5 rounded-2xl bg-slate-950/30 text-slate-500 italic font-sans text-[11px]">
                     {isAiProcessing ? (
                       <div className="space-y-2 animate-pulse not-italic">
                         <div className="w-6 h-6 border-2 border-t-transparent border-[#D4AF37] rounded-full animate-spin mx-auto" />
                         <span className="text-[9px] font-mono text-[#D4AF37] block uppercase tracking-widest font-bold">{aiStatusMessage}</span>
                       </div>
                     ) : (
-                      <p className="px-4 leading-relaxed">Awaiting text characteristic parameters inside the descriptive layout console below...</p>
+                      <p className="leading-relaxed">Awaiting text characteristic parameters inside the descriptive layout console below...</p>
                     )}
                   </div>
                 )}
 
                 {aiErrorMessage && (
-                  <div className="text-[10px] text-rose-400 font-medium bg-rose-950/30 border border-rose-900/40 px-3 py-1.5 rounded-xl text-center shadow-sm shrink-0">{aiErrorMessage}</div>
+                  <div className="text-[10px] text-rose-400 font-medium bg-rose-950/30 border border-rose-900/40 px-3 py-1.5 rounded-xl text-center shadow-sm w-full">{aiErrorMessage}</div>
                 )}
               </div>
 
               {/* AI Description Input Console */}
-              <div className="bg-slate-950/90 p-3 sm:p-3.5 rounded-2xl border border-white/5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] z-10 mt-4 text-left shrink-0 w-full">
+              <div className="bg-slate-950/90 p-3 sm:p-3.5 rounded-2xl border border-white/5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] z-10 w-full">
                 <label className="block text-[9px] uppercase font-bold tracking-widest text-slate-500 mb-2 text-center font-mono">
                   AI_PREDICTIVE_DESCRIPTOR_CONSOLE
                 </label>
                 <form onSubmit={handleAISearchSubmit} className="space-y-2 animate-fade-in">
-                  <textarea rows="2" value={petDescription} onChange={(e) => setPetDescription(e.target.value)} placeholder="Describe visual markers... (Ex: tan coat askal with floppy left ear, orange tabby found near canteen)" className="w-full bg-slate-900/60 border border-white/10 rounded-xl p-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#D4AF37] font-sans tracking-wide text-white placeholder-slate-600 shadow-inner shadow-black resize-none leading-relaxed min-w-0" />
-                  <button type="submit" disabled={isAiProcessing || !petDescription.trim()} className="w-full bg-gradient-to-r from-[#5C0612] to-[#7A0918] text-white py-2 rounded-xl border border-[#D4AF37]/30 hover:brightness-110 text-xs font-mono font-bold tracking-wider uppercase transition-all shadow-md disabled:opacity-30 disabled:pointer-events-none">Initialize Predictive Matching</button>
+                  <textarea
+                    rows="2"
+                    value={petDescription}
+                    onChange={(e) => setPetDescription(e.target.value)}
+                    placeholder="Describe visual markers... (Ex: tan coat askal with floppy left ear, orange tabby found near canteen)"
+                    className="w-full bg-slate-900/60 border border-white/10 rounded-xl p-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#D4AF37] font-sans tracking-wide text-white placeholder-slate-600 shadow-inner shadow-black resize-none leading-relaxed"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isAiProcessing || !petDescription.trim()}
+                    className="w-full bg-gradient-to-r from-[#5C0612] to-[#7A0918] text-white py-2 rounded-xl border border-[#D4AF37]/30 hover:brightness-110 text-xs font-mono font-bold tracking-wider uppercase transition-all shadow-md disabled:opacity-30 disabled:pointer-events-none"
+                  >
+                    Initialize Predictive Matching
+                  </button>
                 </form>
               </div>
             </div>
@@ -535,7 +568,7 @@ export default function QRScannerView() {
         </div>
 
       </div>
-      
+
     </div>
   );
 }
