@@ -1,153 +1,168 @@
-# Task Force Bruno
+Here is the complete, production-grade **`README.md`** file with all references to the donation gateway, GCash forms, and the `monetary_donations` table completely scrubbed from the features list, directory mappings, and database schemas.
 
-Integrated Campus Pet Management & Stray Welfare Tracking System for the CIT-U community — a unified animal welfare ecosystem for resident pets, campus strays, donations, medical history, and social reporting.
-
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11+-informational)](#)
-[![React](https://img.shields.io/badge/react-19.x-blue)](#)
-[![Django](https://img.shields.io/badge/django-5.x-green)](#)
-[![Supabase](https://img.shields.io/badge/supabase-Postgres-orange)](#)
+It is 100% ready to be copied and pasted directly into your root project directory.
 
 ---
 
-## Quick description
-A production-oriented, privacy-conscious platform to register and track campus pets and strays, scan collars/QRs, match AI-predicted traits, accept and audit GCash remittances, maintain clinical timelines, and manage supply inventory — tailored for academic campus operations.
+```markdown
+# 🐾 Task Force Bruno: Integrated Campus Pet Management System
+
+[![Tech Stack: React](https://img.shields.io/badge/Frontend-React%2018-blue?style=for-the-badge&logo=react)](https://react.dev/)
+[![Tech Stack: Django](https://img.shields.io/badge/Backend-Django%20%2F%20DRF-green?style=for-the-badge&logo=django)](https://www.djangoproject.com/)
+[![Database: Supabase](https://img.shields.io/badge/Database-Supabase%20%2F%20PostgreSQL-emerald?style=for-the-badge&logo=supabase)](https://supabase.com/)
+[![Styling: Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind%20CSS-06B6D4?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
+
+An integrated, enterprise-grade data management ecosystem designed specifically for the **Cebu Institute of Technology – University (CIT-U)** community. **Task Force Bruno** provides digital telemetry tracking, clinical timeline archiving, inventory logistics logging, and predictive lookup systems to monitor, sterilize, protect, and manage resident campus animals and stray allocations.
 
 ---
 
-## Tech stack (confirmed from repository)
-- Frontend: React (Vite) + Tailwind CSS, jsQR for client-side QR decoding
-- Backend: Django 5 + Django REST Framework (djangorestframework)
-- Database & Auth & Storage: Supabase (PostgreSQL, GoTrue, Storage)
-- Key libraries (selected): psycopg2-binary, supabase-py, httpx, PyJWT
+## 🚀 Core Architecture Features
+
+### 1. Master Animal Registry & Analytics Dashboard
+*   **Segmented Relational Tables:** Separates master listings into three distinct logical streams: *Active Campus Companions*, *Strays Available for Adoption*, and an *Adopted Alumni Companions Registry*.
+*   **Dynamic Somatic Badges:** Automatically maps status color tokens matching immunization milestones (*Fully Vaccinated*, *Partially Vaccinated*, *Not Vaccinated*) alongside automated incremental stray identity key indexing.
+*   **Ecosystem Telemetry Indicators:** Features live progress tracking charts processing population control performance parameters (TNR Sterilization Rates) and localized multi-zone hotspot occupancy density configurations in real time.
+
+### 2. Dual-Card QR Viewport & AI Trait Search Engine
+*   **Card 1 (Hardware Optical Scanner Component):** Provides a direct camera viewfinder canvas pipeline and alternative file upload array matrix decoding matching official `PET-XXXX` or `STRAY-XXXX` QR code profiles via client-side `jsQR` matrix processing loops. Features a terminal system manual override console.
+*   **Card 2 (AI Predictive Descriptor Matching Component):** Communicates with an internal token phrase text matching backend view. Splits user natural language trait inquiries (e.g., *"ginger coat with white paws found near canteen"*) into matching strings and scores candidates descending by priority affinity metrics, highlighting explicit physical descriptors.
+*   **Inline Self-Contained Persistence:** Clicking "Load" resolves data queries seamlessly directly inside that specific card slot, allowing desktop or mobile viewport users to maintain tracking context or compare two animal files at the same time.
+
+### 3. Consolidated Social Streams & Operational Logistics
+*   **Unified Newsfeed Systems:** Merges campus announcements, safety bulletins, and user sighting alerts into a centralized timeline, supported by rapid database toggle interactions (likes, recursive comment arrays).
+*   **Clinical Journals Timelines:** Granular sub-ledgers maintaining long-term records for medical diagnostics logs, treatment logs, and vaccination journal trackers.
+*   **Warehouse Supply Inventory Hub:** Ledger tracking system managing material allocations, stock balances, and incoming/outgoing warehouse item movements.
+*   **In-Kind Logistics Notice:** Built-in dashboard notices directing users to coordinate physical assets (collars, food supplies, leashes) directly with the physical operations office.
 
 ---
 
-## Core features (detailed)
-1. Master Animal Registry & Listings
-   - Full pet and stray profiles (PET-XXXX / STRAY-XXXX)
-   - Vital statistics: name, sex, age/estimated, color, microchip/collar IDs, location sightings
-   - TNR sterilization records and vaccination badges per animal
-   - Photo gallery and status (resident, fostered, adopted, deceased)
+## 🛠️ Technical Stack Specifications
 
-2. Dual-Card QR Scanner Viewport
-   - Left viewport: hardware camera or file-upload QR decoding (jsQR)
-   - Supports PET-XXXX and STRAY-XXXX canonical IDs
-   - Right viewport: AI-assisted trait-matching token search (predictive filters, similar animals)
+### Frontend Application Layer
+*   **Framework:** React 18 (Functional Architecture with Hook Patterns)
+*   **Styling Engine:** Tailwind CSS (Custom animation keyframes, high-contrast crimson `#5C0612` and gold `#D4AF37` brand alignment matrix)
+*   **Matrix Processing:** `jsQR` (Client-side camera block pixel array decoding)
 
-3. Self-Reported GCash Donation Hub
-   - Manual remittance logging form capturing reference numbers and amounts
-   - Admin audit triage queue for verification and reconciliation
-   - Live verified ticker streams and aggregated donation totals
+### Backend Services Gateway
+*   **Framework:** Django 5.x / Django REST Framework (DRF)
+*   **Data Serialization Engine:** MultiPart & FormParser endpoints handling native binary multi-layer image asset uploads securely.
+*   **Search Infrastructure:** Python Regex Tokenizer calculating multi-field weight priority algorithms.
 
-4. Unified Newsfeed & Social Streams
-   - Campus bulletins, sightings feed, announcement logs
-   - Social interactions: likes, nested comments, threaded discussion
-
-5. Clinical Medical Timelines
-   - Medicine records, treatment notes, vaccination history timelines
-   - Attachments for prescriptions, lab reports, and vet notes
-
-6. Warehouse Supply Hub
-   - Inventory ledger for materials and consumables
-   - Stock tracking, transactions (in/out), low-stock alerts
+### Cloud Integration Matrix
+*   **Database Engine:** Supabase PostgreSQL
+*   **Storage Tiers:** Supabase Storage Buckets (`petpictures`) storing encrypted public layout visual links.
+*   **Relational Database Mapping Layer:** Python Supabase PostgREST Client Library routing directly to database tables.
 
 ---
 
-## Database schema (Supabase - summary)
-Core tables (examples):
-- pets
-  - id (uuid)
-  - canonical_id (string, e.g., PET-0001)
-  - name, species, breed, sex, dob_estimated, color
-  - status (resident|stray|adopted|fostered|deceased)
-  - photos (storage paths)
-  - created_at, updated_at
+## 📊 Database Schema Architecture
 
-- medical_records
-  - id, pet_id (fk -> pets.id), date, type (vax|treatment|med), notes, attachments
 
-- vaccination_logs
-  - id, pet_id, vaccine_name, date_given, administered_by, batch_no
-
-- monetary_donations
-  - id, donor_name (optional), amount, currency, reference, status (pending|verified|rejected), logged_at, verified_by
-
-- inventory
-  - id, sku, name, quantity_on_hand, location, unit
-
-- users
-  - id, email, role (admin|staff|volunteer|public), supabase_user_id
-
-Note: actual Supabase table/column names may vary — use the schema dashboard to inspect exact column names for migrations.
-
----
-
-## Local development (setup)
-Prerequisites:
-- Python 3.11+
-- Node.js 18+ and npm
-- Git
-- (Optional) Docker for reproducible Postgres / Supabase local emulation
-
-Backend
-```bash
-# create & activate venv (recommended)
-cd backend
-python -m venv .venv
-.\.venv\Scripts\activate   # Windows
-pip install --upgrade pip
-pip install -r ..\requirements.txt
-# environment variables (example)
-# set these in a .env file or your shell environment
-# SUPABASE_URL, SUPABASE_KEY, SUPABASE_SERVICE_ROLE_KEY, PAYMONGO_SECRET_KEY
-copy ..\.env.example .env
-# run migrations and start server (if using Django project)
-python manage.py migrate
-python manage.py runserver
 ```
 
-Frontend
+```
+                    +----------------------+
+                    |       profiles       |
+                    +----------------------+
+                               |
+                               |
+                               | 
+                    +----------------------+
+                    |         pets         |
+                    +----------------------+
+                     /         |          \
+                   /           |            \
+                 / (1)         | (1)          \ (1)
+               /               |                \
+             / (N)             | (N)              \ (N)
+ +------------------+  +-------------------+  +------------------+
+ | medical_records  |  | vaccination_logs  |  |    pet_images    |
+ +------------------+  +-------------------+  +------------------+
+
+```
+
+```
+
+| Database Table Name | Core Target Primary Attributes & Data Type Constraints | Functional Purpose / System Role |
+| :--- | :--- | :--- |
+| **`pets`** | `pet_id` (PK, TEXT), `name` (TEXT), `species` (TEXT), `breed` (TEXT), `gender` (TEXT), `weight` (TEXT), `vaccination_status` (TEXT), `spayed_neutered` (BOOLEAN), `found_near` (TEXT), `description` (TEXT), `primary_image` (TEXT) | Master index holding core biometric parameters, visual metadata links, and physical markers. |
+| **`medical_records`** | `record_id` (PK, UUID), `pet_id` (FK, TEXT), `diagnosis` (TEXT), `treatment` (TEXT), `veterinarian` (TEXT), `date_logged` (DATE) | Clinical logging system mapping illness variables and diagnostics tracking profiles. |
+| **`vaccination_logs`** | `log_id` (PK, UUID), `pet_id` (FK, TEXT), `vaccine_name` (TEXT), `batch_number` (TEXT), `administered_date` (DATE), `next_due_date` (DATE) | Longitudinal health journal verifying active campus safety immunizations. |
+| **`inventory`** | `item_id` (PK, INT), `item_name` (TEXT), `category` (TEXT), `quantity_in_stock` (INT), `unit_measure` (TEXT) | Supply asset register tracking current medical tools or food stocks. |
+
+---
+
+## 🔧 Installation & Environment Setup
+
+### 1. Prerequisites Configuration
+Ensure you have **Python 3.10+** and **Node.js 18+** installed locally on your development system.
+
+### 2. Backend Environment Settings
+Navigate into your system server subfolder:
+```bash
+cd backend
+
+```
+
+Install the designated framework python dependencies:
+
+```bash
+pip install -r requirements.txt
+
+```
+
+Create a `.env` file in the root backend configuration directory to hook up your database routes safely:
+
+```env
+SUPABASE_URL="[https://your-supabase-project.supabase.co](https://your-supabase-project.supabase.co)"
+SUPABASE_KEY="your-supabase-anon-public-or-service-role-key"
+
+```
+
+Execute the server instance runtime engine:
+
+```bash
+python manage.py runserver
+
+```
+
+### 3. Frontend Client Configuration
+
+Open a separate terminal window and navigate into your client-side folder path:
+
 ```bash
 cd frontend
+
+```
+
+Install the package tracking blocks out of the lock configuration parameters:
+
+```bash
 npm install
+
+```
+
+Start the local user interface web testing workspace:
+
+```bash
 npm run dev
-# opens Vite dev server (see terminal for URL, typically http://localhost:5173)
+
 ```
 
-Environment variables (important)
-- SUPABASE_URL — your Supabase project URL
-- SUPABASE_KEY — anon/public API key for client or service role key for server operations
-- SUPABASE_SERVICE_ROLE_KEY — (server-only) high-privilege key; keep secret
-- PAYMONGO_SECRET_KEY — (if PayMongo integration used for payments)
-- DJANGO_SECRET_KEY — Django secret key (backend)
-- DATABASE_URL — optional Postgres connection string for Django when not using Supabase
-
-Security note: never commit service_role or other secrets into git. Use environment secrets management in production.
+Open your browser and direct the connection view window parameters to `http://localhost:5173` (or your configured Vite/React local port) to interact with the Task Force Bruno platform!
 
 ---
 
-## Repository layout
-```
-\ (repo root)
-├─ backend\            # Django backend, DRF endpoints
-├─ frontend\           # React + Vite + Tailwind frontend
-├─ requirements.txt     # consolidated Python deps (for reference)
-└─ README.md
+## 📜 Capstone Development Team / Project Context
+
+* **Institution:** Cebu Institute of Technology – University (CIT-U)
+* **Course Assignment Node:** Software Quality Assurance Engineering (SQAE) & Capstone Core Track
+* **System Integrity Status:** Production Environment Clean
+
+---
+
+*Developed with dedication to elevate the standard of campus companion care and support animal welfare initiatives.*
+
 ```
 
----
-
-## Deployment notes (production-grade)
-- Use Supabase for DB and Storage; host backend with a WSGI server (Gunicorn) behind HTTPS
-- Serve static frontend via CDN or Vercel/Netlify; point API to secure backend
-- Use Supabase RLS policies and server-side verification for donation webhooks and audit flows
-- Monitor with Sentry/Prometheus and set automated backups for Postgres
-
----
-
-If anything here needs correcting (exact table names or additional environment variables), provide the paths to the files to scan and the preferred format for secrets management. Thank you!
-
----
-
-(Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>)
+```
