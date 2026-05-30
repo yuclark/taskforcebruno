@@ -317,7 +317,7 @@ export default function QRScannerView() {
   );
 
   return (
-    <div className="w-full min-h-[550px] flex flex-col items-center justify-center relative p-2 sm:p-6 bg-gradient-to-br from-slate-200 via-zinc-200 to-stone-300 rounded-3xl overflow-hidden shadow-inner">
+    <div className="w-full min-h-screen md:min-h-0 flex flex-col items-center justify-start md:justify-center relative p-3 sm:p-6 bg-gradient-to-br from-slate-200 via-zinc-200 to-stone-300 rounded-2xl md:rounded-3xl overflow-hidden shadow-inner">
       
       {/* BACKGROUND GRAPHIC INTERFACES */}
       <div className="absolute inset-0 z-0 pointer-events-none select-none">
@@ -334,12 +334,12 @@ export default function QRScannerView() {
       </div>
 
       {/* DUAL COMPONENT VIEWPORT GRID RENDER MATRIX */}
-      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 relative z-10">
 
         {/* =========================================================
             CARD 1: HARDWARE OPTICAL SCANNER & MANUAL OVERRIDE
            ========================================================= */}
-        <div className="w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-[32px] overflow-hidden shadow-2xl border-4 border-[#5C0612] p-4 sm:p-5 text-white flex flex-col justify-between relative min-h-[570px] md:min-h-[590px]">
+        <div className="w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-[28px] md:rounded-[32px] overflow-hidden shadow-2xl border-4 border-[#5C0612] p-4 sm:p-5 text-white flex flex-col justify-between relative min-h-[500px] md:min-h-[590px]">
           
           <div className="absolute inset-0 opacity-[0.02] pointer-events-none z-0">
             <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
@@ -350,7 +350,7 @@ export default function QRScannerView() {
             </svg>
           </div>
 
-          <div className="flex justify-between items-center text-[10px] opacity-40 font-mono tracking-widest z-10 mb-2 shrink-0">
+          <div className="flex justify-between items-center text-[10px] opacity-40 font-mono tracking-widest z-10 mb-3 shrink-0">
             <div className="flex items-center gap-1.5">
               <span className={`w-1.5 h-1.5 rounded-full ${card1PetData ? 'bg-indigo-400' : isActiveCamera ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
               <span>{card1PetData ? 'PROFILE_NODE_LOADED' : isActiveCamera ? 'HARDWARE_LIVE_FEED' : 'HARDWARE_STANDBY'}</span>
@@ -359,22 +359,20 @@ export default function QRScannerView() {
           </div>
 
           {loadingCard1Profile ? (
-            <div className="my-auto text-center space-y-2 font-mono text-[10px] text-slate-400 animate-pulse">
+            <div className="my-auto py-12 text-center space-y-2 font-mono text-[10px] text-slate-400 animate-pulse">
               <div className="w-6 h-6 border-2 border-t-transparent border-[#D4AF37] rounded-full animate-spin mx-auto" />
               <span>RESOLVING DATA ARCHIVE LINK...</span>
             </div>
           ) : card1PetData ? (
-            /* Render Embedded full profile right inside Card 1 wrapper lines */
             renderEmbeddedProfile(card1PetData, () => { setCard1PetData(null); setManualId(''); })
           ) : (
-            /* Fallback rendering to capture hardware inputs standard views */
-            <>
-              <div className="my-auto flex flex-col items-center z-10 w-full space-y-4 flex-1 justify-center">
+            <div className="flex-1 flex flex-col justify-between h-full w-full">
+              <div className="flex flex-col items-center justify-center z-10 w-full space-y-4 flex-1 py-4">
                 <span className="text-[#D4AF37] text-[10px] uppercase font-bold tracking-widest bg-[#D4AF37]/5 px-2.5 py-0.5 rounded-md border border-[#D4AF37]/10 shrink-0">
                   Collar Lens Reader
                 </span>
                 
-                <div className="w-40 h-40 sm:w-44 sm:h-44 rounded-3xl border border-white/10 bg-slate-950 relative flex items-center justify-center overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.6)] border-b-2 border-[#D4AF37]/20 shrink-0">
+                <div className="w-36 h-36 sm:w-44 sm:h-44 rounded-3xl border border-white/10 bg-slate-950 relative flex items-center justify-center overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.6)] border-b-2 border-[#D4AF37]/20 shrink-0">
                   <video ref={videoRef} className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${isActiveCamera ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} />
 
                   <div className="absolute top-3 left-3 w-5 h-5 border-t-4 border-l-4 border-[#D4AF37] rounded-tl z-20" />
@@ -409,7 +407,7 @@ export default function QRScannerView() {
                 )}
 
                 {qrErrorMessage && (
-                  <div className="text-[10px] text-rose-400 font-medium bg-rose-950/30 border border-rose-900/40 px-3 py-1.5 rounded-xl max-w-[224px] text-center shadow-sm">{qrErrorMessage}</div>
+                  <div className="text-[10px] text-rose-400 font-medium bg-rose-950/30 border border-rose-900/40 px-3 py-1.5 rounded-xl max-w-xs text-center shadow-sm">{qrErrorMessage}</div>
                 )}
 
                 {qrStatusMessage && isActiveCamera && (
@@ -429,23 +427,23 @@ export default function QRScannerView() {
               </div>
 
               {/* Terminal Manual Override Input Console */}
-              <div className="bg-slate-950/90 p-3.5 rounded-2xl border border-white/5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] z-10 mt-4 text-left shrink-0">
-                <label className="block text-[9px] uppercase font-bold tracking-widest text-slate-500 mb-2 text-center font-mono">
+              <div className="bg-slate-950/90 p-3 sm:p-3.5 rounded-2xl border border-white/5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] z-10 mt-auto text-left shrink-0 w-full">
+                <label className="block text-[9px] uppercase font-bold tracking-widest text-slate-500 mb-2 text-center Richmond font-mono">
                   SYS_MANUAL_OVERRIDE_CONSOLE
                 </label>
-                <form onSubmit={handleManualSubmit} className="flex gap-2">
-                  <input type="text" value={manualId} onChange={(e) => setManualId(e.target.value)} placeholder="SYS_REF_ID (Ex: PET-1001)" className="flex-1 bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#D4AF37] font-mono tracking-wider text-white placeholder-slate-700 shadow-inner min-w-0" />
-                  <button type="submit" className="bg-[#5C0612] hover:bg-[#42040B] px-3.5 py-2 rounded-xl text-xs font-bold tracking-wider border border-[#D4AF37]/30 hover:border-[#D4AF37]/60 active:scale-95 transition-all text-white shrink-0 shadow-md font-mono">LOAD</button>
+                <form onSubmit={handleManualSubmit} className="flex flex-col sm:flex-row gap-2">
+                  <input type="text" value={manualId} onChange={(e) => setManualId(e.target.value)} placeholder="SYS_REF_ID (Ex: PET-1001)" className="w-full sm:flex-1 bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#D4AF37] font-mono tracking-wider text-white placeholder-slate-700 shadow-inner min-w-0" />
+                  <button type="submit" className="w-full sm:w-auto bg-[#5C0612] hover:bg-[#42040B] px-4 py-2 rounded-xl text-xs font-bold tracking-wider border border-[#D4AF37]/30 hover:border-[#D4AF37]/60 active:scale-95 transition-all text-white shrink-0 shadow-md font-mono">LOAD</button>
                 </form>
               </div>
-            </>
+            </div>
           )}
         </div>
 
         {/* =========================================================
             CARD 2: AI DESCRIPTIVE MARKS SEARCH ENGINE
            ========================================================= */}
-        <div className="w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-[32px] overflow-hidden shadow-2xl border-4 border-[#5C0612] p-4 sm:p-5 text-white flex flex-col justify-between relative min-h-[570px] md:min-h-[590px]">
+        <div className="w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-[28px] md:rounded-[32px] overflow-hidden shadow-2xl border-4 border-[#5C0612] p-4 sm:p-5 text-white flex flex-col justify-between relative min-h-[500px] md:min-h-[590px]">
           
           <div className="absolute inset-0 opacity-[0.02] pointer-events-none z-0">
             <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
@@ -456,7 +454,7 @@ export default function QRScannerView() {
             </svg>
           </div>
 
-          <div className="flex justify-between items-center text-[10px] opacity-40 font-mono tracking-widest z-10 mb-2 shrink-0">
+          <div className="flex justify-between items-center text-[10px] opacity-40 font-mono tracking-widest z-10 mb-3 shrink-0">
             <div className="flex items-center gap-1.5">
               <span className={`w-1.5 h-1.5 rounded-full ${card2PetData ? 'bg-indigo-400' : aiCandidates.length > 0 ? 'bg-emerald-500' : isAiProcessing ? 'bg-amber-500 animate-pulse' : 'bg-slate-600'}`} />
               <span>{card2PetData ? 'AI_PROFILE_LOADED' : aiCandidates.length > 0 ? 'MATRIX_MATCHES_FOUND' : 'AI_PARSER_READY'}</span>
@@ -465,17 +463,15 @@ export default function QRScannerView() {
           </div>
 
           {loadingCard2Profile ? (
-            <div className="my-auto text-center space-y-2 font-mono text-[10px] text-slate-400 animate-pulse">
+            <div className="my-auto py-12 text-center space-y-2 font-mono text-[10px] text-slate-400 animate-pulse">
               <div className="w-6 h-6 border-2 border-t-transparent border-[#D4AF37] rounded-full animate-spin mx-auto" />
               <span>RESOLVING DATA ARCHIVE LINK...</span>
             </div>
           ) : card2PetData ? (
-            /* Render Embedded profile directly inside Card 2 wrapper line */
             renderEmbeddedProfile(card2PetData, () => { setCard2PetData(null); setAiCandidates([]); setPetDescription(''); })
           ) : (
-            /* Standard input console views for description lookups fallback engine */
-            <>
-              <div className="my-auto flex flex-col justify-start items-center z-10 w-full space-y-4 flex-1 pt-2 overflow-hidden">
+            <div className="flex-1 flex flex-col justify-between h-full w-full">
+              <div className="flex flex-col justify-start items-center z-10 w-full space-y-3 flex-1 pt-1 overflow-hidden">
                 <span className="text-[#D4AF37] text-[10px] uppercase font-bold tracking-widest bg-[#D4AF37]/5 px-2.5 py-0.5 rounded-md border border-[#D4AF37]/10 shrink-0">
                   AI Trait-matching Engine
                 </span>
@@ -487,7 +483,7 @@ export default function QRScannerView() {
                       <button onClick={() => { setAiCandidates([]); setPetDescription(''); }} className="text-[9px] font-mono font-bold text-rose-400 hover:text-rose-300 uppercase tracking-wider focus:outline-none">Flush Table</button>
                     </div>
                     
-                    <div className="space-y-2 overflow-y-auto pr-1 border border-white/5 rounded-2xl p-2 bg-slate-950/60 flex-1 w-full">
+                    <div className="space-y-2 overflow-y-auto pr-1 border border-white/5 rounded-2xl p-1.5 bg-slate-950/60 flex-1 w-full max-h-[220px] md:max-h-none">
                       {aiCandidates.map((candidate, idx) => (
                         <div key={candidate.pet_id} className="p-2 border border-white/5 bg-slate-900/50 rounded-xl flex items-center justify-between gap-3 shadow-inner hover:bg-slate-900 transition-colors">
                           <div className="flex items-center gap-2.5 truncate flex-1 text-left">
@@ -500,14 +496,13 @@ export default function QRScannerView() {
                               <div className="text-[9px] text-slate-500 font-mono truncate uppercase font-bold mt-0.5">{candidate.species} &bull; {candidate.breed}</div>
                             </div>
                           </div>
-                          {/* Pressing Load triggers inline card content swap */}
                           <button onClick={() => resolveCard2Profile(candidate.pet_id)} className="px-3 py-1.5 bg-[#5C0612] hover:bg-[#42040B] text-white border border-[#D4AF37]/20 text-[9px] font-mono font-bold uppercase rounded-lg shrink-0 transition-all shadow-md">Load</button>
                         </div>
                       ))}
                     </div>
                   </div>
                 ) : (
-                  <div className="w-full flex-1 flex flex-col items-center justify-center text-center p-4 border border-dashed border-white/5 rounded-2xl bg-slate-950/30 text-slate-500 italic font-sans text-[11px] min-h-[200px]">
+                  <div className="w-full flex-1 flex flex-col items-center justify-center text-center p-4 border border-dashed border-white/5 rounded-2xl bg-slate-950/30 text-slate-500 italic font-sans text-[11px] min-h-[160px] md:min-h-[200px]">
                     {isAiProcessing ? (
                       <div className="space-y-2 animate-pulse not-italic">
                         <div className="w-6 h-6 border-2 border-t-transparent border-[#D4AF37] rounded-full animate-spin mx-auto" />
@@ -525,7 +520,7 @@ export default function QRScannerView() {
               </div>
 
               {/* AI Description Input Console */}
-              <div className="bg-slate-950/90 p-3.5 rounded-2xl border border-white/5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] z-10 mt-4 text-left shrink-0 w-full">
+              <div className="bg-slate-950/90 p-3 sm:p-3.5 rounded-2xl border border-white/5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] z-10 mt-4 text-left shrink-0 w-full">
                 <label className="block text-[9px] uppercase font-bold tracking-widest text-slate-500 mb-2 text-center font-mono">
                   AI_PREDICTIVE_DESCRIPTOR_CONSOLE
                 </label>
@@ -534,7 +529,7 @@ export default function QRScannerView() {
                   <button type="submit" disabled={isAiProcessing || !petDescription.trim()} className="w-full bg-gradient-to-r from-[#5C0612] to-[#7A0918] text-white py-2 rounded-xl border border-[#D4AF37]/30 hover:brightness-110 text-xs font-mono font-bold tracking-wider uppercase transition-all shadow-md disabled:opacity-30 disabled:pointer-events-none">Initialize Predictive Matching</button>
                 </form>
               </div>
-            </>
+            </div>
           )}
 
         </div>
