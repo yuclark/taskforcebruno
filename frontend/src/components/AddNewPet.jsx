@@ -9,6 +9,7 @@ const ALLOWED_LOCATIONS = [
   "CIT-U Canteen",
   "SAL Building",
   "CIT-U Gymnasium"
+  "Elementary Building"
 ];
 
 export default function AddNewPet({ onRefresh }) {
