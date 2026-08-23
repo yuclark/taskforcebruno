@@ -14,7 +14,7 @@
 
 **A modern, full-stack digital telemetry, clinical archiving, inventory logistics, and adoption management platform engineered specifically for the Cebu Institute of Technology – University (CIT-U) community.**
 
-[Features](#-key-features--capabilities) • [System Architecture](#-system-architecture) • [Database Schema](#-database-schema) • [API Directory](#-api-endpoint-reference) • [Getting Started](#-installation--setup) • [Validation Plan](docs/MVP_VALIDATION_PLAN.md)
+[Features](#-key-features--capabilities) • [System Architecture](#-system-architecture) • [Database Schema](#-database-schema) • [API Directory](#-api-endpoint-reference) • [Getting Started](#-installation--setup) • [Validation Plan (MD)](docs/MVP_VALIDATION_PLAN.md) • [Word (.docx)](docs/Task_Force_Bruno_MVP_Validation_Plan.docx) • [PDF](docs/Task_Force_Bruno_MVP_Validation_Plan.pdf)
 
 ---
 
@@ -23,7 +23,7 @@
 ## 📌 Table of Contents
 
 - [Overview & Mission](#-overview--mission)
-- [Validation Framework & Research Plan](docs/MVP_VALIDATION_PLAN.md)
+- [Validation Framework & Research Plan](docs/MVP_VALIDATION_PLAN.md) ([.docx](docs/Task_Force_Bruno_MVP_Validation_Plan.docx) | [.pdf](docs/Task_Force_Bruno_MVP_Validation_Plan.pdf))
 - [Key Features & Capabilities](#-key-features--capabilities)
   - [1. Role-Based Access Portals](#1-role-based-access-portals)
   - [2. Master Pet Registry & Ecosystem Telemetry](#2-master-pet-registry--ecosystem-telemetry)
