@@ -454,15 +454,21 @@ export default function NewsfeedView({ session }) {
                         </div>
                       )}
 
-                      {/* Image Attachment (if any) */}
+                      {/* Image Attachment (Full Natural Proportions) */}
                       {item.image_url && (
-                        <div className="mt-3 rounded-xl overflow-hidden border border-slate-200 max-h-72 cursor-pointer">
+                        <div
+                          onClick={() => setLightboxImg(item.image_url)}
+                          className="mt-3.5 rounded-2xl overflow-hidden border border-slate-200/80 bg-slate-900/5 cursor-pointer group flex items-center justify-center relative shadow-sm"
+                        >
                           <img
                             src={item.image_url}
-                            alt=""
-                            onClick={() => setLightboxImg(item.image_url)}
-                            className="w-full h-full object-cover hover:opacity-95 transition-opacity"
+                            alt={item.title || "Campus update"}
+                            className="w-full max-h-[540px] h-auto object-cover sm:object-contain transition-transform duration-200 group-hover:scale-[1.01]"
+                            loading="lazy"
                           />
+                          <div className="absolute bottom-2.5 right-2.5 bg-black/65 backdrop-blur-sm text-white text-[10px] font-mono px-2.5 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                            Click to expand
+                          </div>
                         </div>
                       )}
                     </div>
