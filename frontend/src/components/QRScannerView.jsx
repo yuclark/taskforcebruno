@@ -392,10 +392,10 @@ export default function QRScannerView({ onProfileIdentified }) {
   );
 
   return (
-    <div className="w-full max-w-5xl mx-auto flex flex-col gap-6 py-2 px-1 text-slate-100">
+    <div className="w-full max-w-6xl xl:max-w-7xl mx-auto flex flex-col gap-5 sm:gap-6 py-1 px-1 sm:px-2 text-slate-100">
 
       {/* HEADER BANNER */}
-      <div className="bg-white/80 backdrop-blur-md rounded-2xl p-5 md:p-6 border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl p-4 sm:p-5 md:p-6 border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -477,7 +477,7 @@ export default function QRScannerView({ onProfileIdentified }) {
 
               {/* Viewfinder / Camera Area */}
               <div className="flex flex-col items-center">
-                <div className="w-full max-w-[240px] aspect-square rounded-2xl bg-slate-950 border-2 border-slate-800 relative flex items-center justify-center overflow-hidden shadow-inner group">
+                <div className="w-full max-w-[260px] sm:max-w-[280px] aspect-square rounded-2xl bg-slate-950 border-2 border-slate-800 relative flex items-center justify-center overflow-hidden shadow-inner group">
                   <video
                     ref={videoRef}
                     className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${isActiveCamera ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
@@ -525,7 +525,7 @@ export default function QRScannerView({ onProfileIdentified }) {
                     <button
                       type="button"
                       onClick={startCameraStream}
-                      className="inline-flex items-center gap-2 bg-[#5C0612] hover:bg-[#700816] text-white px-4 py-2 rounded-xl text-xs font-bold border border-[#D4AF37]/40 shadow-md transition-all active:scale-95"
+                      className="inline-flex items-center gap-2 bg-[#5C0612] hover:bg-[#700816] text-white px-4 py-2.5 rounded-xl text-xs font-bold border border-[#D4AF37]/40 shadow-md transition-all active:scale-95"
                     >
                       <svg className="w-4 h-4 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -648,7 +648,8 @@ export default function QRScannerView({ onProfileIdentified }) {
                   {[
                     "Calico cat near library",
                     "Orange tabby near canteen",
-                    "Tan askal dog with floppy ears"
+                    "Tan askal dog with floppy ears",
+                    "White stray cat near gym"
                   ].map((preset) => (
                     <button
                       key={preset}
@@ -774,6 +775,42 @@ export default function QRScannerView({ onProfileIdentified }) {
 
         </div>
 
+      </div>
+
+      {/* QUICK SCANNING & TELEMETRY PROTOCOL GUIDELINES (Full Width Desktop & Mobile) */}
+      <div className="bg-white rounded-2xl p-5 md:p-6 border border-slate-200/80 shadow-sm text-slate-700 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-lg bg-[#5C0612]/10 text-[#5C0612] flex items-center justify-center">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h4 className="font-bold text-slate-900 text-xs sm:text-sm tracking-tight">
+            Scanner Diagnostic & Telemetry Guidelines
+          </h4>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-100 text-[11px] leading-relaxed text-slate-600">
+          <div className="space-y-1">
+            <span className="font-bold text-slate-800 block">1. Hardware & Device Support</span>
+            <p>Compatible with smartphone cameras (Android Chrome / iOS Safari), tablets, and laptop webcams.</p>
+          </div>
+
+          <div className="space-y-1">
+            <span className="font-bold text-slate-800 block">2. Optimal Tag Alignment</span>
+            <p>Hold collar QR tag steady 4–6 inches from camera lens in good lighting for instant automatic decoding.</p>
+          </div>
+
+          <div className="space-y-1">
+            <span className="font-bold text-slate-800 block">3. Offline Matrix Engine</span>
+            <p>Decodes standard QR matrix strings locally in real time without sending camera streams over the network.</p>
+          </div>
+
+          <div className="space-y-1">
+            <span className="font-bold text-slate-800 block">4. Untagged Animals</span>
+            <p>If the animal has lost or has no physical tag, switch to the AI Trait Search on the right to match candidate records.</p>
+          </div>
+        </div>
       </div>
 
     </div>

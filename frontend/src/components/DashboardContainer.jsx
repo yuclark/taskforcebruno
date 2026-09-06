@@ -236,12 +236,10 @@ export default function DashboardContainer({ session, onLogout }) {
             </div>
           )}
 
-          {/* SCANNER — FIX 3: overflow-y-auto here (not on QRScannerView wrapper),
-              centered horizontally and vertically on desktop via flex,
-              aligns to top on mobile so it scrolls naturally */}
+          {/* SCANNER — top-aligned, natural scroll, responsive padding */}
           {currentTab === 'scanner' && (
             <div className="relative z-10 w-full h-full overflow-y-auto">
-              <div className="min-h-full flex items-start md:items-center justify-center p-4 md:p-8">
+              <div className="min-h-full flex items-start justify-center p-3 sm:p-5 md:p-6 lg:p-8">
                 {!activePetId ? (
                   <QRScannerView onProfileIdentified={(id) => setActivePetId(id)} />
                 ) : (

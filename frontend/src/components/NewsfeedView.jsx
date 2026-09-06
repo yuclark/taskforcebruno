@@ -48,6 +48,20 @@ export default function NewsfeedView({ session }) {
     setEditBody('');
   };
 
+  const [petsData, setPetsData] = useState([]);
+
+  const fetchPetsData = async () => {
+    try {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/pets/');
+      if (res.ok) {
+        const data = await res.json();
+        setPetsData(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Error fetching pets for newsfeed telemetry:', err);
+    }
+  };
+
   const fetchStreamData = async () => {
     if (!currentUserEmail) return;
     try {
@@ -73,6 +87,7 @@ export default function NewsfeedView({ session }) {
     clearTransientUi();
     setExpandedComments({});
     fetchStreamData();
+    fetchPetsData();
   }, [currentUserEmail, currentUserRole]);
 
   useEffect(() => {
@@ -205,8 +220,17 @@ export default function NewsfeedView({ session }) {
     );
   }
 
-  const totalCampusPetsCount = feedItems.filter(i => i.item_type === 'pet').length;
-  const petsAwaitingHomeCount = feedItems.filter(i => i.item_type === 'pet' && (i.badge_text === 'Available' || i.badge_text === 'For Adoption')).length;
+  const totalCampusPetsCount = petsData.length > 0 
+    ? petsData.length 
+    : feedItems.filter(i => i.item_type === 'pet').length;
+
+  const petsAwaitingHomeCount = petsData.length > 0
+    ? petsData.filter(p => 
+        (p.pet_type === 'For Adoption' || p.pet_id?.startsWith('STRAY-')) && 
+        p.adoption_status === 'Available'
+      ).length
+    : feedItems.filter(i => i.item_type === 'pet' && (i.badge_text === 'Available' || i.badge_text === 'For Adoption')).length;
+
   const sightingsCount = feedItems.filter(i => i.item_type === 'sighting').length;
 
   const filteredFeedItems = feedItems.filter(item => {
