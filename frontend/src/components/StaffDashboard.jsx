@@ -124,7 +124,7 @@ export default function StaffDashboard({ session, onLogout }) {
               <span className="text-[9px] text-stone-300 font-mono mt-1 block truncate">{session?.email || 'Loading context...'}</span>
             </div>
           </div>
-          <button onClick={onLogout} className="w-full py-2 bg-white/5 hover:bg-rose-950/40 text-stone-300 hover:text-rose-200 rounded-xl text-[11px] font-medium border border-white/10 transition-all">DISCONNECT NODE</button>
+          <button onClick={onLogout} className="w-full py-2 bg-white/5 hover:bg-rose-950/40 text-stone-300 hover:text-rose-200 rounded-xl text-[11px] font-medium border border-white/10 transition-all">Sign Out / Exit Portal</button>
         </div>
       </aside>
 
@@ -141,7 +141,7 @@ export default function StaffDashboard({ session, onLogout }) {
 
             <div>
               <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">{activeMenu}</h1>
-              <p className="text-[11px] md:text-xs text-slate-500 mt-0.5 hidden sm:block">Manage and execute state mutations on active institutional records.</p>
+              <p className="text-[11px] md:text-xs text-slate-500 mt-0.5 hidden sm:block">Campus animal welfare, clinical tracking, and operational management portal.</p>
             </div>
           </div>
           <div className="flex items-center gap-2 text-[11px] md:text-xs font-mono bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm self-end md:self-auto">

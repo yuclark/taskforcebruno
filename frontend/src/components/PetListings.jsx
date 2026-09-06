@@ -534,7 +534,11 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
       {petIdToPurge && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in font-sans">
           <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-6 text-center animate-scale-up">
-            <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg select-none">⚠️</div>
+            <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg select-none">
+              <svg className="w-6 h-6 text-rose-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+            </div>
             <h3 className="font-black text-slate-900 text-sm tracking-tight mb-1">Confirm Configuration Wipe</h3>
             <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">
               Are you completely sure you want to permanently delete profile <strong className="text-slate-800 font-bold">#{petIdToPurge}</strong>? 
