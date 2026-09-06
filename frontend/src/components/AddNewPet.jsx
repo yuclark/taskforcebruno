@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const ALLOWED_LOCATIONS = [
   "Wildcat Innovation Labs",
@@ -26,7 +26,7 @@ export default function AddNewPet({ onRefresh }) {
     size: 'Small',
     vaccination_status: 'Fully Vaccinated',
     spayed_neutered: true,
-    adoption_status: 'Available',
+    adoption_status: 'Permanent Resident',
     found_near: 'Wildcat Innovation Labs',
     rescue_date: new Date().toISOString().split('T')[0],
     current_conditions: 'None',
@@ -34,6 +34,26 @@ export default function AddNewPet({ onRefresh }) {
     about_text: '',
     description: ''
   });
+
+  // Hydrate handoff from an investigated Sighting Triage report
+  useEffect(() => {
+    try {
+      const handoff = sessionStorage.getItem('tfb_stray_handoff');
+      if (handoff) {
+        const data = JSON.parse(handoff);
+        setIsStrayMode(true);
+        setNewPetForm(prev => ({
+          ...prev,
+          pet_type: 'For Adoption',
+          adoption_status: 'Available',
+          species: data.species || 'Cat',
+          found_near: data.found_near || prev.found_near,
+          description: data.description || ''
+        }));
+        sessionStorage.removeItem('tfb_stray_handoff');
+      }
+    } catch {}
+  }, []);
 
   const [imageFile, setImageFile] = useState(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
@@ -161,7 +181,10 @@ export default function AddNewPet({ onRefresh }) {
         <div className="flex bg-slate-100 p-1 rounded-xl font-mono text-[10px] font-bold uppercase select-none shrink-0 self-stretch sm:self-auto">
           <button
             type="button"
-            onClick={() => setIsStrayMode(false)}
+            onClick={() => {
+              setIsStrayMode(false);
+              setNewPetForm(prev => ({ ...prev, pet_type: 'Campus Pet', adoption_status: 'Permanent Resident' }));
+            }}
             className={`flex-1 sm:flex-none px-4 py-2 rounded-lg transition-all ${
               !isStrayMode ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-800'
             }`}
@@ -170,7 +193,10 @@ export default function AddNewPet({ onRefresh }) {
           </button>
           <button
             type="button"
-            onClick={() => setIsStrayMode(true)}
+            onClick={() => {
+              setIsStrayMode(true);
+              setNewPetForm(prev => ({ ...prev, pet_type: 'For Adoption', adoption_status: 'Available' }));
+            }}
             className={`flex-1 sm:flex-none px-4 py-2 rounded-lg transition-all ${
               isStrayMode ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-800'
             }`}
@@ -423,17 +449,27 @@ export default function AddNewPet({ onRefresh }) {
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Adoption Stage
+                    {isStrayMode ? 'Adoption Pipeline Stage' : 'Campus Residency Status'}
                   </label>
                   <select
                     name="adoption_status"
                     value={newPetForm.adoption_status}
                     onChange={handleCreateChange}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800 font-semibold"
                   >
-                    <option value="Available">Available</option>
-                    <option value="Fostered">Fostered</option>
-                    <option value="Adopted">Adopted</option>
+                    {!isStrayMode ? (
+                      <>
+                        <option value="Permanent Resident">Permanent Campus Resident (Not for Adoption)</option>
+                        <option value="Campus Mascot">Campus Mascot</option>
+                        <option value="Fostered">Temporary Campus Foster</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="Available">Available for Adoption</option>
+                        <option value="Fostered">Fostered</option>
+                        <option value="Adopted">Adopted</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>

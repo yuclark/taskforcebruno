@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import QRCode from 'qrcode';
 
 const ALLOWED_LOCATIONS = [
   "Wildcat Innovation Labs",
@@ -21,6 +22,24 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   const [petIdToPurge, setPetIdToPurge] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLocationsExpanded, setIsLocationsExpanded] = useState(false);
+  const [qrTagModal, setQrTagModal] = useState({ isOpen: false, pet: null, qrDataUrl: '', targetUrl: '' });
+
+  const handleGenerateQrTag = async (pet) => {
+    try {
+      const targetUrl = `https://taskforcebruno.vercel.app/?pet=${encodeURIComponent(pet.pet_id)}`;
+      const dataUrl = await QRCode.toDataURL(targetUrl, {
+        width: 360,
+        margin: 2,
+        color: {
+          dark: '#5C0612',
+          light: '#FFFFFF'
+        }
+      });
+      setQrTagModal({ isOpen: true, pet, qrDataUrl: dataUrl, targetUrl });
+    } catch (err) {
+      console.error('QR code generation failed:', err);
+    }
+  };
 
   const getNormalizedLocation = (locStr, petId) => {
     if (!locStr) return ALLOWED_LOCATIONS[0];
@@ -371,9 +390,19 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                                 </div>
                               </div>
                               
-                              <div className="flex gap-2 justify-end mt-2 text-[10px] font-mono font-bold uppercase">
-                                <button onClick={() => startEditing(pet)} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-semibold shadow-sm transition-all">Modify Entire Record</button>
-                                <button onClick={() => setPetIdToPurge(pet.pet_id)} className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold">Wipe Configuration</button>
+                              <div className="flex flex-wrap gap-2 justify-end mt-2 text-[10px] font-mono font-bold uppercase">
+                                <button 
+                                  onClick={() => handleGenerateQrTag(pet)} 
+                                  className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
+                                >
+                                  <svg className="w-3.5 h-3.5 text-[#5C0612]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h3.75v3.75H13.5v-3.75Z" />
+                                  </svg>
+                                  Generate Collar Tag QR
+                                </button>
+                                <button onClick={() => startEditing(pet)} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-semibold shadow-sm transition-all">Modify Record</button>
+                                <button onClick={() => setPetIdToPurge(pet.pet_id)} className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold">Wipe Record</button>
                               </div>
                             </div>
                           </div>
@@ -528,6 +557,70 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
           {generateRenderedTableBlock("Stray Animals Available for Adoption", sortedStrayCollection)}
           {generateRenderedTableBlock("Adopted Alumni Companions Registry", sortedAdoptedCollection)}
         </>
+      )}
+
+      {/* Printable Collar Tag QR Code Modal */}
+      {qrTagModal.isOpen && qrTagModal.pet && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in font-sans">
+          <div className="bg-white border border-slate-200 shadow-2xl rounded-3xl max-w-sm w-full p-6 text-center space-y-4 animate-scale-up">
+            
+            {/* Tag Badge Frame */}
+            <div className="border-4 border-[#5C0612] rounded-2xl p-4 bg-gradient-to-b from-slate-50 to-white shadow-inner relative space-y-3">
+              <div className="flex items-center justify-between border-b border-[#5C0612]/20 pb-2">
+                <span className="text-[10px] font-bold font-mono tracking-wider text-[#5C0612] uppercase">
+                  CIT-U Task Force Bruno
+                </span>
+                <span className="text-[9px] font-mono font-black px-2 py-0.5 rounded bg-[#D4AF37]/20 text-[#5C0612] border border-[#D4AF37]">
+                  {qrTagModal.pet.pet_type === 'Campus Pet' ? 'RESIDENT' : 'TAG'}
+                </span>
+              </div>
+
+              {/* QR Code Container */}
+              <div className="w-52 h-52 mx-auto bg-white p-2 rounded-xl border border-slate-200 shadow-sm flex items-center justify-center">
+                <img src={qrTagModal.qrDataUrl} alt="Collar QR Code" className="w-full h-full object-contain" />
+              </div>
+
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight leading-none">{qrTagModal.pet.name}</h3>
+                <span className="text-[11px] font-mono font-bold text-slate-500 block mt-1">Collar Tag ID: {qrTagModal.pet.pet_id}</span>
+                <span className="text-[10px] text-slate-400 block">{qrTagModal.pet.species} &bull; {qrTagModal.pet.found_near}</span>
+              </div>
+
+              <div className="text-[9px] font-mono text-slate-500 border-t border-slate-200/60 pt-2 leading-tight">
+                Emergency Hotline: (032) 261-7741 / loc. 144
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-400 font-normal leading-relaxed">
+              Print and laminate this collar tag for physical attachment to the animal's collar. Anyone scanning this tag will immediately access their public passport and emergency contacts.
+            </p>
+
+            <div className="flex gap-2">
+              <a 
+                href={qrTagModal.qrDataUrl} 
+                download={`${qrTagModal.pet.pet_id}_collar_tag.png`}
+                className="flex-1 py-2.5 bg-[#5C0612] hover:bg-[#42040B] text-white font-bold rounded-xl text-xs uppercase tracking-wider shadow-sm transition-all block text-center"
+              >
+                Download PNG
+              </a>
+              <button 
+                type="button" 
+                onClick={() => window.print()}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors"
+              >
+                Print
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setQrTagModal({ isOpen: false, pet: null, qrDataUrl: '', targetUrl: '' })} 
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+          </div>
+        </div>
       )}
 
       {/* Confirmation Purge Dialog Overlay Modal */}

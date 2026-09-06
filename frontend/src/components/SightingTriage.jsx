@@ -182,6 +182,25 @@ export default function SightingTriage({ session }) {
                 </button>
               )}
               <button 
+                onClick={() => {
+                  sessionStorage.setItem('tfb_stray_handoff', JSON.stringify({
+                    found_near: report.location_details,
+                    description: report.distinct_features,
+                    species: report.animal_type?.toLowerCase().includes('dog') ? 'Dog' : 'Cat',
+                    sighting_id: report.sighting_id
+                  }));
+                  localStorage.setItem('tfb_staff_tab', 'Add New Pet');
+                  window.location.reload();
+                }}
+                className="px-4 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 font-bold rounded-xl tracking-wide text-[10px] uppercase transition-colors flex items-center gap-1.5"
+                title="Animal caught and admitted to clinic for full veterinary intake"
+              >
+                <svg className="w-3.5 h-3.5 text-[#5C0612]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Admit & Intake Stray
+              </button>
+              <button 
                 onClick={() => openConfirmModal(report.sighting_id, 'Resolved')} 
                 className="px-5 py-2 bg-[#5C0612] hover:bg-[#42040B] border-b-2 border-[#D4AF37] text-white font-bold rounded-xl tracking-wide text-[10px] uppercase shadow-sm transition-colors flex items-center gap-1.5"
               >

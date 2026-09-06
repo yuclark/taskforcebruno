@@ -47,22 +47,30 @@ export default function SupplyLogistics() {
     return acc;
   }, { cat: {}, dog: {} });
 
-  // Category weights
-  const categoryWeights = inventory.reduce((acc, item) => {
-    let targetCategory = item.category;
-    if (targetCategory === 'Food') {
-      const nameLower = item.item_name.toLowerCase();
-      if (nameLower.includes('cat')) {
-        targetCategory = 'Cat Food';
-      } else if (nameLower.includes('dog')) {
-        targetCategory = 'Dog Food';
-      }
+  // Unit-aware category metrics (never adding kg to cans or vials)
+  const categoryMetrics = {
+    'Cat Food': {
+      skus: inventory.filter(i => (i.category === 'Food' && (i.item_name.toLowerCase().includes('cat') || i.item_name.toLowerCase().includes('kitten')))).length,
+      kg: inventory.filter(i => i.category === 'Food' && (i.item_name.toLowerCase().includes('cat') || i.item_name.toLowerCase().includes('kitten')) && i.unit?.toLowerCase() === 'kg').reduce((sum, i) => sum + i.quantity, 0),
+      cans: inventory.filter(i => i.category === 'Food' && (i.item_name.toLowerCase().includes('cat') || i.item_name.toLowerCase().includes('kitten')) && (i.unit?.toLowerCase() === 'cans' || i.unit?.toLowerCase() === 'pcs')).reduce((sum, i) => sum + i.quantity, 0),
+    },
+    'Dog Food': {
+      skus: inventory.filter(i => (i.category === 'Food' && (i.item_name.toLowerCase().includes('dog') || i.item_name.toLowerCase().includes('puppy')))).length,
+      kg: inventory.filter(i => i.category === 'Food' && (i.item_name.toLowerCase().includes('dog') || i.item_name.toLowerCase().includes('puppy')) && i.unit?.toLowerCase() === 'kg').reduce((sum, i) => sum + i.quantity, 0),
+      cans: inventory.filter(i => i.category === 'Food' && (i.item_name.toLowerCase().includes('dog') || i.item_name.toLowerCase().includes('puppy')) && (i.unit?.toLowerCase() === 'cans' || i.unit?.toLowerCase() === 'pcs')).reduce((sum, i) => sum + i.quantity, 0),
+    },
+    'Medical': {
+      skus: inventory.filter(i => i.category === 'Medical').length,
+      vials: inventory.filter(i => i.category === 'Medical' && (i.unit?.toLowerCase() === 'vials' || i.unit?.toLowerCase() === 'doses')).reduce((sum, i) => sum + i.quantity, 0),
+      items: inventory.filter(i => i.category === 'Medical' && i.unit?.toLowerCase() !== 'vials' && i.unit?.toLowerCase() !== 'doses').reduce((sum, i) => sum + i.quantity, 0),
+    },
+    'Supplies': {
+      skus: inventory.filter(i => i.category === 'Supplies').length,
+      items: inventory.filter(i => i.category === 'Supplies').reduce((sum, i) => sum + i.quantity, 0),
     }
-    acc[targetCategory] = (acc[targetCategory] || 0) + item.quantity;
-    return acc;
-  }, { 'Cat Food': 0, 'Dog Food': 0, Medical: 0, Supplies: 0 });
+  };
 
-  const maxCategoryValue = Math.max(1, categoryWeights['Cat Food'], categoryWeights['Dog Food'], categoryWeights.Medical, categoryWeights.Supplies);
+  const totalCatalogSkus = Math.max(1, inventory.length);
 
   if (loading) {
     return (
@@ -264,23 +272,46 @@ export default function SupplyLogistics() {
 
           <div className="space-y-4 my-auto pt-4">
             {[
-              { name: 'Cat Food Rations', key: 'Cat Food', color: 'bg-[#5C0612]' },
-              { name: 'Dog Food Rations', key: 'Dog Food', color: 'bg-amber-600' },
-              { name: 'Medical & Clinic', key: 'Medical', color: 'bg-blue-600' },
-              { name: 'General Supplies', key: 'Supplies', color: 'bg-slate-700' }
+              { 
+                name: 'Cat Food Rations', 
+                key: 'Cat Food', 
+                color: 'bg-[#5C0612]',
+                summary: `${categoryMetrics['Cat Food'].kg > 0 ? `${categoryMetrics['Cat Food'].kg} kg dry` : ''}${categoryMetrics['Cat Food'].kg > 0 && categoryMetrics['Cat Food'].cans > 0 ? ' & ' : ''}${categoryMetrics['Cat Food'].cans > 0 ? `${categoryMetrics['Cat Food'].cans} cans` : ''}` || '0 kg',
+                skus: categoryMetrics['Cat Food'].skus
+              },
+              { 
+                name: 'Dog Food Rations', 
+                key: 'Dog Food', 
+                color: 'bg-amber-600',
+                summary: `${categoryMetrics['Dog Food'].kg > 0 ? `${categoryMetrics['Dog Food'].kg} kg dry` : ''}${categoryMetrics['Dog Food'].kg > 0 && categoryMetrics['Dog Food'].cans > 0 ? ' & ' : ''}${categoryMetrics['Dog Food'].cans > 0 ? `${categoryMetrics['Dog Food'].cans} cans` : ''}` || '0 kg',
+                skus: categoryMetrics['Dog Food'].skus
+              },
+              { 
+                name: 'Medical & Clinic', 
+                key: 'Medical', 
+                color: 'bg-blue-600',
+                summary: categoryMetrics.Medical.vials > 0 ? `${categoryMetrics.Medical.vials} vials` : `${categoryMetrics.Medical.items} supplies`,
+                skus: categoryMetrics.Medical.skus
+              },
+              { 
+                name: 'General Supplies', 
+                key: 'Supplies', 
+                color: 'bg-slate-700',
+                summary: `${categoryMetrics.Supplies.items} assets`,
+                skus: categoryMetrics.Supplies.skus
+              }
             ].map((cat) => {
-              const totalQty = categoryWeights[cat.key] || 0;
-              const fillingPercent = Math.min(100, (totalQty / maxCategoryValue) * 100);
+              const skuPercent = Math.min(100, (cat.skus / totalCatalogSkus) * 100);
 
               return (
                 <div key={cat.key} className="space-y-1.5">
                   <div className="flex justify-between text-xs font-mono">
-                    <span className="font-sans font-medium text-slate-700">{cat.name}</span>
-                    <span className="font-bold text-slate-900">{totalQty} units</span>
+                    <span className="font-sans font-medium text-slate-700">{cat.name} ({cat.skus} SKUs)</span>
+                    <span className="font-bold text-slate-900">{cat.summary}</span>
                   </div>
                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200/60">
                     <div 
-                      style={{ width: `${fillingPercent}%` }} 
+                      style={{ width: `${skuPercent}%` }} 
                       className={`h-full rounded-full transition-all duration-500 ${cat.color}`}
                     />
                   </div>

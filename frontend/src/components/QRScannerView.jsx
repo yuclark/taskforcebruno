@@ -36,12 +36,39 @@ export default function QRScannerView({ onProfileIdentified }) {
   }, []);
 
   // ── CARD 1 ACTION HANDLERS ──
-  const resolveCard1Profile = async (targetId) => {
+  const extractPetIdFromQr = (rawText) => {
+    if (!rawText) return '';
+    const trimmed = rawText.trim();
+    
+    // 1. If full URL (e.g. https://taskforcebruno.vercel.app/pet/TF-BRUNO-01 or ?pet=TF-BRUNO-01)
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      try {
+        const url = new URL(trimmed);
+        const queryParam = url.searchParams.get('pet') || url.searchParams.get('id');
+        if (queryParam) return queryParam.trim().toUpperCase();
+        
+        const segments = url.pathname.split('/').filter(Boolean);
+        if (segments.length > 0) {
+          return decodeURIComponent(segments[segments.length - 1]).trim().toUpperCase();
+        }
+      } catch {}
+    }
+    
+    // 2. Look for standard patterns like TF-BRUNO-01, STRAY-1024, PET-01, etc.
+    const match = trimmed.match(/(?:PET|STRAY|TF|CIT)[-_A-Z0-9]+/i);
+    if (match) return match[0].toUpperCase();
+    
+    // 3. Clean fallback
+    return trimmed.replace(/^[#\/]+/, '').toUpperCase();
+  };
+
+  const resolveCard1Profile = async (rawTarget) => {
+    const targetId = extractPetIdFromQr(rawTarget);
     if (!targetId) return;
     setQrErrorMessage('');
     setLoadingCard1Profile(true);
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${targetId}/`);
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(targetId)}/`);
       if (res.ok) {
         const data = await res.json();
         setCard1PetData(data);
@@ -58,7 +85,7 @@ export default function QRScannerView({ onProfileIdentified }) {
   const handleManualSubmit = (e) => {
     e.preventDefault();
     if (!manualId.trim()) return;
-    resolveCard1Profile(manualId.trim().toUpperCase());
+    resolveCard1Profile(manualId.trim());
   };
 
   const startCameraStream = async () => {
@@ -290,6 +317,21 @@ export default function QRScannerView({ onProfileIdentified }) {
             </span>
           </div>
         </div>
+
+        {/* Public Health Quarantine Alert */}
+        {petData.is_quarantined && (
+          <div className="p-3 bg-rose-950/80 border border-rose-500/80 rounded-xl text-rose-200 text-xs space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-rose-300 uppercase tracking-wider text-[10px]">
+              <svg className="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              14-Day Health Observation (RA 9482)
+            </div>
+            <p className="text-[11px] leading-relaxed text-rose-200">
+              This animal is currently under routine campus health observation following an incident report. Please <strong>do not feed, touch, or handle</strong>.
+            </p>
+          </div>
+        )}
 
         {/* Identity & Basic Info */}
         <div className="border-b border-slate-800 pb-3">

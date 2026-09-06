@@ -110,12 +110,33 @@ class PetListAPIView(APIView):
 class PetDetailAPIView(APIView):
     def get(self, request, pet_id):
         try:
+            from datetime import datetime, date
             pet_query = supabase.table("pets").select("*").eq("pet_id", pet_id).execute()
             if not pet_query.data: 
                 return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
             pet_data = pet_query.data[0]
             img = supabase.table("pet_images").select("image_url").eq("pet_id", pet_id).eq("is_primary", True).execute()
             pet_data["primary_image"] = img.data[0]["image_url"] if img.data else pet_data.get("primary_image")
+
+            # Check active rabies quarantine observation logs (under RA 9482)
+            med_logs = supabase.table("medical_records").select("*").eq("pet_id", pet_id).execute().data or []
+            is_quarantined = False
+            quarantine_until = None
+            for m in med_logs:
+                rtype = str(m.get("record_type", ""))
+                if "Bite" in rtype or "Scratch" in rtype:
+                    followup = m.get("next_followup_date")
+                    if followup:
+                        try:
+                            f_date = datetime.strptime(str(followup), "%Y-%m-%d").date()
+                            if f_date >= date.today():
+                                is_quarantined = True
+                                quarantine_until = str(followup)
+                                break
+                        except Exception:
+                            pass
+            pet_data["is_quarantined"] = is_quarantined
+            pet_data["quarantine_until"] = quarantine_until
             return Response(pet_data, status=status.HTTP_200_OK)
         except Exception as e: 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -303,10 +324,21 @@ class AdoptionApplicationDetailAPIView(APIView):
             
             # 2. Structural checks: Cascading mutations ONLY run for 'Approved' cases
             if status_val == "Approved" and pet_id:
+                # Guard against double placement: Check if already adopted
+                current_pet = supabase.table("pets").select("adoption_status").eq("pet_id", pet_id).execute()
+                if current_pet.data and current_pet.data[0].get("adoption_status") == "Adopted":
+                    return Response({"error": "This companion has already been placed with an approved applicant."}, status=status.HTTP_400_BAD_REQUEST)
+
+                # Update target pet to Adopted
                 supabase.table("pets").update({"adoption_status": "Adopted"}).eq("pet_id", pet_id).execute()
                 
+                # Automatically close all other pending applications for this same pet to prevent zombie state
+                supabase.table("adoption_applications").update({
+                    "application_status": "Closed - Pet Placed"
+                }).eq("pet_id", pet_id).eq("application_status", "Pending").neq("application_id", target_id).execute()
+
                 try:
-                    # Query BOTH the name and the visual photo link out of the pets table
+                    # Query name and image for official announcement
                     pet_query = supabase.table("pets").select("name, primary_image").eq("pet_id", pet_id).execute()
                     if pet_query.data:
                         pet_name = pet_query.data[0].get("name", "A companion")
@@ -315,10 +347,9 @@ class AdoptionApplicationDetailAPIView(APIView):
                         pet_name = "A companion"
                         pet_image = None
                     
-                    # Inject the extracted pet image URL straight into the bulletin record payload
                     celebration_payload = {
-                        "title": f"🎉 Companion Adopted: {pet_name} has a Forever Home!",
-                        "content": f"Wonderful news community! The adoption application clearance for {pet_name} (File ID: #{pet_id}) has passed all official vetting filters.",
+                        "title": f"Companion Placement: {pet_name} has a Forever Home!",
+                        "content": f"Official notice: The adoption application clearance for {pet_name} (File ID: #{pet_id}) has passed all official vetting procedures.",
                         "author_email": "mdc.operations@cit.edu",
                         "image_url": pet_image
                     }
@@ -763,15 +794,12 @@ class NewsfeedItemActionAPIView(APIView):
                 print(delete_res)
 
             # =====================================================
-            # DELETE PETS
+            # MODERATE PET FEED CARDS (DO NOT DELETE FROM MASTER PETS TABLE)
             # =====================================================
             elif feed_id.startswith("pet_"):
 
-                pet_id = feed_id.replace(
-                    "pet_",
-                    ""
-                )
-
+                # Feed moderation: Clear social timeline interactions (likes/comments)
+                # Master animal registration and clinical records remain strictly preserved in pets table
                 admin_supabase.table("feed_likes").delete().eq(
                     "feed_id",
                     feed_id
@@ -782,14 +810,7 @@ class NewsfeedItemActionAPIView(APIView):
                     feed_id
                 ).execute()
 
-                delete_res = admin_supabase.table(
-                    "pets"
-                ).delete().eq(
-                    "pet_id",
-                    pet_id
-                ).execute()
-
-                print(delete_res)
+                print(f"[FEED MODERATION] Cleared social interactions for feed item {feed_id}. Master animal file preserved.")
 
             else:
                 return Response(
@@ -873,60 +894,78 @@ class HealthCheckAPIView(APIView):
     def get(self, request):
         return Response({"status": "healthy", "message": "Task Force Bruno Node is awake."}, status=status.HTTP_200_OK)
 
-# Add this endpoint view class near your other Adoption/Pet views in views.py
 class PetAISearchAPIView(APIView):
     """
-    AI Predictive Search Engine: Performs token phrase matching over multi-field string
-    blobs, placing heavy priority scoring weights on the new native description attribute.
+    Heuristic Semantic Search Engine: Handles negation ("not a dog"),
+    synonym normalization (kitten -> cat, pup -> dog), and trait weighting.
     """
     def post(self, request):
         try:
-            description_query = request.data.get("description", "").strip().lower()
-            if not description_query:
+            raw_query = request.data.get("description", "").strip().lower()
+            if not raw_query:
                 return Response({"error": "Null search constraint parameters."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # 1. Fetch active pet assets including the new description column out of Supabase
+            # 1. Fetch active pet assets from Supabase
             all_pets = supabase.table("pets").select("pet_id, name, species, breed, about_text, description, primary_image, found_near, current_conditions").execute().data or []
             
-            # 2. Tokenize user natural description text input parameters
-            query_tokens = [t for t in re.split(r'\W+', description_query) if len(t) > 2] # filters out filler small words
+            # 2. Extract negations (e.g. "not a dog", "no collar", "not cat")
+            negative_tokens = set(re.findall(r'(?:not|no|never|except)\s+(?:a\s+|an\s+)?(\w+)', raw_query))
+
+            # 3. Synonym mapping
+            SYNONYMS = {
+                'pup': 'dog', 'puppy': 'dog', 'hound': 'dog', 'aspin': 'dog', 'canine': 'dog',
+                'kitten': 'cat', 'kitty': 'cat', 'puspin': 'cat', 'feline': 'cat'
+            }
+
+            # 4. Tokenize and clean query
+            raw_tokens = [t for t in re.split(r'\W+', raw_query) if len(t) > 2]
+            query_tokens = []
+            for t in raw_tokens:
+                canonical = SYNONYMS.get(t, t)
+                query_tokens.append(canonical)
+
+            COLOR_TRAITS = {'orange', 'ginger', 'black', 'white', 'brown', 'gray', 'grey', 'calico', 'tabby', 'tricolor', 'golden', 'spotted'}
 
             scored_candidates = []
             for pet in all_pets:
-                score = 0
-                
-                # Combine lookup text anchors including the new explicit physical traits column
-                searchable_blob = f"{pet.get('name', '')} {pet.get('species', '')} {pet.get('breed', '')} {pet.get('about_text', '')} {pet.get('description', '')} {pet.get('found_near', '')} {pet.get('current_conditions', '')}".lower()
-                
-                # High-weight strict category matching anchors
                 species_val = str(pet.get("species", "")).lower()
                 breed_val = str(pet.get("breed", "")).lower()
                 origin_val = str(pet.get("found_near", "")).lower()
                 explicit_desc = str(pet.get("description", "")).lower()
+                searchable_blob = f"{pet.get('name', '')} {species_val} {breed_val} {pet.get('about_text', '')} {explicit_desc} {origin_val} {pet.get('current_conditions', '')}".lower()
 
+                # Negation penalty: If search says "not a dog" and pet is a dog, exclude
+                has_negative_conflict = False
+                for neg in negative_tokens:
+                    canonical_neg = SYNONYMS.get(neg, neg)
+                    if canonical_neg in species_val or canonical_neg in breed_val:
+                        has_negative_conflict = True
+                        break
+                if has_negative_conflict:
+                    continue
+
+                score = 0
                 for token in query_tokens:
-                    # Specific high-weight bonuses
+                    if token in negative_tokens:
+                        continue
                     if token in species_val:
-                        score += 15  # Heavy structural weight for matching species ('cat', 'dog')
+                        score += 20  # Species match (e.g. 'cat', 'dog')
+                    if token in COLOR_TRAITS and (token in explicit_desc or token in breed_val):
+                        score += 15  # Specific color/coat pattern match
                     if token in explicit_desc:
-                        score += 12  # Premium match weight if query token hits explicit physical markers
+                        score += 12  # Explicit physical description trait
                     if token in breed_val:
-                        score += 10  # Weight anchor for matching breeds ('tabby', 'husky')
+                        score += 10  # Breed match
                     if token in origin_val:
-                        score += 8   # Weight anchor for campus geographical match indicators
-                    
-                    # Baseline substring scan match tracking accumulation loop
+                        score += 8   # Landmark / Colony zone match
                     if token in searchable_blob:
-                        score += 3
-                        
+                        score += 3   # Substring occurrence
+
                 if score > 0:
                     pet["search_affinity_score"] = score
                     scored_candidates.append(pet)
             
-            # 3. Sort structural matches descending by high matching priority metrics
             scored_candidates.sort(key=lambda x: x["search_affinity_score"], reverse=True)
-            
-            # Limit array scale matrix return parameters to top 5 candidates
             final_top_hits = scored_candidates[:5]
             
             return Response(final_top_hits, status=status.HTTP_200_OK)
