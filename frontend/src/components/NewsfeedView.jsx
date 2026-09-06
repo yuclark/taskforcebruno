@@ -199,14 +199,15 @@ export default function NewsfeedView({ session }) {
 
   if (loading) {
     return (
-      <div className="w-full text-center p-12 font-mono text-[11px] text-slate-400 animate-pulse">
-        COMPILING COMMUNITY INTERACTION MATRICES...
+      <div className="w-full text-center p-12 font-mono text-xs text-slate-400 animate-pulse">
+        Loading community announcements and sightings...
       </div>
     );
   }
 
   const totalCampusPetsCount = feedItems.filter(i => i.item_type === 'pet').length;
   const petsAwaitingHomeCount = feedItems.filter(i => i.item_type === 'pet' && (i.badge_text === 'Available' || i.badge_text === 'For Adoption')).length;
+  const sightingsCount = feedItems.filter(i => i.item_type === 'sighting').length;
 
   const filteredFeedItems = feedItems.filter(item => {
     const query = searchQuery.toLowerCase().trim();
@@ -225,7 +226,7 @@ export default function NewsfeedView({ session }) {
   const paginatedFeedItems = filteredFeedItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-1 sm:px-4 font-sans antialiased h-full flex flex-col overflow-hidden">
+    <div className="w-full max-w-6xl xl:max-w-7xl mx-auto px-1 sm:px-4 font-sans antialiased h-full flex flex-col overflow-hidden">
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none !important; }
         .no-scrollbar { -ms-overflow-style: none !important; scrollbar-width: none !important; }
@@ -239,16 +240,27 @@ export default function NewsfeedView({ session }) {
       )}
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0 items-stretch">
-        <div className="lg:col-span-7 w-full h-full flex flex-col min-h-0 bg-transparent">
+        
+        {/* LEFT COLUMN: NEWSFEED POSTS STREAM (Col 8 on wide screens) */}
+        <div className="lg:col-span-7 xl:col-span-8 w-full h-full flex flex-col min-h-0 bg-transparent">
           
-          <div className="flex items-center bg-white px-4 py-3 rounded-xl border border-slate-200/80 shadow-sm select-none shrink-0 mb-3">
-            <span className="font-mono text-[10px] font-bold text-slate-500 uppercase tracking-wide truncate">
-              {totalCampusPetsCount} pets roaming the campus now &bull; {petsAwaitingHomeCount} pets awaiting their new homes
+          {/* Quick Metrics Bar */}
+          <div className="flex items-center justify-between bg-white px-4 py-3 rounded-2xl border border-slate-200/80 shadow-sm select-none shrink-0 mb-3">
+            <span className="text-xs font-semibold text-slate-700 truncate">
+              {totalCampusPetsCount} registered pets on campus &bull; {petsAwaitingHomeCount} awaiting adoption
+            </span>
+            <span className="text-[10px] font-mono font-bold uppercase bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg border border-slate-200 shrink-0">
+              Live Feed
             </span>
           </div>
 
-          <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2.5 shrink-0 mb-3">
-            <div className="text-slate-400 pl-1.5 select-none text-xs">🔍</div>
+          {/* Search Input Bar (No emoji) */}
+          <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-2.5 shrink-0 mb-3">
+            <div className="text-slate-400 pl-2 select-none">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
             <input
               type="text"
               value={searchQuery}
@@ -256,7 +268,7 @@ export default function NewsfeedView({ session }) {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              placeholder="Filter active newsfeed logs by keywords, tags, or badges..."
+              placeholder="Filter announcements, sightings, and bulletins by keyword..."
               className="w-full bg-transparent text-xs text-slate-800 focus:outline-none placeholder-slate-400 font-medium"
             />
             {searchQuery && (
@@ -272,10 +284,11 @@ export default function NewsfeedView({ session }) {
             )}
           </div>
 
+          {/* Feed Posts Scrollable List */}
           <div className="flex-1 overflow-y-auto space-y-4 pr-1 no-scrollbar min-h-0 pb-4">
             {paginatedFeedItems.length === 0 ? (
-              <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 italic">
-                No active records match your search criteria parameters.
+              <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-400 text-xs">
+                No announcements or sighting reports match your search query.
               </div>
             ) : (
               paginatedFeedItems.map((item) => {
@@ -292,30 +305,36 @@ export default function NewsfeedView({ session }) {
                 const isCommentsOpen = !!expandedComments[item.feed_id];
 
                 return (
-                  <div key={item.feed_id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden text-left w-full animate-fade-in">
-                    <div className="p-4 flex items-start justify-between border-b border-slate-50 gap-3 relative">
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm select-none shadow-inner border border-black/5 text-white shrink-0 ${isAnnouncement ? 'bg-gradient-to-br from-black to-neutral-800' : 'bg-slate-500'}`}>
+                  <div key={item.feed_id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden text-left w-full animate-fade-in">
+                    
+                    {/* Post Author / Header */}
+                    <div className="p-4 flex items-start justify-between border-b border-slate-100 gap-3 relative">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-xs select-none shadow-sm text-white shrink-0 ${
+                          isAnnouncement ? 'bg-[#5C0612] text-[#D4AF37]' : 'bg-slate-700'
+                        }`}>
                           {initials}
                         </div>
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap max-w-full">
                             {!isCurrentlyEditingThisItem ? (
-                              <h4 className="font-bold text-slate-900 text-sm sm:text-[14px] tracking-tight leading-tight break-words pr-1">
+                              <h4 className="font-bold text-slate-900 text-sm tracking-tight leading-tight break-words pr-1">
                                 {item.title}
                               </h4>
                             ) : (
-                              <span className="text-[9px] font-mono bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                                Modifying Record Payload
+                              <span className="text-[10px] font-mono bg-amber-100 text-amber-900 px-2 py-0.5 rounded font-bold uppercase">
+                                Modifying Post
                               </span>
                             )}
-                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border shrink-0 ${isAnnouncement ? 'bg-stone-100 text-neutral-900 border-stone-300' : 'bg-emerald-50 text-emerald-800 border-emerald-200'}`}>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 ${
+                              isAnnouncement ? 'bg-amber-50 text-amber-900 border-amber-300' : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            }`}>
                               {item.badge_text}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-slate-500 font-normal mt-0.5 flex-wrap min-w-0">
-                            <span className="hover:underline cursor-pointer truncate max-w-[120px] sm:max-w-[180px]">{item.author_tag}</span>
+                          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-normal mt-0.5 flex-wrap min-w-0">
+                            <span className="truncate max-w-[140px] sm:max-w-[200px] font-medium text-slate-600">{item.author_tag}</span>
                             <span>&bull;</span>
                             <span className="shrink-0">{HongKongDate}</span>
                           </div>
@@ -341,7 +360,7 @@ export default function NewsfeedView({ session }) {
                                     startEditingWorkflow(item);
                                     setActiveDropdownId(null);
                                   }}
-                                  className="w-full text-left px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50/60 transition-colors"
+                                  className="w-full text-left px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
                                 >
                                   Edit Post
                                 </button>
@@ -352,7 +371,7 @@ export default function NewsfeedView({ session }) {
                                   setItemToDelete(item.feed_id);
                                   setActiveDropdownId(null);
                                 }}
-                                className="w-full text-left px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50/60 transition-colors"
+                                className="w-full text-left px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition-colors"
                               >
                                 Delete Post
                               </button>
@@ -362,147 +381,149 @@ export default function NewsfeedView({ session }) {
                       )}
                     </div>
 
-                    <div className="px-4 py-3 bg-white">
+                    {/* Post Content */}
+                    <div className="px-5 py-4 bg-white">
                       {!isCurrentlyEditingThisItem ? (
-                        <p className="text-[13px] text-slate-800 dispatch-body leading-snug font-normal whitespace-pre-wrap break-words">
+                        <p className="text-xs sm:text-[13px] text-slate-800 leading-relaxed font-normal whitespace-pre-wrap break-words">
                           {item.body}
                         </p>
                       ) : (
-                        <div className="space-y-3 bg-slate-50 p-3 sm:p-4 border border-dashed border-amber-300 rounded-xl">
+                        <div className="space-y-3 bg-slate-50 p-4 border border-dashed border-amber-300 rounded-xl">
                           <div>
-                            <label className="block text-[9px] font-mono font-bold text-amber-800 uppercase tracking-wider mb-1">
-                              Modify Bulletin Title Header
+                            <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                              Edit Post Title
                             </label>
                             <input
                               type="text"
                               value={editTitle}
                               onChange={(e) => setEditTitle(e.target.value)}
-                              className="w-full px-3 py-2 border bg-white rounded-lg font-bold text-slate-900 text-xs focus:outline-none focus:border-amber-500"
+                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg font-bold text-slate-900 text-xs focus:outline-none focus:border-amber-500"
                             />
                           </div>
                           <div>
-                            <label className="block text-[9px] font-mono font-bold text-amber-800 uppercase tracking-wider mb-1">
-                              Modify Broadcast Narrative Content
+                            <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                              Edit Post Body
                             </label>
                             <textarea
                               rows="3"
                               value={editBody}
                               onChange={(e) => setEditBody(e.target.value)}
-                              className="w-full p-3 border bg-white rounded-lg text-slate-800 text-xs focus:outline-none focus:border-amber-500 resize-none leading-relaxed"
+                              className="w-full p-3 border border-slate-200 bg-white rounded-lg text-slate-800 text-xs focus:outline-none focus:border-amber-500 leading-relaxed"
                             />
                           </div>
-                          <div className="flex gap-2 justify-end text-[10px] font-mono font-bold uppercase">
-                            <button type="button" onClick={() => setEditingItemId(null)} className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-all">
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingItemId(null)}
+                              className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg"
+                            >
                               Cancel
                             </button>
-                            <button type="button" onClick={() => handleSaveEditChanges(item.feed_id)} className="px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all shadow-sm">
-                              Save
+                            <button
+                              type="button"
+                              onClick={() => handleSaveEditChanges(item.feed_id)}
+                              className="px-4 py-1.5 bg-[#5C0612] hover:bg-[#720817] text-white text-xs font-bold rounded-lg shadow-sm"
+                            >
+                              Save Changes
                             </button>
                           </div>
                         </div>
                       )}
 
-                      <div className="mt-2.5 text-[9px] sm:text-[10px] text-slate-500 bg-slate-100/80 border border-slate-200/50 rounded-md px-2 py-0.5 w-fit font-mono font-medium max-w-full truncate">
-                        Context Metric: <span className="font-sans text-slate-700 font-normal">{item.meta_details}</span>
-                      </div>
+                      {/* Image Attachment (if any) */}
+                      {item.image_url && (
+                        <div className="mt-3 rounded-xl overflow-hidden border border-slate-200 max-h-72 cursor-pointer">
+                          <img
+                            src={item.image_url}
+                            alt=""
+                            onClick={() => setLightboxImg(item.image_url)}
+                            className="w-full h-full object-cover hover:opacity-95 transition-opacity"
+                          />
+                        </div>
+                      )}
                     </div>
 
-                    {item.image_url && (
-                      <div
-                        onClick={() => setLightboxImg(item.image_url)}
-                        className="w-full h-64 sm:h-96 border-y border-slate-200 bg-slate-100 flex items-center justify-center overflow-hidden cursor-zoom-in hover:brightness-95 transition-all shrink-0"
-                      >
-                        <img src={item.image_url} alt="Attached Media Asset" className="w-full h-full object-cover select-none" />
-                      </div>
-                    )}
-
-                    <div className="px-4 py-2.5 flex items-center justify-between border-b border-slate-200 text-slate-500 text-[11px] sm:text-[12px] font-normal select-none">
-                      <div className="flex items-center gap-1.5">
-                        {item.likes_count > 0 && (
-                          <span className="bg-[#1877F2] text-white p-1 rounded-full text-[8px] w-4 h-4 flex items-center justify-center shadow-sm">👍</span>
-                        )}
-                        <span className="hover:underline cursor-pointer">
-                          {item.likes_count} {item.likes_count === 1 ? 'like' : 'likes'}
-                        </span>
-                      </div>
-                      <div
-                        onClick={() => toggleCommentsDrawer(item.feed_id)}
-                        className="hover:underline cursor-pointer text-slate-500 font-medium"
-                      >
-                        {item.comments?.length || 0} {item.comments?.length === 1 ? 'comment' : 'comments'} {isCommentsOpen ? '▲' : '▼'}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 border-b border-slate-100 px-2 py-0.5 bg-white select-none">
+                    {/* Like & Comment Bar */}
+                    <div className="px-5 py-2.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                       <button
                         type="button"
                         onClick={() => handleLikeToggle(item.feed_id)}
-                        className={`flex items-center justify-center gap-2 py-2 rounded-md font-bold text-xs sm:text-[13px] transition-all hover:bg-slate-100/80 ${item.is_liked_by_me ? 'text-[#1877F2]' : 'text-slate-600'}`}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg transition-colors font-medium ${
+                          item.is_liked_by_me
+                            ? 'text-rose-600 bg-rose-50 font-bold'
+                            : 'hover:bg-slate-100 text-slate-600'
+                        }`}
                       >
-                        Like
+                        <svg className="w-4 h-4" fill={item.is_liked_by_me ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                        </svg>
+                        <span>{item.likes_count || 0} Likes</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => toggleCommentsDrawer(item.feed_id)}
-                        className={`flex items-center justify-center gap-2 py-2 rounded-md font-bold text-xs sm:text-[13px] hover:bg-slate-100/80 transition-all ${isCommentsOpen ? 'text-black bg-stone-50' : 'text-slate-600'}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg hover:bg-slate-100 text-slate-600 font-medium transition-colors"
                       >
-                        Comment
+                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        <span>{(item.comments || []).length} Comments</span>
                       </button>
                     </div>
 
+                    {/* Comments Drawer */}
                     {isCommentsOpen && (
-                      <div className="bg-[#F0F2F5]/60 px-3 sm:px-4 py-3 space-y-2.5 border-t border-slate-100 animate-fade-in">
-                        {item.comments && item.comments.map((comm) => (
-                          <div key={comm.comment_id} className="flex gap-2 text-left items-start group relative">
-                            <div className="w-7 h-7 rounded-full bg-slate-400 text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 border border-black/5 select-none shadow-sm">
-                              {(comm.user_email || 'CU').substring(0, 2)}
-                            </div>
-
-                            <div className="flex-1 min-w-0 flex items-center gap-1.5 max-w-[85%] sm:max-w-[88%]">
-                              <div className="bg-[#E4E6EB] rounded-2xl px-3 py-1.5 shadow-sm break-words flex-1 min-w-0">
-                                <p className="font-bold text-slate-900 text-[10px] sm:text-[11px] leading-tight mb-0.5 hover:underline cursor-pointer truncate max-w-full">
-                                  {comm.user_email}
-                                </p>
-                                <p className="text-slate-800 text-xs sm:text-[12px] leading-snug font-normal">{comm.comment_text}</p>
+                      <div className="bg-slate-50 p-4 border-t border-slate-100 space-y-3">
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {(item.comments || []).length === 0 ? (
+                            <p className="text-slate-400 text-xs text-center py-2 italic">No comments yet. Start the conversation below.</p>
+                          ) : (
+                            item.comments.map((comment, cIdx) => (
+                              <div key={cIdx} className="bg-white p-3 rounded-xl border border-slate-200 text-xs space-y-1">
+                                <div className="flex justify-between items-center text-[10px] text-slate-400">
+                                  <span className="font-bold text-slate-700">{comment.user_email}</span>
+                                  <span>{new Date(comment.created_at || item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <p className="text-slate-800">{comment.comment_text}</p>
                               </div>
-                            </div>
-                          </div>
-                        ))}
+                            ))
+                          )}
+                        </div>
 
-                        <form onSubmit={(e) => handleSendComment(e, item.feed_id)} className="flex items-center gap-2 pt-1">
-                          <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[10px] uppercase shrink-0 select-none border border-black/5 shadow-inner">
-                            {(currentUserEmail || 'CU').substring(0, 2)}
-                          </div>
-                          <div className="flex-1 relative flex items-center">
-                            <input
-                              type="text"
-                              value={commentInputs[item.feed_id] || ''}
-                              onChange={(e) => setCommentInputs(prev => ({ ...prev, [item.feed_id]: e.target.value }))}
-                              placeholder="Write a comment..."
-                              className="w-full bg-[#E4E6EB] border border-transparent rounded-full pl-4 pr-14 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-slate-300 transition-all placeholder-slate-500 shadow-inner"
-                            />
-                            <button type="submit" className="absolute right-1 bg-black hover:bg-neutral-800 text-white font-bold text-[9px] uppercase px-2.5 py-1 rounded-full transition-all shadow-sm tracking-wider">
-                              Send
-                            </button>
-                          </div>
+                        {/* Comment Input */}
+                        <form onSubmit={(e) => handleSendComment(e, item.feed_id)} className="flex gap-2">
+                          <input
+                            type="text"
+                            value={commentInputs[item.feed_id] || ''}
+                            onChange={(e) => setCommentInputs(prev => ({ ...prev, [item.feed_id]: e.target.value }))}
+                            placeholder="Write a comment..."
+                            className="flex-1 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#5C0612]/20"
+                          />
+                          <button
+                            type="submit"
+                            className="px-4 py-2 bg-[#5C0612] hover:bg-[#720817] text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+                          >
+                            Send
+                          </button>
                         </form>
                       </div>
                     )}
+
                   </div>
                 );
               })
             )}
           </div>
 
-          {/* Persistent Pagination Drawer Base Module */}
+          {/* Pagination */}
           {totalPagesCount > 1 && (
-            <div className="flex justify-center items-center gap-1.5 pt-3 pb-2 select-none font-mono text-xs shrink-0 w-full border-t border-slate-200 bg-slate-50 mt-auto">
+            <div className="flex justify-center items-center gap-1.5 pt-3 pb-2 select-none font-mono text-xs shrink-0 w-full border-t border-slate-200 bg-slate-50 mt-auto rounded-xl">
               <button
                 type="button"
                 disabled={currentPage === 1}
-                onClick={() => { setCurrentPage(prev => Math.max(prev - 1, 1)); }}
-                className="px-2.5 py-1.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white text-slate-700 font-black transition-all shadow-sm"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-30 text-slate-700 font-bold transition-all shadow-sm"
               >
                 &lt;
               </button>
@@ -511,10 +532,10 @@ export default function NewsfeedView({ session }) {
                 <button
                   key={pageNumber}
                   type="button"
-                  onClick={() => { setCurrentPage(pageNumber); }}
+                  onClick={() => setCurrentPage(pageNumber)}
                   className={`px-3 py-1.5 border rounded-xl font-bold transition-all shadow-sm ${
                     currentPage === pageNumber
-                      ? 'bg-black border-black text-white shadow-inner'
+                      ? 'bg-[#5C0612] border-[#5C0612] text-white'
                       : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
                   }`}
                 >
@@ -525,8 +546,8 @@ export default function NewsfeedView({ session }) {
               <button
                 type="button"
                 disabled={currentPage === totalPagesCount}
-                onClick={() => { setCurrentPage(prev => Math.min(prev + 1, totalPagesCount)); }}
-                className="px-2.5 py-1.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white text-slate-700 font-black transition-all shadow-sm"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPagesCount))}
+                className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-30 text-slate-700 font-bold transition-all shadow-sm"
               >
                 &gt;
               </button>
@@ -534,76 +555,155 @@ export default function NewsfeedView({ session }) {
           )}
         </div>
 
-        {/* Right Info Sidebar Layout Panel */}
-        <div className="lg:col-span-5 space-y-4 w-full text-left hidden lg:block sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-y-auto no-scrollbar pr-1">
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+        {/* RIGHT COLUMN: CAMPUS INTELLIGENCE & GUIDELINES SIDEBAR (Col 5 / Col 4 on wide) */}
+        <div className="lg:col-span-5 xl:col-span-4 space-y-4 w-full text-left hidden lg:block sticky top-2 self-start max-h-[calc(100vh-2rem)] overflow-y-auto no-scrollbar pr-1">
+          
+          {/* Card 1: Live Overview Stats */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
             <div>
-              <h4 className="font-black text-slate-900 text-sm tracking-tight">Ecosystem Intelligence Console</h4>
-              <p className="text-[10px] text-slate-400 mt-0.5 font-normal">Real-time macro parameters aggregated from tracking tables.</p>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-bold font-mono uppercase tracking-wider text-[#5C0612]">
+                  CIT-U Ecosystem Telemetry
+                </span>
+              </div>
+              <h4 className="font-bold text-slate-900 text-sm tracking-tight">
+                Campus Animal Welfare Overview
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Aggregated activity across university grounds.
+              </p>
             </div>
 
-            {/* ── CHANGED: Wiped out redundant tracking card layout components from right pane as per instructions ── */}
+            <div className="grid grid-cols-3 gap-2 text-center select-none">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+                <span className="text-[10px] font-mono text-slate-400 block font-bold">ANIMALS</span>
+                <span className="text-lg font-black text-slate-900 font-mono mt-0.5 block">{totalCampusPetsCount}</span>
+                <span className="text-[9px] text-slate-500">Registered</span>
+              </div>
 
-            <div className="border-t pt-3 space-y-2 text-[11px] text-slate-500 leading-relaxed font-normal">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+                <span className="text-[10px] font-mono text-slate-400 block font-bold">ADOPTABLE</span>
+                <span className="text-lg font-black text-amber-700 font-mono mt-0.5 block">{petsAwaitingHomeCount}</span>
+                <span className="text-[9px] text-slate-500">Looking</span>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+                <span className="text-[10px] font-mono text-slate-400 block font-bold">REPORTS</span>
+                <span className="text-lg font-black text-slate-900 font-mono mt-0.5 block">{sightingsCount}</span>
+                <span className="text-[9px] text-slate-500">Sightings</span>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-3 space-y-2 text-xs text-slate-500">
               <p className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0"></span>
-                <span>Active node synchronized with Cebu Institute of Technology – University facility bounds.</span>
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0"></span>
+                <span>Active campus node synchronized with CIT-U facility database.</span>
               </p>
               <p className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full shrink-0"></span>
-                <span>All actions are signed using your institutional email domain balance (`@cit.edu`).</span>
+                <span>All actions verified with institutional account (`@cit.edu`).</span>
               </p>
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-black/5 via-white to-white border border-slate-200 rounded-xl p-5 shadow-sm text-[11px] leading-relaxed space-y-3">
-            <div>
-              <h5 className="font-black text-slate-900 text-[12px] tracking-tight flex items-center gap-2">
-                🛡️ Community Code of Conduct Matrix
+          {/* Card 2: Community Guidelines (No Emojis, clean SVG) */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm text-xs space-y-3">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-[#5C0612]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <h5 className="font-bold text-slate-900 text-xs tracking-tight">
+                Community Posting Guidelines
               </h5>
-              <p className="text-[10px] text-slate-400 font-normal block mt-0.5">Mandatory compliance baselines for logged users and peer facilitators.</p>
             </div>
 
-            <ul className="space-y-2.5 text-slate-600 font-normal list-inside list-none border-t pt-2.5">
-              <li className="flex items-start gap-2">
-                <span className="text-black font-black mt-0.5">&bull;</span>
-                <div><strong className="text-slate-800 font-semibold block">01. Landmark Context Matrix</strong>Always attach explicit Location Matrix Context landmarks when submitting sightings to aid rapid response teams.</div>
+            <ul className="space-y-3 text-slate-600 border-t border-slate-100 pt-3">
+              <li className="flex items-start gap-2.5">
+                <span className="text-[#5C0612] font-bold">&bull;</span>
+                <div>
+                  <strong className="text-slate-800 font-semibold block text-xs">1. Include Specific Landmarks</strong>
+                  Provide exact locations (building, floor, landmark) to assist responders in locating animals.
+                </div>
               </li>
-              <li className="flex items-start gap-2">
-                <span className="text-black font-black mt-0.5">&bull;</span>
-                <div><strong className="text-slate-800 font-semibold block">02. Communication Guardrails</strong>Keep comment response tracks clean, constructive, and oriented toward companion welfare tracking parameters.</div>
+              <li className="flex items-start gap-2.5">
+                <span className="text-[#5C0612] font-bold">&bull;</span>
+                <div>
+                  <strong className="text-slate-800 font-semibold block text-xs">2. Constructive Discussions</strong>
+                  Keep all comments focused on animal safety, rescue coordination, and pet adoption.
+                </div>
               </li>
-              <li className="flex items-start gap-2">
-                <span className="text-black font-black mt-0.5">&bull;</span>
-                <div><strong className="text-slate-800 font-semibold block">03. QR Collar Asset Protection</strong>Never remove or exchange physical tracking collars from campus pets; doing so breaks active relational database mappings.</div>
+              <li className="flex items-start gap-2.5">
+                <span className="text-[#5C0612] font-bold">&bull;</span>
+                <div>
+                  <strong className="text-slate-800 font-semibold block text-xs">3. Protect Physical QR Collars</strong>
+                  Never remove or alter collar QR tags on campus animals. They preserve active medical histories.
+                </div>
               </li>
-              <li className="flex items-start gap-2">
-                <span className="text-black font-black mt-0.5">&bull;</span>
-                <div><strong className="text-slate-800 font-semibold block">04. Telemetry Discrepancy Reports</strong>Report corrupted media asset links, invalid profile details, or broken data maps to portal node admins immediately.</div>
+              <li className="flex items-start gap-2.5">
+                <span className="text-[#5C0612] font-bold">&bull;</span>
+                <div>
+                  <strong className="text-slate-800 font-semibold block text-xs">4. Immediate Sighting Triage</strong>
+                  Spotted an unregistered stray or injured animal? Report it immediately using the Sighting tab.
+                </div>
               </li>
             </ul>
           </div>
+
+          {/* Card 3: Quick Contact Box */}
+          <div className="bg-[#5C0612]/5 border border-[#5C0612]/15 rounded-2xl p-4 text-xs space-y-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#5C0612] font-mono block">
+              Emergency Contact & Marshals
+            </span>
+            <p className="text-slate-700">
+              For aggressive animals, critical injuries, or rabies bite assistance, immediately contact the <strong>CIT-U Medical-Dental Clinic (MDC)</strong> or campus security officers.
+            </p>
+          </div>
+
         </div>
       </div>
 
-      {/* Action Confirmation Overlay Modals */}
+      {/* Delete Confirmation Modal (Clean SVG, No Emoji) */}
       {itemToDelete && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-5 sm:p-6 text-center animate-scale-up">
-            <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg">⚠️</div>
-            <h3 className="font-black text-slate-900 text-sm tracking-tight mb-1">Confirm Record Purge</h3>
-            <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">Are you absolutely sure you want to permanently scrub this log entry? This operation will instantly wipe all linked community interactions and can't be undone.</p>
-            <div className="flex gap-3 justify-center font-mono text-[10px] font-bold uppercase">
-              <button type="button" onClick={() => setItemToDelete(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all tracking-wider">Cancel</button>
-              <button type="button" onClick={handleExecuteDelete} className="px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-xl transition-all shadow-sm tracking-wider">Scrub Log Entry</button>
+          <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-6 text-center animate-scale-up space-y-3">
+            <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm tracking-tight">Confirm Deletion</h3>
+              <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+                Are you sure you want to permanently delete this post? All associated comments will also be removed.
+              </p>
+            </div>
+
+            <div className="flex gap-2 justify-center pt-2">
+              <button
+                type="button"
+                onClick={() => setItemToDelete(null)}
+                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteDelete}
+                className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl transition-all shadow-sm"
+              >
+                Delete Post
+              </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Lightbox Image Preview */}
       {lightboxImg && (
         <div onClick={() => setLightboxImg(null)} className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 cursor-zoom-out animate-fade-in">
-          <button type="button" className="absolute top-4 sm:top-6 right-4 sm:right-6 text-white/70 hover:text-white font-mono text-[10px] sm:text-xs bg-white/10 hover:bg-white/20 p-2 px-3 sm:px-4 rounded-xl transition-all">✕ CLOSE</button>
+          <button type="button" className="absolute top-4 sm:top-6 right-4 sm:right-6 text-white/70 hover:text-white font-mono text-xs bg-white/10 hover:bg-white/20 p-2 px-4 rounded-xl transition-all">✕ CLOSE</button>
           <img src={lightboxImg} alt="Expanded Media" className="max-w-full max-h-[85vh] sm:max-h-[92vh] rounded-lg shadow-2xl object-contain animate-scale-up" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
