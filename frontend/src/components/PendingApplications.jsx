@@ -526,33 +526,62 @@ export default function PendingApplications() {
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex flex-wrap gap-2.5 justify-end pt-3 border-t border-slate-100">
-                      {volStatus !== 'Declined' && (
-                        <button
-                          type="button"
-                          onClick={() => openVolunteerModal(volId, 'Declined', vol.full_name)}
-                          className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl transition-all uppercase tracking-wide text-[10px] flex items-center gap-1.5"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                          Decline Applicant
-                        </button>
-                      )}
+                    {/* Action Buttons & Status State */}
+                    <div className="flex flex-wrap gap-2.5 justify-between items-center pt-3 border-t border-slate-100">
+                      <div>
+                        {volStatus === 'Approved' && (
+                          <span className="text-[11px] font-mono text-emerald-700 font-bold flex items-center gap-1.5">
+                            <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                            </svg>
+                            Application Approved & Institutional Clearance Granted
+                          </span>
+                        )}
+                        {volStatus === 'Declined' && (
+                          <span className="text-[11px] font-mono text-rose-700 font-bold flex items-center gap-1.5">
+                            <svg className="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            Application Declined
+                          </span>
+                        )}
+                      </div>
 
-                      {volStatus !== 'Approved' && (
-                        <button
-                          type="button"
-                          onClick={() => openVolunteerModal(volId, 'Approved', vol.full_name)}
-                          className="px-5 py-2 bg-[#5C0612] hover:bg-[#42040B] text-white font-bold rounded-xl border-b-2 border-[#D4AF37] shadow-sm transition-all uppercase tracking-wide text-[10px] flex items-center gap-1.5"
-                        >
-                          <svg className="w-3.5 h-3.5 text-[#D4AF37]" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                          </svg>
-                          Approve Volunteer
-                        </button>
-                      )}
+                      <div className="flex gap-2">
+                        {volStatus === 'Pending' ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openVolunteerModal(volId, 'Declined', vol.full_name)}
+                              className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl transition-all uppercase tracking-wide text-[10px] flex items-center gap-1.5"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                              Decline Applicant
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => openVolunteerModal(volId, 'Approved', vol.full_name)}
+                              className="px-5 py-2 bg-[#5C0612] hover:bg-[#42040B] text-white font-bold rounded-xl border-b-2 border-[#D4AF37] shadow-sm transition-all uppercase tracking-wide text-[10px] flex items-center gap-1.5"
+                            >
+                              <svg className="w-3.5 h-3.5 text-[#D4AF37]" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                              </svg>
+                              Approve Volunteer
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => executeVolunteerStatusChange(volId, 'Pending')}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-all uppercase tracking-wide text-[9px] font-mono"
+                          >
+                            Reopen to Pending
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
