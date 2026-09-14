@@ -1,44 +1,5 @@
 import React, { useState, useEffect } from 'react';
 
-const SEED_VOLUNTEERS = [
-  {
-    application_id: 'VOL-2026-01',
-    full_name: 'Maria Clarissa Santos',
-    student_id: '22-4102-184',
-    contact_number: '0917-555-3921',
-    program: 'BS Information Technology (CEA)',
-    role: 'Feeding Patrol',
-    availability: 'Monday, Wednesday, Friday after 4:30 PM',
-    email: 'mc.santos@cit.edu',
-    status: 'Pending',
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString()
-  },
-  {
-    application_id: 'VOL-2026-02',
-    full_name: 'Joshua Emmanuel Tan',
-    student_id: '23-1109-892',
-    contact_number: '0928-341-9012',
-    program: 'BS Computer Science (CCS)',
-    role: 'Rescue Marshal',
-    availability: 'Tuesday / Thursday mornings & weekends',
-    email: 'je.tan@cit.edu',
-    status: 'Pending',
-    created_at: new Date(Date.now() - 86400000).toISOString()
-  },
-  {
-    application_id: 'VOL-2026-03',
-    full_name: 'Andrea Nicole Ramos',
-    student_id: '21-3304-451',
-    contact_number: '0919-872-6631',
-    program: 'BS Nursing (CN)',
-    role: 'Clinic Assistant',
-    availability: 'Saturday whole day & Sunday afternoons',
-    email: 'an.ramos@cit.edu',
-    status: 'Approved',
-    created_at: new Date(Date.now() - 86400000 * 5).toISOString()
-  }
-];
-
 export default function PendingApplications() {
   const [activeTab, setActiveTab] = useState('adoption'); // 'adoption' | 'volunteer'
   
@@ -95,20 +56,28 @@ export default function PendingApplications() {
       const raw = localStorage.getItem('tfb_volunteer_applications');
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const normalized = normalizeVolunteerList(parsed);
+        if (Array.isArray(parsed)) {
+          // Filter out dummy placeholder volunteer records if present in storage
+          const cleanList = parsed.filter(item => {
+            const name = (item.full_name || item.name || '').trim().toLowerCase();
+            const id = (item.student_id || item.studentId || '').trim();
+            const email = (item.email || '').trim().toLowerCase();
+            if (name.includes('maria clarissa santos') || name.includes('joshua emmanuel tan') || name.includes('andrea nicole ramos')) return false;
+            if (email === 'mc.santos@cit.edu' || email === 'je.tan@cit.edu' || email === 'an.ramos@cit.edu') return false;
+            if (id === '22-4102-184' || id === '23-1109-892' || id === '21-3304-451') return false;
+            return true;
+          });
+          const normalized = normalizeVolunteerList(cleanList);
           setVolunteerApplications(normalized);
           localStorage.setItem('tfb_volunteer_applications', JSON.stringify(normalized));
           return;
         }
       }
-      // Seed default entries
-      const normalizedSeeds = normalizeVolunteerList(SEED_VOLUNTEERS);
-      localStorage.setItem('tfb_volunteer_applications', JSON.stringify(normalizedSeeds));
-      setVolunteerApplications(normalizedSeeds);
+      setVolunteerApplications([]);
+      localStorage.setItem('tfb_volunteer_applications', JSON.stringify([]));
     } catch (err) {
       console.error('Error loading volunteer applications:', err);
-      setVolunteerApplications(SEED_VOLUNTEERS);
+      setVolunteerApplications([]);
     }
   };
 
