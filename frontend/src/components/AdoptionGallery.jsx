@@ -23,18 +23,35 @@ export default function AdoptionGallery({ session }) {
   const [cancelModal, setCancelModal] = useState({ isOpen: false, appId: null });
 
   const getInitialFullName = () => {
-    if (session?.full_name) return session.full_name;
-    if (session?.first_name || session?.last_name) {
-      return `${session.first_name || ''} ${session.last_name || ''}`.trim();
+    let name = session?.full_name || '';
+    if (!name && (session?.first_name || session?.last_name)) {
+      name = `${session.first_name || ''} ${session.last_name || ''}`.trim();
     }
     if (session?.email) {
-      const userPart = session.email.split('@')[0];
-      const parts = userPart.split('.');
-      if (parts.length >= 2) {
-        return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+      try {
+        const savedProf = JSON.parse(localStorage.getItem(`tfb_user_profile_${session.email}`) || '{}');
+        if (!name && savedProf.full_name) name = savedProf.full_name;
+        if (!name && savedProf.first_name) name = `${savedProf.first_name} ${savedProf.last_name || ''}`.trim();
+      } catch {}
+
+      if (!name) {
+        try {
+          const pastVols = JSON.parse(localStorage.getItem('tfb_volunteer_applications') || '[]');
+          const match = pastVols.find(v => (v.email || '').toLowerCase() === session.email.toLowerCase() && v.full_name);
+          if (match) name = match.full_name;
+        } catch {}
+      }
+
+      if (!name) {
+        const userPart = session.email.split('@')[0];
+        const segments = userPart.split('.').flatMap(seg => {
+          if (seg.toLowerCase() === 'vinceclark') return ['Vince', 'Clark'];
+          return [seg.charAt(0).toUpperCase() + seg.slice(1)];
+        });
+        name = segments.join(' ').trim();
       }
     }
-    return '';
+    return name;
   };
 
   const [applicationForm, setApplicationForm] = useState({

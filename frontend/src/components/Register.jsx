@@ -62,6 +62,17 @@ export default function Register({ togglePage }) {
       });
       const data = await res.json();
       if (res.ok) {
+        try {
+          localStorage.setItem(`tfb_user_profile_${emailClean}`, JSON.stringify({
+            id: idClean,
+            student_id: idClean,
+            custom_id: idClean,
+            first_name: firstNameClean,
+            last_name: lastNameClean,
+            full_name: `${firstNameClean} ${lastNameClean}`.trim(),
+            email: emailClean
+          }));
+        } catch {}
         setMessage({ type: 'success', text: data.message || 'Account initialized successfully! You may now sign in.' });
         setFormData({ id: '', first_name: '', last_name: '', email: '', password: '' });
       } else {

@@ -1,28 +1,56 @@
 import React, { useState, useEffect } from 'react';
 
 export default function SupportAndVolunteers({ session }) {
-  const getInitialName = () => {
-    if (session?.full_name) return session.full_name;
-    if (session?.first_name || session?.last_name) {
-      return `${session.first_name || ''} ${session.last_name || ''}`.trim();
+  const resolveUserIdentity = () => {
+    let name = session?.full_name || '';
+    if (!name && (session?.first_name || session?.last_name)) {
+      name = `${session.first_name || ''} ${session.last_name || ''}`.trim();
     }
+    
+    let studentId = session?.student_id || session?.custom_id || session?.user_id || '';
+
+    // Check saved local profile for this email
     if (session?.email) {
-      const userPart = session.email.split('@')[0];
-      const parts = userPart.split('.');
-      if (parts.length >= 2) {
-        return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+      try {
+        const savedProf = JSON.parse(localStorage.getItem(`tfb_user_profile_${session.email}`) || '{}');
+        if (!name && savedProf.full_name) name = savedProf.full_name;
+        if (!name && savedProf.first_name) name = `${savedProf.first_name} ${savedProf.last_name || ''}`.trim();
+        if (!studentId && (savedProf.id || savedProf.student_id || savedProf.custom_id)) {
+          studentId = savedProf.id || savedProf.student_id || savedProf.custom_id;
+        }
+      } catch {}
+
+      // Check existing volunteer applications submitted by this email
+      if (!name || !studentId) {
+        try {
+          const pastVols = JSON.parse(localStorage.getItem('tfb_volunteer_applications') || '[]');
+          const match = pastVols.find(v => (v.email || '').toLowerCase() === session.email.toLowerCase() && (v.student_id || v.full_name));
+          if (match) {
+            if (!name && match.full_name) name = match.full_name;
+            if (!studentId && match.student_id) studentId = match.student_id;
+          }
+        } catch {}
       }
     }
-    return '';
+
+    // Smart fallback formatting for CIT email handles (e.g., vinceclark.lanticse -> Vince Clark Lanticse)
+    if (!name && session?.email) {
+      const userPart = session.email.split('@')[0];
+      const segments = userPart.split('.').flatMap(seg => {
+        if (seg.toLowerCase() === 'vinceclark') return ['Vince', 'Clark'];
+        return [seg.charAt(0).toUpperCase() + seg.slice(1)];
+      });
+      name = segments.join(' ').trim();
+    }
+
+    return { name, studentId };
   };
 
-  const getInitialStudentId = () => {
-    return session?.student_id || session?.custom_id || session?.user_id || '';
-  };
+  const initialIdentity = resolveUserIdentity();
 
   const [volunteerForm, setVolunteerForm] = useState({
-    name: getInitialName(),
-    studentId: getInitialStudentId(),
+    name: initialIdentity.name,
+    studentId: initialIdentity.studentId,
     contactNum: '',
     program: '',
     role: 'Feeding Patrol',
@@ -30,12 +58,13 @@ export default function SupportAndVolunteers({ session }) {
     notes: ''
   });
 
-  // Sync when session updates
+  // Sync when session or storage updates
   useEffect(() => {
+    const resolved = resolveUserIdentity();
     setVolunteerForm(prev => ({
       ...prev,
-      name: prev.name || getInitialName(),
-      studentId: prev.studentId || getInitialStudentId()
+      name: prev.name || resolved.name,
+      studentId: prev.studentId || resolved.studentId
     }));
   }, [session]);
 
@@ -190,6 +219,21 @@ export default function SupportAndVolunteers({ session }) {
     if (!trimmedAvailability || trimmedAvailability.length < 5) {
       setError('Please describe your general availability (e.g., MWF after 4:00 PM, or Saturday mornings).');
       return;
+    }
+
+    // Save profile cache for student
+    if (session?.email) {
+      try {
+        localStorage.setItem(`tfb_user_profile_${session.email}`, JSON.stringify({
+          full_name: trimmedName,
+          student_id: trimmedId,
+          custom_id: trimmedId,
+          id: trimmedId,
+          contact_number: volunteerForm.contactNum.trim(),
+          program: trimmedProgram,
+          email: session.email
+        }));
+      } catch {}
     }
 
     // Save in localStorage so staff reviewer can screen and approve
