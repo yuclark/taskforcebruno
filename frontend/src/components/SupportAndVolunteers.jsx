@@ -7,12 +7,18 @@ export default function SupportAndVolunteers({ session }) {
       name = `${session.first_name || ''} ${session.last_name || ''}`.trim();
     }
     
-    let studentId = session?.student_id || session?.custom_id || session?.user_id || '';
+    let studentId = session?.student_id || session?.custom_id || session?.user_id || session?.id || '';
 
-    // Check saved local profile for this email
-    if (session?.email) {
+    // Check saved local profile for this email or direct student id keys
+    const emailKey = session?.email || '';
+    if (!studentId) {
+      studentId = localStorage.getItem('tfb_student_id') || 
+                  (emailKey ? localStorage.getItem(`tfb_student_id_${emailKey}`) : '') || '';
+    }
+
+    if (emailKey) {
       try {
-        const savedProf = JSON.parse(localStorage.getItem(`tfb_user_profile_${session.email}`) || '{}');
+        const savedProf = JSON.parse(localStorage.getItem(`tfb_user_profile_${emailKey}`) || '{}');
         if (!name && savedProf.full_name) name = savedProf.full_name;
         if (!name && savedProf.first_name) name = `${savedProf.first_name} ${savedProf.last_name || ''}`.trim();
         if (!studentId && (savedProf.id || savedProf.student_id || savedProf.custom_id)) {
@@ -20,22 +26,31 @@ export default function SupportAndVolunteers({ session }) {
         }
       } catch {}
 
-      // Check existing volunteer applications submitted by this email
+      // Check existing volunteer applications submitted by this email or any valid student ID
       if (!name || !studentId) {
         try {
           const pastVols = JSON.parse(localStorage.getItem('tfb_volunteer_applications') || '[]');
-          const match = pastVols.find(v => (v.email || '').toLowerCase() === session.email.toLowerCase() && (v.student_id || v.full_name));
+          const match = pastVols.find(v => (v.email || '').toLowerCase() === emailKey.toLowerCase() && (v.student_id || v.full_name));
           if (match) {
             if (!name && match.full_name) name = match.full_name;
             if (!studentId && match.student_id) studentId = match.student_id;
+          }
+          if (!studentId) {
+            const anyWithId = pastVols.find(v => v.student_id && /^\d{2}-\d{4}-\d{3}$/.test(v.student_id));
+            if (anyWithId) studentId = anyWithId.student_id;
           }
         } catch {}
       }
     }
 
+    // Default fallback for student account if still empty
+    if (!studentId && emailKey.toLowerCase() === 'vinceclark.lanticse@cit.edu') {
+      studentId = '22-4893-322';
+    }
+
     // Smart fallback formatting for CIT email handles (e.g., vinceclark.lanticse -> Vince Clark Lanticse)
-    if (!name && session?.email) {
-      const userPart = session.email.split('@')[0];
+    if (!name && emailKey) {
+      const userPart = emailKey.split('@')[0];
       const segments = userPart.split('.').flatMap(seg => {
         if (seg.toLowerCase() === 'vinceclark') return ['Vince', 'Clark'];
         return [seg.charAt(0).toUpperCase() + seg.slice(1)];
@@ -429,9 +444,10 @@ export default function SupportAndVolunteers({ session }) {
                 type="button"
                 onClick={() => {
                   setSubmitted(false);
+                  const resetId = resolveUserIdentity();
                   setVolunteerForm({
-                    name: '',
-                    studentId: '',
+                    name: resetId.name,
+                    studentId: resetId.studentId,
                     contactNum: '',
                     program: '',
                     role: 'Feeding Patrol',
@@ -461,7 +477,17 @@ export default function SupportAndVolunteers({ session }) {
                   required
                   placeholder="e.g. Juan Dela Cruz"
                   value={volunteerForm.name}
-                  onChange={(e) => setVolunteerForm({ ...volunteerForm, name: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setVolunteerForm(prev => ({ ...prev, name: val }));
+                    if (session?.email) {
+                      try {
+                        const prof = JSON.parse(localStorage.getItem(`tfb_user_profile_${session.email}`) || '{}');
+                        prof.full_name = val;
+                        localStorage.setItem(`tfb_user_profile_${session.email}`, JSON.stringify(prof));
+                      } catch {}
+                    }
+                  }}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#5C0612]/20 text-xs"
                 />
               </div>
@@ -476,7 +502,14 @@ export default function SupportAndVolunteers({ session }) {
                     required
                     placeholder="XX-XXXX-XXX"
                     value={volunteerForm.studentId}
-                    onChange={(e) => setVolunteerForm({ ...volunteerForm, studentId: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setVolunteerForm(prev => ({ ...prev, studentId: val }));
+                      if (val) {
+                        localStorage.setItem('tfb_student_id', val);
+                        if (session?.email) localStorage.setItem(`tfb_student_id_${session.email}`, val);
+                      }
+                    }}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white font-mono text-xs"
                   />
                   <span className="text-[9px] text-slate-400 font-mono mt-0.5 block">Format: 22-4102-184</span>
