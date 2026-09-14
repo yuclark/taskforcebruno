@@ -285,7 +285,7 @@ export default function InventoryControl({
               inventorySubTab === 'history' ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            Audit Ledger ({transactionLedger.length})
+            Stock History Log ({transactionLedger.length})
           </button>
         </div>
 
@@ -620,31 +620,31 @@ export default function InventoryControl({
         <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-left animate-fade-in">
           <div className="p-4 border-b border-slate-100 flex justify-between items-center">
             <div>
-              <h4 className="font-bold text-slate-900 text-sm">Inventory Transaction Audit Trail</h4>
-              <p className="text-[11px] text-slate-400 mt-0.5">Immutable ledger of all stock adjustments, disbursements, and restocking entries.</p>
+              <h4 className="font-bold text-slate-900 text-sm">Stock Movement & Activity Log</h4>
+              <p className="text-[11px] text-slate-400 mt-0.5">Complete history of all incoming supplies, stock used, and inventory adjustments.</p>
             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 uppercase tracking-wider font-semibold text-[10px]">
-                  <th className="p-4">Timestamp</th>
-                  <th className="p-4 w-1/3">Target Provision Item</th>
-                  <th className="p-4 text-center">Movement</th>
-                  <th className="p-4">Delta</th>
-                  <th className="p-4">Audit Justification & Source</th>
+                  <th className="p-4">Date & Time</th>
+                  <th className="p-4 w-1/3">Item Name</th>
+                  <th className="p-4 text-center">Action</th>
+                  <th className="p-4">Quantity (+ / -)</th>
+                  <th className="p-4">Reason & Source / Donor</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-mono text-[11px] text-slate-600">
                 {transactionLedger.map((tx) => (
                   <tr key={tx.transaction_id} className="hover:bg-slate-50/50">
                     <td className="p-4 text-slate-400 text-[10px] whitespace-nowrap">{new Date(tx.logged_at).toLocaleString()}</td>
-                    <td className="p-4 font-sans font-bold text-slate-900 text-xs whitespace-normal break-words">{tx.inventory?.item_name || 'Archived Asset'}</td>
+                    <td className="p-4 font-sans font-bold text-slate-900 text-xs whitespace-normal break-words">{tx.inventory?.item_name || 'Archived Item'}</td>
                     <td className="p-4 text-center whitespace-nowrap">
-                      <span className={`inline-block px-2 py-0.5 text-[9px] font-bold rounded ${
+                      <span className={`inline-block px-2.5 py-1 text-[9px] font-bold rounded-lg ${
                         tx.transaction_type === 'IN' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
                       }`}>
-                        {tx.transaction_type === 'IN' ? '+ INFLOW' : '- DEDUCTION'}
+                        {tx.transaction_type === 'IN' ? '+ Stock In' : '- Stock Out'}
                       </span>
                     </td>
                     <td className="p-4 font-bold text-slate-900 whitespace-nowrap">
