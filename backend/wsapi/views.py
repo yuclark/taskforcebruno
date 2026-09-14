@@ -22,27 +22,98 @@ EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9._%+-]+@cit\.edu$')
 class RegisterUserView(APIView):
     def post(self, request):
         data = request.data
-        user_id, first_name, last_name, email, password = data.get('id'), data.get('first_name'), data.get('last_name'), data.get('email'), data.get('password')
+        user_id = (data.get('id') or '').strip()
+        first_name = (data.get('first_name') or '').strip()
+        last_name = (data.get('last_name') or '').strip()
+        email = (data.get('email') or '').strip().lower()
+        password = data.get('password') or ''
+
         if not user_id or not ID_PATTERN.match(user_id): 
-            return Response({"error": "Format mismatch."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Format mismatch. Student ID must follow format XX-XXXX-XXX."}, status=status.HTTP_400_BAD_REQUEST)
         if not email or not EMAIL_PATTERN.match(email): 
-            return Response({"error": "Domain mismatch."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Domain mismatch. Must be a valid @cit.edu institutional email address."}, status=status.HTTP_400_BAD_REQUEST)
+        if not password or len(password) < 6:
+            return Response({"error": "Password must be at least 6 characters."}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
-            auth_response = supabase.auth.sign_up({"email": email, "password": password, "options": {"data": {"custom_id": user_id, "first_name": first_name, "last_name": last_name, "role": 'user'}}})
-            supabase.table("profiles").insert({"id": auth_response.user.id, "custom_id": user_id, "first_name": first_name, "last_name": last_name, "email": email, "role": 'user'}).execute()
-            return Response({"message": "Account initialized."}, status=status.HTTP_201_CREATED)
+            auth_response = supabase.auth.sign_up({
+                "email": email, 
+                "password": password, 
+                "options": {
+                    "data": {
+                        "custom_id": user_id, 
+                        "first_name": first_name, 
+                        "last_name": last_name, 
+                        "role": 'user'
+                    }
+                }
+            })
+            if not auth_response or not auth_response.user:
+                return Response({"error": "Account registration failed. Please ensure the email is not already in use."}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                supabase.table("profiles").upsert({
+                    "id": auth_response.user.id, 
+                    "custom_id": user_id, 
+                    "first_name": first_name, 
+                    "last_name": last_name, 
+                    "email": email, 
+                    "role": 'user'
+                }).execute()
+            except Exception:
+                pass
+
+            return Response({"message": "Account initialized successfully. You may now log in."}, status=status.HTTP_201_CREATED)
         except Exception as e: 
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            err_msg = str(e)
+            if "already registered" in err_msg.lower() or "unique" in err_msg.lower():
+                return Response({"error": "This email is already registered. Please sign in."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": f"Registration error: {err_msg}"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class LoginView(APIView):
     def post(self, request):
+        email = (request.data.get('email') or '').strip().lower()
+        password = request.data.get('password') or ''
+
+        if not email or not password:
+            return Response({"error": "Institutional email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
-            response = supabase.auth.sign_in_with_password({"email": request.data.get('email'), "password": request.data.get('password')})
-            role = response.user.user_metadata.get("role", "user")
-            return Response({"session": {"access_token": response.session.access_token, "role": role, "email": response.user.email}}, status=status.HTTP_200_OK)
-        except Exception: 
-            return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+            response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+            if not response or not response.user:
+                return Response({"error": "Invalid email or password credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+
+            if not response.session or not getattr(response.session, 'access_token', None):
+                return Response({"error": "Session token missing. Please verify your email confirmation or contact admin."}, status=status.HTTP_403_FORBIDDEN)
+
+            # Determine role with reliable database profile fallback
+            role = (response.user.user_metadata or {}).get("role", "")
+            if not role:
+                try:
+                    p = supabase.table("profiles").select("role").eq("id", response.user.id).execute()
+                    if p.data and len(p.data) > 0:
+                        role = p.data[0].get("role", "user")
+                except Exception:
+                    role = "user"
+            if not role:
+                role = "user"
+
+            return Response({
+                "session": {
+                    "access_token": response.session.access_token, 
+                    "role": role, 
+                    "email": response.user.email
+                }
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            err_str = str(e).lower()
+            if "invalid" in err_str or "credential" in err_str or "user not found" in err_str:
+                return Response({"error": "Invalid institutional credentials. Please re-check email and password."}, status=status.HTTP_401_UNAUTHORIZED)
+            if "email not confirmed" in err_str:
+                return Response({"error": "Please confirm your institutional email before signing in."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Authentication failed. Server connection error or invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+
 
 
 # =====================================================================
@@ -400,11 +471,22 @@ class AnimalSightingAPIView(APIView):
                 )
                 image_url = supabase.storage.from_("sightings").get_public_url(storage_filename)
 
+            campus_zone = (d.get("campus_zone") or '').strip()
+            is_emergency = str(d.get("is_emergency", "")).lower() in ['true', '1', 'yes']
+            
+            location_details = (d.get("location_details") or '').strip()
+            if campus_zone and not location_details.startswith(f"[{campus_zone}]"):
+                location_details = f"[{campus_zone}] {location_details}"
+                
+            distinct_features = (d.get("distinct_features") or '').strip()
+            if is_emergency and not distinct_features.startswith("[🚨 URGENT EMERGENCY]"):
+                distinct_features = f"[🚨 URGENT EMERGENCY] {distinct_features}"
+
             insert_payload = {
-                "reporter_email": d.get("reporter_email"),
+                "reporter_email": (d.get("reporter_email") or '').strip().lower(),
                 "animal_type": d.get("animal_type"),
-                "distinct_features": d.get("distinct_features"),
-                "location_details": d.get("location_details"),
+                "distinct_features": distinct_features,
+                "location_details": location_details,
                 "image_url": image_url,
                 "status": "Pending"
             }
@@ -498,16 +580,24 @@ class UnifiedNewsfeedAPIView(APIView):
                     "timestamp": c["created_at"]
                 })
 
-            # 1. Gather Sightings
+            # 1. Gather Sightings (Community Moderation: Only show verified / investigated sightings or emergency alerts to prevent spam)
             sightings = supabase.table("animal_sightings").select("*").neq("status", "Resolved").execute().data or []
             for s in sightings:
+                is_urgent = "[🚨 URGENT EMERGENCY]" in (s.get('distinct_features') or '')
+                status_val = s.get('status') or 'Pending'
+                
+                # Await staff triage moderation before displaying on public newsfeed, unless emergency
+                if status_val == "Pending" and not is_urgent:
+                    continue
+
                 fid = f"sighting_{s['sighting_id']}"
+                badge = "🚨 URGENT EMERGENCY" if is_urgent else ("Verified Sighting" if status_val == "Investigated" else status_val)
                 unified_feed.append({
                     "feed_id": fid,
                     "item_type": "sighting",
                     "title": f"Active Sighting Area: {s['animal_type']}",
                     "body": f"Distinct somatic markers observed: \"{s['distinct_features']}\"",
-                    "badge_text": s['status'],
+                    "badge_text": badge,
                     "meta_details": s['location_details'],
                     "image_url": s['image_url'],
                     "author_tag": s['reporter_email'],

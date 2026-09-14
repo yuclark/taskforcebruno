@@ -5,6 +5,8 @@ import SupplyLogistics from './SupplyLogistics';
 import AdoptionGallery from './AdoptionGallery';
 import ReportSightingView from './ReportSightingView';
 import NewsfeedView from './NewsfeedView';
+import SupportAndVolunteers from './SupportAndVolunteers';
+import UserGuideModal from './UserGuideModal';
 
 export default function DashboardContainer({ session, onLogout }) {
   // Hydrate current tab position from disk parameters on bootup loop
@@ -14,6 +16,7 @@ export default function DashboardContainer({ session, onLogout }) {
 
   const [activePetId, setActivePetId] = useState(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   // Save current tab layout configuration dynamically upon mutation
   useEffect(() => {
@@ -22,6 +25,9 @@ export default function DashboardContainer({ session, onLogout }) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex text-slate-800 font-sans antialiased relative overflow-hidden">
+
+      {/* USER INTERACTIVE SYSTEM GUIDE MODAL */}
+      <UserGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
 
       {/* MOBILE OVERLAY */}
       {isMobileOpen && (
@@ -88,7 +94,7 @@ export default function DashboardContainer({ session, onLogout }) {
             </button>
           </div>
 
-          <nav className="p-4 space-y-1.5 overflow-y-auto max-h-[calc(100vh-180px)]">
+          <nav className="p-4 space-y-1.5 overflow-y-auto max-h-[calc(100vh-220px)]">
             <span className="text-[8px] font-mono font-bold tracking-widest uppercase text-white/40 block px-3 mb-1">
               Community Node Workspace
             </span>
@@ -99,7 +105,7 @@ export default function DashboardContainer({ session, onLogout }) {
                 currentTab === 'newsfeed' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
-              Community Newsfeed
+              <span>📰</span> Community Newsfeed
             </button>
 
             <button
@@ -108,7 +114,7 @@ export default function DashboardContainer({ session, onLogout }) {
                 currentTab === 'scanner' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
-              Collar QR Scanner
+              <span>📷</span> Collar QR Scanner
             </button>
 
             <button
@@ -117,16 +123,7 @@ export default function DashboardContainer({ session, onLogout }) {
                 currentTab === 'adoption' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
-              Adoption Placement Portal
-            </button>
-
-            <button
-              onClick={() => { setCurrentTab('resources'); setActivePetId(null); setIsMobileOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                currentTab === 'resources' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
-              }`}
-            >
-              Supply Logistics Hub
+              <span>🐾</span> Adoption Placement Portal
             </button>
 
             <button
@@ -135,8 +132,35 @@ export default function DashboardContainer({ session, onLogout }) {
                 currentTab === 'report' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
-              Report Animal Sighting
+              <span>🚨</span> Report Animal Sighting
             </button>
+
+            <button
+              onClick={() => { setCurrentTab('support'); setActivePetId(null); setIsMobileOpen(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                currentTab === 'support' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
+              }`}
+            >
+              <span>🤝</span> Support & Volunteers
+            </button>
+
+            <button
+              onClick={() => { setCurrentTab('resources'); setActivePetId(null); setIsMobileOpen(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                currentTab === 'resources' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
+              }`}
+            >
+              <span>📦</span> Supply Logistics Hub
+            </button>
+
+            <div className="pt-2 border-t border-white/10 mt-2">
+              <button
+                onClick={() => { setIsGuideOpen(true); setIsMobileOpen(false); }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold text-[#D4AF37] hover:bg-white/10 transition-all text-left"
+              >
+                <span>🧭</span> System User Guide
+              </button>
+            </div>
           </nav>
         </div>
 
@@ -165,10 +189,8 @@ export default function DashboardContainer({ session, onLogout }) {
         </div>
       </aside>
 
-      {/* MAIN */}
-      {/* FIX 1: h-screen overflow-hidden on main so newsfeed can manage its own scroll,
-          while scanner/other tabs get a scrollable content area below */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative min-w-0">
+      {/* MAIN CONTAINER */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden relative min-w-0 pb-16 md:pb-0">
 
         {/* HEADER */}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0 z-10 shadow-sm">
@@ -193,20 +215,26 @@ export default function DashboardContainer({ session, onLogout }) {
             </button>
 
             <span className="text-xs font-bold font-mono text-[#5C0612] uppercase tracking-wider">
-              {currentTab.replace('-', ' ')} Module
+              {currentTab === 'support' ? 'Support & Action' : `${currentTab.replace('-', ' ')} Module`}
             </span>
           </div>
 
-          <div className="text-[11px] md:text-xs font-mono bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600">
-            POV: General Community
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setIsGuideOpen(true)}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[#5C0612] rounded-xl font-mono text-[11px] font-bold transition-colors"
+            >
+              <span>🧭</span>
+              <span>System Guide</span>
+            </button>
+
+            <div className="text-[11px] md:text-xs font-mono bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600">
+              POV: General Community
+            </div>
           </div>
         </header>
 
         {/* CONTENT AREA */}
-        {/* FIX 2: Removed the single shared content div with conflicting conditional classes.
-            Each tab now renders inside its own correctly-scoped layout shell. */}
-
-        {/* Background grid layer — shared across all tabs */}
         <div className="flex-1 relative min-h-0 bg-gradient-to-br from-slate-50 via-stone-50 to-slate-100 overflow-hidden">
           <div className="absolute inset-0 z-0 pointer-events-none opacity-40">
             <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
@@ -229,14 +257,14 @@ export default function DashboardContainer({ session, onLogout }) {
             </svg>
           </div>
 
-          {/* NEWSFEED — manages its own internal scroll, no outer padding overflow */}
+          {/* NEWSFEED */}
           {currentTab === 'newsfeed' && (
             <div className="relative z-10 w-full h-full min-h-0 p-4 md:p-8 overflow-hidden">
               <NewsfeedView session={session} />
             </div>
           )}
 
-          {/* SCANNER — top-aligned, natural scroll, responsive padding */}
+          {/* SCANNER */}
           {currentTab === 'scanner' && (
             <div className="relative z-10 w-full h-full overflow-y-auto">
               <div className="min-h-full flex items-start justify-center p-3 sm:p-5 md:p-6 lg:p-8">
@@ -252,21 +280,28 @@ export default function DashboardContainer({ session, onLogout }) {
             </div>
           )}
 
-          {/* REPORT — scrollable, top-aligned */}
+          {/* REPORT */}
           {currentTab === 'report' && (
             <div className="relative z-10 w-full h-full overflow-y-auto p-4 md:p-8">
               <ReportSightingView session={session} />
             </div>
           )}
 
-          {/* ADOPTION — scrollable, top-aligned */}
+          {/* ADOPTION */}
           {currentTab === 'adoption' && (
             <div className="relative z-10 w-full h-full overflow-y-auto p-4 md:p-8">
               <AdoptionGallery session={session} />
             </div>
           )}
 
-          {/* RESOURCES — scrollable, top-aligned */}
+          {/* SUPPORT & VOLUNTEERS */}
+          {currentTab === 'support' && (
+            <div className="relative z-10 w-full h-full overflow-y-auto p-4 md:p-8">
+              <SupportAndVolunteers session={session} />
+            </div>
+          )}
+
+          {/* RESOURCES */}
           {currentTab === 'resources' && (
             <div className="relative z-10 w-full h-full overflow-y-auto p-4 md:p-8">
               <SupplyLogistics />
@@ -275,6 +310,38 @@ export default function DashboardContainer({ session, onLogout }) {
         </div>
 
       </main>
+
+      {/* MODERN MOBILE BOTTOM NAVIGATION BAR */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-30 flex items-center justify-around h-16 px-1 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+        {[
+          { key: 'newsfeed', label: 'Feed', icon: '📰' },
+          { key: 'scanner', label: 'Scan', icon: '📷' },
+          { key: 'report', label: 'Report', icon: '🚨' },
+          { key: 'adoption', label: 'Adopt', icon: '🐾' },
+          { key: 'support', label: 'Support', icon: '🤝' },
+        ].map((item) => {
+          const isActive = currentTab === item.key;
+          return (
+            <button
+              key={item.key}
+              onClick={() => {
+                setCurrentTab(item.key);
+                setActivePetId(null);
+              }}
+              className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all ${
+                isActive ? 'text-[#5C0612] font-black scale-105' : 'text-slate-500 font-medium'
+              }`}
+            >
+              <span className="text-lg leading-none">{item.icon}</span>
+              <span className="text-[10px] mt-1 tracking-tight">{item.label}</span>
+              {isActive && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[#5C0612] mt-0.5" />
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
     </div>
   );
-}
+}

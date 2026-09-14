@@ -91,18 +91,35 @@ export default function QRScannerView({ onProfileIdentified }) {
   const startCameraStream = async () => {
     setQrErrorMessage('');
     setIsQrProcessing(true);
-    setQrStatusMessage('Requesting camera access...');
+    setQrStatusMessage('Requesting camera permissions...');
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setIsQrProcessing(false);
+      setQrErrorMessage('Live camera feed is not supported in this browser context (HTTPS required). Please use "Take Photo / Upload Tag Image" below.');
+      return;
+    }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 640 } }
-      });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 640 } }
+        });
+      } catch (constraintErr) {
+        // Fallback to basic video stream if ideal dimensions or facingMode fails
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
 
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute('playsinline', 'true');
-        videoRef.current.play();
+        videoRef.current.setAttribute('muted', 'true');
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn('Video autoplay play rejection handled:', playErr);
+        }
       }
 
       setIsActiveCamera(true);
@@ -112,7 +129,7 @@ export default function QRScannerView({ onProfileIdentified }) {
     } catch (err) {
       console.error('Camera access error:', err);
       setIsQrProcessing(false);
-      setQrErrorMessage('Camera access was denied or no camera device is available.');
+      setQrErrorMessage('Camera access was denied or hardware is busy. Please allow camera permissions in your browser or tap "Take Photo / Upload Tag" below.');
     }
   };
 
@@ -562,18 +579,44 @@ export default function QRScannerView({ onProfileIdentified }) {
                 </div>
 
                 {/* Camera Toggle Button */}
-                <div className="mt-3">
+                {/* Camera & Mobile Snapshot Action Row */}
+                <div className="mt-3 flex flex-wrap gap-2 justify-center">
                   {!isActiveCamera ? (
-                    <button
-                      type="button"
-                      onClick={startCameraStream}
-                      className="inline-flex items-center gap-2 bg-[#5C0612] hover:bg-[#700816] text-white px-4 py-2.5 rounded-xl text-xs font-bold border border-[#D4AF37]/40 shadow-md transition-all active:scale-95"
-                    >
-                      <svg className="w-4 h-4 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                      <span>Start Camera Scanner</span>
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={startCameraStream}
+                        disabled={isQrProcessing}
+                        className="inline-flex items-center gap-2 bg-[#5C0612] hover:bg-[#700816] text-white px-4 py-2.5 rounded-xl text-xs font-bold border border-[#D4AF37]/40 shadow-md transition-all active:scale-95"
+                      >
+                        <svg className="w-4 h-4 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        <span>Start Live Viewfinder</span>
+                      </button>
+
+                      {/* Instant Mobile Camera Snapshot Fallback */}
+                      <label
+                        htmlFor="qr-direct-camera-input"
+                        className="inline-flex items-center gap-2 bg-amber-500/20 hover:bg-amber-500/30 text-[#D4AF37] px-4 py-2.5 rounded-xl text-xs font-bold border border-[#D4AF37]/50 shadow-md transition-all active:scale-95 cursor-pointer"
+                        title="Direct hardware camera snapshot (fastest on mobile phones)"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span>Take Photo</span>
+                        <input
+                          type="file"
+                          id="qr-direct-camera-input"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleFileUpload}
+                          disabled={isQrProcessing}
+                          className="hidden"
+                        />
+                      </label>
+                    </>
                   ) : (
                     <button
                       type="button"
@@ -589,13 +632,13 @@ export default function QRScannerView({ onProfileIdentified }) {
                 </div>
 
                 {qrErrorMessage && (
-                  <div className="mt-3 text-xs text-rose-300 bg-rose-950/40 border border-rose-800/60 px-3.5 py-2 rounded-xl w-full text-center">
+                  <div className="mt-3 text-xs text-rose-300 bg-rose-950/60 border border-rose-800/80 px-3.5 py-2.5 rounded-xl w-full text-center leading-relaxed">
                     {qrErrorMessage}
                   </div>
                 )}
               </div>
 
-              {/* Upload QR File Option */}
+              {/* Upload QR File Option from Gallery */}
               <div className="pt-2 border-t border-slate-800">
                 <input
                   type="file"

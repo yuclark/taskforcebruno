@@ -146,20 +146,26 @@ export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
               </div>
             </div>
 
-            {/* Vitals and Campus Territory Details */}
+            {/* Vitals, Campus Territory, and Feeding Details */}
             <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-100">
               <div>
-                <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block">Campus Colony Zone</span>
+                <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block">Usual Campus Hangout Zone</span>
                 <span className="font-bold text-slate-800">{pet.found_near || 'CIT-U Campus Grounds'}</span>
               </div>
               <div>
-                <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block">Registered Weight</span>
-                <span className="font-bold text-slate-800">{pet.weight || 'Recorded on file'}</span>
+                <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block">Usual Feeding Routine</span>
+                <span className="font-bold text-slate-800">{pet.feeding_area || 'Scheduled Campus Feeding Station'}</span>
+              </div>
+              <div className="col-span-2 pt-2 border-t border-slate-200/50">
+                <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block mb-0.5">Temperament & Student Interaction Notes</span>
+                <p className="text-[11px] text-slate-700 bg-white p-2.5 rounded-xl border border-slate-200/70 leading-relaxed font-medium">
+                  {pet.behavior_notes || 'Friendly campus companion. Enjoys gentle head pats and company. Please do not feed harmful table scraps.'}
+                </p>
               </div>
               <div className="col-span-2 pt-1 border-t border-slate-200/50">
-                <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block mb-0.5">Physical Identification Notes</span>
+                <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block mb-0.5">Physical Description & Background</span>
                 <p className="text-[11px] text-slate-600 italic leading-relaxed">
-                  "{pet.description || pet.about_text || 'Registered resident under Task Force Bruno.'}"
+                  "{pet.description || pet.about_text || 'Registered resident companion under Task Force Bruno campus protection.'}"
                 </p>
               </div>
             </div>

@@ -81,29 +81,36 @@ export default function PetProfileView({ petId, onBackToScanner }) {
           <div className="bg-slate-900/80 p-1.5 rounded-lg border border-white/5"><span className="text-[8px] text-slate-600 block mb-0.5">SCALE</span>{petData.size || 'Medium'}</div>
         </div>
 
-        {/* BLOCK SECTION 2: Environmental Sighting Tracking Fields */}
+        {/* BLOCK SECTION 2: Environmental Sighting & Campus Territory Fields */}
         <div className="bg-slate-950/40 p-3 rounded-xl border border-white/5 space-y-1.5 font-sans text-[11px] text-slate-400">
-          <span className="text-[9px] font-bold font-mono text-slate-500 uppercase tracking-wider block">Environmental Rescue Tracking:</span>
-          <div className="flex justify-between"><span>Frequent Colony Zone:</span><strong className="text-slate-200 font-mono font-normal text-[10px]">{petData.found_near}</strong></div>
+          <span className="text-[9px] font-bold font-mono text-slate-500 uppercase tracking-wider block">Campus Territory & Feeding Routine:</span>
+          <div className="flex justify-between"><span>Frequent Campus Zone:</span><strong className="text-slate-200 font-mono font-normal text-[10px]">{petData.found_near || 'CIT-U Grounds'}</strong></div>
+          <div className="flex justify-between"><span>Feeding Station:</span><strong className="text-slate-200 font-mono font-normal text-[10px]">{petData.feeding_area || 'Designated Campus Care Station'}</strong></div>
           <div className="flex justify-between"><span>Rescue Document Date:</span><strong className="text-slate-200 font-mono font-normal text-[10px]">{petData.rescue_date || 'N/A'}</strong></div>
-          <div className="flex justify-between"><span>Pipeline Status Stage:</span><strong className="text-slate-200 font-mono font-normal text-[10px]">{petData.adoption_status}</strong></div>
+          <div className="flex justify-between"><span>Pipeline Status:</span><strong className="text-slate-200 font-mono font-normal text-[10px]">{petData.adoption_status}</strong></div>
         </div>
 
-        {/* BLOCK SECTION 3: Detailed Clinical Diagnostic Variables */}
+        {/* BLOCK SECTION 3: Temperament & Clinical Diagnostic Variables */}
         <div className="bg-slate-950/40 p-3 rounded-xl border border-white/5 space-y-2 text-[11px]">
-          <span className="text-[9px] font-bold font-mono text-[#D4AF37] uppercase tracking-wider block">Clinical Diagnostics Metrics:</span>
-          <div className="grid grid-cols-2 gap-2 text-[10px]">
+          <span className="text-[9px] font-bold font-mono text-[#D4AF37] uppercase tracking-wider block">Temperament & Clinical Profile:</span>
+          
+          <div className="bg-slate-900/90 p-2.5 rounded-lg border border-white/5 text-slate-200">
+            <span className="text-[9px] text-[#D4AF37] font-bold font-mono uppercase block mb-1">Behavior & Student Handling Notes:</span>
+            <p className="text-[11px] font-light leading-relaxed">
+              {petData.behavior_notes || 'Friendly campus companion. Calm around students and staff.'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[10px] pt-1">
             <div>Immunization: <strong className="text-emerald-400 block font-sans font-semibold mt-0.5">{petData.vaccination_status}</strong></div>
             <div>Sterilization: <strong className="text-blue-400 block font-sans font-semibold mt-0.5">{petData.spayed_neutered ? 'Yes (Neutered)' : 'Pending Neutering'}</strong></div>
           </div>
-          <div className="pt-2 border-t border-white/5 text-slate-400">
-            Medical Monitoring Logs:
-            <span className="text-rose-400 font-mono block mt-0.5 text-[10px] bg-rose-950/20 px-2 py-1 rounded border border-rose-900/30">{petData.current_conditions || 'None registered.'}</span>
-          </div>
-          <div className="text-slate-400">
-            Behavior Evaluation Notes:
-            <p className="text-slate-200 block mt-0.5 font-light leading-relaxed">{petData.behavior_notes || 'Stable behavior baseline configuration.'}</p>
-          </div>
+          {petData.current_conditions && (
+            <div className="pt-2 border-t border-white/5 text-slate-400">
+              Medical Monitoring Logs:
+              <span className="text-rose-400 font-mono block mt-0.5 text-[10px] bg-rose-950/20 px-2 py-1 rounded border border-rose-900/30">{petData.current_conditions}</span>
+            </div>
+          )}
         </div>
 
         {/* BLOCK SECTION 4: Biography Paragraph Text */}

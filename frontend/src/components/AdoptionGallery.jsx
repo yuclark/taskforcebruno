@@ -106,18 +106,49 @@ export default function AdoptionGallery({ session }) {
     setSuccessMessage('');
     setErrorMessage('');
 
+    const fullNameClean = (applicationForm.fullName || '').trim();
+    const contactNumClean = (applicationForm.contactNum || '').trim();
+    const addressClean = (applicationForm.address || '').trim();
+    const planIfMovingClean = (applicationForm.planIfMoving || '').trim();
+
+    if (!fullNameClean || fullNameClean.split(/\s+/).length < 2) {
+      setErrorMessage('Validation Error: Please provide your full name (both First and Last name).');
+      return;
+    }
+
+    const cleanDigits = contactNumClean.replace(/[\s-]/g, '');
+    if (!/^(09\d{9}|\+639\d{9}|\d{7,12})$/.test(cleanDigits)) {
+      setErrorMessage('Validation Error: Please enter a valid 11-digit Philippine contact number (e.g., 09171234567).');
+      return;
+    }
+
+    if (!addressClean || addressClean.length < 8) {
+      setErrorMessage('Validation Error: Please provide a complete residential address with street/barangay details.');
+      return;
+    }
+
+    if (!applicationForm.householdAgreement) {
+      setErrorMessage('Validation Error: All members of your household must agree to adopt the pet before proceeding.');
+      return;
+    }
+
+    if (!planIfMovingClean || planIfMovingClean.length < 10) {
+      setErrorMessage('Validation Error: Please describe your contingency plan if you relocate or graduate (at least 10 characters).');
+      return;
+    }
+
     const payload = {
       pet_id: filteredPets[currentIndex].pet_id,
-      full_name: applicationForm.fullName.trim(), 
+      full_name: fullNameClean, 
       email: applicationForm.email, 
-      contact_number: applicationForm.contactNum.trim(),
-      address: applicationForm.address.trim(),
+      contact_number: contactNumClean,
+      address: addressClean,
       experience_level: applicationForm.experience,
       housing_type: applicationForm.housingType,
       has_secure_fence: applicationForm.hasSecureFence,
       household_agreement: applicationForm.householdAgreement,
       pet_care_budget: applicationForm.petCareBudget,
-      plan_if_moving: applicationForm.planIfMoving.trim()
+      plan_if_moving: planIfMovingClean
     };
 
     try {

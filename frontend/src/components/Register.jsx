@@ -20,25 +20,57 @@ export default function Register({ togglePage }) {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const [isLoading, setIsLoading] = useState(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage({ type: '', text: '' });
 
+    const emailClean = (formData.email || '').trim().toLowerCase();
+    const idClean = (formData.id || '').trim();
+    const firstNameClean = (formData.first_name || '').trim();
+    const lastNameClean = (formData.last_name || '').trim();
+    const passwordClean = formData.password || '';
+
+    if (!idClean || !/^\d{2}-\d{4}-\d{3}$/.test(idClean)) {
+      setMessage({ type: 'error', text: 'Institutional ID format mismatch. Must be XX-XXXX-XXX.' });
+      return;
+    }
+
+    if (!emailClean.endsWith('@cit.edu')) {
+      setMessage({ type: 'error', text: 'Registration requires an active CIT-U email address ending in @cit.edu' });
+      return;
+    }
+
+    if (passwordClean.length < 6) {
+      setMessage({ type: 'error', text: 'Password must contain at least 6 characters.' });
+      return;
+    }
+
+    setIsLoading(true);
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/register/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          id: idClean,
+          first_name: firstNameClean,
+          last_name: lastNameClean,
+          email: emailClean,
+          password: passwordClean
+        }),
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: 'success', text: data.message });
+        setMessage({ type: 'success', text: data.message || 'Account initialized successfully! You may now sign in.' });
         setFormData({ id: '', first_name: '', last_name: '', email: '', password: '' });
       } else {
-        setMessage({ type: 'error', text: data.error || 'Account creation aborted.' });
+        setMessage({ type: 'error', text: data.error || 'Account creation failed. Please check inputs.' });
       }
     } catch (err) {
-      setMessage({ type: 'error', text: 'Operational error: Connection to registration engine failed.' });
+      setMessage({ type: 'error', text: 'Connection error: Unable to reach registration server. Please check your internet.' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -140,8 +172,19 @@ export default function Register({ togglePage }) {
               />
             </div>
 
-            <button type="submit" className="w-full py-3 bg-[#5C0612] hover:bg-[#42040B] text-white font-medium rounded-xl tracking-wider text-xs shadow-md transition-colors border-b-4 border-[#D4AF37] mt-2">
-              SUBMIT SYSTEM REGISTRATION
+            <button 
+              type="submit" 
+              disabled={isLoading}
+              className="w-full py-3 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-60 text-white font-medium rounded-xl tracking-wider text-xs shadow-md transition-colors border-b-4 border-[#D4AF37] mt-2 flex items-center justify-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>INITIALIZING ACCOUNT...</span>
+                </>
+              ) : (
+                <span>SUBMIT SYSTEM REGISTRATION</span>
+              )}
             </button>
           </form>
 

@@ -352,7 +352,11 @@ export default function NewsfeedView({ session }) {
                               </span>
                             )}
                             <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 ${
-                              isAnnouncement ? 'bg-amber-50 text-amber-900 border-amber-300' : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              item.badge_text?.includes('EMERGENCY')
+                                ? 'bg-rose-600 text-white border-rose-700 animate-pulse font-black'
+                                : isAnnouncement 
+                                ? 'bg-amber-50 text-amber-900 border-amber-300' 
+                                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                             }`}>
                               {item.badge_text}
                             </span>
