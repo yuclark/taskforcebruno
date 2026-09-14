@@ -469,48 +469,47 @@ export default function SupportAndVolunteers({ session }) {
               )}
 
               <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
-                  Full Name *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[10px] font-bold uppercase text-slate-600">
+                    Full Name *
+                  </label>
+                  <span className="text-[9px] font-mono text-emerald-700 font-semibold flex items-center gap-1">
+                    <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                    Verified Profile
+                  </span>
+                </div>
                 <input
                   type="text"
+                  readOnly
                   required
                   placeholder="e.g. Juan Dela Cruz"
                   value={volunteerForm.name}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setVolunteerForm(prev => ({ ...prev, name: val }));
-                    if (session?.email) {
-                      try {
-                        const prof = JSON.parse(localStorage.getItem(`tfb_user_profile_${session.email}`) || '{}');
-                        prof.full_name = val;
-                        localStorage.setItem(`tfb_user_profile_${session.email}`, JSON.stringify(prof));
-                      } catch {}
-                    }
-                  }}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#5C0612]/20 text-xs"
+                  className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-700 font-semibold text-xs cursor-not-allowed select-none focus:outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
-                    Student ID *
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] font-bold uppercase text-slate-600">
+                      Student ID *
+                    </label>
+                    <span className="text-[9px] font-mono text-emerald-700 font-semibold flex items-center gap-1">
+                      <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                      </svg>
+                      Verified
+                    </span>
+                  </div>
                   <input
                     type="text"
+                    readOnly
                     required
                     placeholder="XX-XXXX-XXX"
                     value={volunteerForm.studentId}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setVolunteerForm(prev => ({ ...prev, studentId: val }));
-                      if (val) {
-                        localStorage.setItem('tfb_student_id', val);
-                        if (session?.email) localStorage.setItem(`tfb_student_id_${session.email}`, val);
-                      }
-                    }}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white font-mono text-xs"
+                    className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl font-mono text-slate-700 font-bold text-xs cursor-not-allowed select-none focus:outline-none"
                   />
                   <span className="text-[9px] text-slate-400 font-mono mt-0.5 block">Format: 22-4102-184</span>
                 </div>
