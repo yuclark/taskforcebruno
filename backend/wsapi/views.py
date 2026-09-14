@@ -87,23 +87,38 @@ class LoginView(APIView):
             if not response.session or not getattr(response.session, 'access_token', None):
                 return Response({"error": "Session token missing. Please verify your email confirmation or contact admin."}, status=status.HTTP_403_FORBIDDEN)
 
-            # Determine role with reliable database profile fallback
+            # Determine role and user profile with reliable database fallback
             role = (response.user.user_metadata or {}).get("role", "")
-            if not role:
-                try:
-                    p = supabase.table("profiles").select("role").eq("id", response.user.id).execute()
-                    if p.data and len(p.data) > 0:
-                        role = p.data[0].get("role", "user")
-                except Exception:
-                    role = "user"
+            first_name = (response.user.user_metadata or {}).get("first_name", "")
+            last_name = (response.user.user_metadata or {}).get("last_name", "")
+            custom_id = (response.user.user_metadata or {}).get("user_id", "") or (response.user.user_metadata or {}).get("custom_id", "")
+
+            try:
+                p = supabase.table("profiles").select("*").eq("id", response.user.id).execute()
+                if p.data and len(p.data) > 0:
+                    profile_rec = p.data[0]
+                    role = role or profile_rec.get("role", "user")
+                    first_name = first_name or profile_rec.get("first_name", "")
+                    last_name = last_name or profile_rec.get("last_name", "")
+                    custom_id = custom_id or profile_rec.get("custom_id", "")
+            except Exception:
+                pass
+
             if not role:
                 role = "user"
+
+            full_name = f"{first_name} {last_name}".strip()
 
             return Response({
                 "session": {
                     "access_token": response.session.access_token, 
                     "role": role, 
-                    "email": response.user.email
+                    "email": response.user.email,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "full_name": full_name,
+                    "custom_id": custom_id,
+                    "student_id": custom_id
                 }
             }, status=status.HTTP_200_OK)
         except Exception as e:

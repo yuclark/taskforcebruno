@@ -22,8 +22,23 @@ export default function AdoptionGallery({ session }) {
   // Custom modal state trigger for cancellations
   const [cancelModal, setCancelModal] = useState({ isOpen: false, appId: null });
 
+  const getInitialFullName = () => {
+    if (session?.full_name) return session.full_name;
+    if (session?.first_name || session?.last_name) {
+      return `${session.first_name || ''} ${session.last_name || ''}`.trim();
+    }
+    if (session?.email) {
+      const userPart = session.email.split('@')[0];
+      const parts = userPart.split('.');
+      if (parts.length >= 2) {
+        return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+      }
+    }
+    return '';
+  };
+
   const [applicationForm, setApplicationForm] = useState({
-    fullName: '', 
+    fullName: getInitialFullName(), 
     email: session?.email || '', 
     contactNum: '',
     address: '',

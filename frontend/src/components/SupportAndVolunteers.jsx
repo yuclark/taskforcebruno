@@ -1,15 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function SupportAndVolunteers({ session }) {
+  const getInitialName = () => {
+    if (session?.full_name) return session.full_name;
+    if (session?.first_name || session?.last_name) {
+      return `${session.first_name || ''} ${session.last_name || ''}`.trim();
+    }
+    if (session?.email) {
+      const userPart = session.email.split('@')[0];
+      const parts = userPart.split('.');
+      if (parts.length >= 2) {
+        return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+      }
+    }
+    return '';
+  };
+
+  const getInitialStudentId = () => {
+    return session?.student_id || session?.custom_id || session?.user_id || '';
+  };
+
   const [volunteerForm, setVolunteerForm] = useState({
-    name: '',
-    studentId: '',
+    name: getInitialName(),
+    studentId: getInitialStudentId(),
     contactNum: '',
     program: '',
     role: 'Feeding Patrol',
     availability: '',
     notes: ''
   });
+
+  // Sync when session updates
+  useEffect(() => {
+    setVolunteerForm(prev => ({
+      ...prev,
+      name: prev.name || getInitialName(),
+      studentId: prev.studentId || getInitialStudentId()
+    }));
+  }, [session]);
 
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
