@@ -265,19 +265,22 @@ export default function AdoptionGallery({ session }) {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-xl border border-slate-100">
-                <span className="text-slate-400 pl-2 text-[10px] font-bold uppercase tracking-wider font-mono">Species</span>
-                <div className="flex gap-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              {/* Species Filter */}
+              <div className="space-y-1.5">
+                <span className="text-slate-400 pl-1 text-[10px] font-bold uppercase tracking-wider font-mono block">
+                  Species
+                </span>
+                <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-100 gap-1">
                   {['All', 'Cat', 'Dog'].map(sp => (
                     <button
                       key={sp}
                       type="button"
                       onClick={() => setSpeciesFilter(sp)}
-                      className={`px-2.5 py-1 rounded-lg transition-all font-medium text-xs ${
+                      className={`flex-1 py-1.5 px-2 rounded-lg transition-all font-semibold text-xs text-center ${
                         speciesFilter === sp
-                          ? 'bg-[#5C0612] text-white font-bold shadow-sm'
-                          : 'text-slate-600 hover:bg-white'
+                          ? 'bg-[#5C0612] text-white shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
                       }`}
                     >
                       {sp === 'All' ? 'All' : `${sp}s`}
@@ -286,19 +289,23 @@ export default function AdoptionGallery({ session }) {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-xl border border-slate-100">
-                <span className="text-slate-400 pl-2 text-[10px] font-bold uppercase tracking-wider font-mono">Size</span>
-                <div className="flex gap-1">
+              {/* Size Filter */}
+              <div className="space-y-1.5">
+                <span className="text-slate-400 pl-1 text-[10px] font-bold uppercase tracking-wider font-mono block">
+                  Size
+                </span>
+                <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-100 gap-1">
                   {['All', 'Small', 'Medium', 'Large'].map(sz => (
                     <button
                       key={sz}
                       type="button"
                       onClick={() => setSizeFilter(sz)}
-                      className={`px-2 py-1 rounded-lg transition-all font-medium text-xs ${
+                      className={`flex-1 py-1.5 px-1 rounded-lg transition-all font-semibold text-xs text-center truncate ${
                         sizeFilter === sz
-                          ? 'bg-[#5C0612] text-white font-bold shadow-sm'
-                          : 'text-slate-600 hover:bg-white'
+                          ? 'bg-[#5C0612] text-white shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
                       }`}
+                      title={sz}
                     >
                       {sz}
                     </button>
