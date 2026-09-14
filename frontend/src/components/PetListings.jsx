@@ -110,6 +110,12 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     });
   };
 
+  const isCampusResident = (type) => {
+    if (!type) return false;
+    const str = type.toLowerCase();
+    return str.includes('campus') || str.includes('resident');
+  };
+
   const handleEditChange = (e) => {
     const { name, value, type, checked } = e.target;
     const updatedValue = type === 'checkbox' ? checked : value;
@@ -122,16 +128,19 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
         size: calculatedSize
       }));
     } else if (name === 'pet_type') {
-      let nextAdoptionStatus = editFormData.adoption_status;
-      if (updatedValue === 'Campus Pet' && (!nextAdoptionStatus || nextAdoptionStatus === 'Available')) {
-        nextAdoptionStatus = 'Permanent Resident';
-      } else if (updatedValue === 'For Adoption' && nextAdoptionStatus === 'Permanent Resident') {
-        nextAdoptionStatus = 'Available';
-      }
+      const isResident = isCampusResident(updatedValue);
+      const nextAdoptionStatus = isResident ? 'Not for Adoption' : 'Available';
       setEditFormData(prev => ({
         ...prev,
-        pet_type: updatedValue,
+        pet_type: isResident ? 'Campus Resident Pet' : 'For Adoption',
         adoption_status: nextAdoptionStatus
+      }));
+    } else if (name === 'adoption_status') {
+      const isAvail = updatedValue === 'Available' || updatedValue === 'Adopted' || updatedValue === 'Under Review';
+      setEditFormData(prev => ({
+        ...prev,
+        adoption_status: updatedValue,
+        pet_type: isAvail ? 'For Adoption' : prev.pet_type
       }));
     } else {
       setEditFormData(prev => ({ ...prev, [name]: updatedValue }));
@@ -333,7 +342,18 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Name</label><input type="text" name="name" value={editFormData.name || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none" /></div>
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Species</label><select name="species" value={editFormData.species || 'Cat'} onChange={handleEditChange} className="w-full p-2 border rounded-lg"><option value="Cat">Cat</option><option value="Dog">Dog</option></select></div>
-                              <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Classification</label><select name="pet_type" value={editFormData.pet_type || 'Campus Pet'} onChange={handleEditChange} className="w-full p-2 border rounded-lg"><option value="Campus Pet">Campus Pet</option><option value="For Adoption">For Adoption</option></select></div>
+                              <div>
+                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Classification</label>
+                                <select 
+                                  name="pet_type" 
+                                  value={isCampusResident(editFormData.pet_type) ? 'Campus Resident Pet' : 'For Adoption'} 
+                                  onChange={handleEditChange} 
+                                  className="w-full p-2 border rounded-lg"
+                                >
+                                  <option value="Campus Resident Pet">Campus Resident Pet</option>
+                                  <option value="For Adoption">For Adoption</option>
+                                </select>
+                              </div>
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Breed</label><input type="text" name="breed" value={editFormData.breed || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none" /></div>
                             </div>
 
@@ -363,12 +383,18 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Immunization Profile</label><select name="vaccination_status" value={editFormData.vaccination_status || 'Fully Vaccinated'} onChange={handleEditChange} className="w-full p-2 border rounded-lg"><option value="Fully Vaccinated">Fully Vaccinated</option><option value="Partially Vaccinated">Partially Vaccinated</option><option value="Not Vaccinated">Not Vaccinated</option></select></div>
                               <div>
                                 <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">
-                                  {editFormData.pet_type === 'Campus Pet' ? 'Campus Residency Status' : 'Adoption Pipeline Stage'}
+                                  {isCampusResident(editFormData.pet_type) ? 'Campus Residency Status' : 'Adoption Pipeline Stage'}
                                 </label>
-                                <select name="adoption_status" value={editFormData.adoption_status || (editFormData.pet_type === 'Campus Pet' ? 'Permanent Resident' : 'Available')} onChange={handleEditChange} className="w-full p-2 border rounded-lg font-medium">
-                                  {editFormData.pet_type === 'Campus Pet' ? (
+                                <select 
+                                  name="adoption_status" 
+                                  value={editFormData.adoption_status || (isCampusResident(editFormData.pet_type) ? 'Not for Adoption' : 'Available')} 
+                                  onChange={handleEditChange} 
+                                  className="w-full p-2 border rounded-lg font-medium"
+                                >
+                                  {isCampusResident(editFormData.pet_type) ? (
                                     <>
-                                      <option value="Permanent Resident">Permanent Campus Resident (Not for Adoption)</option>
+                                      <option value="Not for Adoption">Permanent Campus Resident (Not for Adoption)</option>
+                                      <option value="Permanent Resident">Permanent Resident</option>
                                       <option value="Fostered">Temporary Campus Foster</option>
                                     </>
                                   ) : (
@@ -442,7 +468,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                                 <div>Weight Mass: <strong className="text-slate-900 font-mono font-medium">{expandedPetData?.weight || 'N/A'}</strong></div>
                                 <div>Size Tier: <strong className="text-slate-900 font-medium">{expandedPetData?.size || 'Medium'}</strong></div>
                                 <div>Sterilized: <strong className="text-slate-900 font-medium">{expandedPetData?.spayed_neutered ? 'Yes (Neutered)' : 'No'}</strong></div>
-                                <div>{expandedPetData?.pet_type === 'Campus Pet' ? 'Residency Status' : 'Pipeline Stage'}: <strong className="text-slate-900 font-medium">{expandedPetData?.adoption_status}</strong></div>
+                                <div>{isCampusResident(expandedPetData?.pet_type) ? 'Residency Status' : 'Pipeline Stage'}: <strong className="text-slate-900 font-medium">{expandedPetData?.adoption_status}</strong></div>
                                 <div className="col-span-2">Rescue Colony: <strong className="text-slate-900 font-medium">{getNormalizedLocation(expandedPetData?.found_near, expandedPetData?.pet_id)}</strong></div>
                                 <div>Rescue Date: <strong className="text-slate-900 font-mono font-medium">{expandedPetData?.rescue_date}</strong></div>
                                 <div className="col-span-3 border-t pt-1.5 mt-1 text-rose-800">Clinical Conditions: <span className="text-slate-700 font-mono font-medium">{expandedPetData?.current_conditions || 'None'}</span></div>

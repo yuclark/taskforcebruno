@@ -73,8 +73,8 @@ export default function AdoptionGallery({ session }) {
       .then((res) => res.json())
       .then((data) => {
         const adoptionPlacements = data.filter(p => 
-          (p.pet_type === 'For Adoption' || p.pet_id?.startsWith('STRAY-')) && 
-          p.adoption_status === 'Available'
+          (p.adoption_status === 'Available' || p.pet_type === 'For Adoption' || p.pet_id?.startsWith('STRAY-')) &&
+          p.adoption_status !== 'Adopted' && p.adoption_status !== 'Not for Adoption' && p.adoption_status !== 'Permanent Resident'
         );
         setPets(adoptionPlacements);
         setFilteredPets(adoptionPlacements);
