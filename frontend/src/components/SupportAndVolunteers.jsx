@@ -15,13 +15,48 @@ export default function SupportAndVolunteers({ session }) {
   const [error, setError] = useState('');
 
   const WISHLIST_ITEMS = [
-    { name: 'Cat Kibble / Dry Food', tier: 'Urgent', desc: 'Adult cat maintenance or mother & kitten formula', icon: '🐱' },
-    { name: 'Dog Kibble / Dry Food', tier: 'Urgent', desc: 'All-breed dog maintenance kibble for campus canine companions', icon: '🐕' },
-    { name: 'Canned Wet Recovery Food', tier: 'High', desc: 'Chicken/tuna loaf for sick, recovering, or post-surgery pets', icon: '🥫' },
-    { name: 'Antiseptic & Wound Care', tier: 'High', desc: 'Povidone-iodine (Betadine), sterile gauze, medical tape, cotton', icon: '🩹' },
-    { name: 'Anti-Flea & Tick Treatment', tier: 'Moderate', desc: 'Topical drops (Frontline/NexGard) or antiparasitic dog soaps', icon: '🧼' },
-    { name: 'Clumping Cat Litter', tier: 'Moderate', desc: 'Bentonite or tofu cat litter for hospital and observation crates', icon: '📦' },
-    { name: 'Reflective Safety Collars', tier: 'Ongoing', desc: 'Breakaway safety collars for tagging registered companions', icon: '🏷️' },
+    { 
+      name: 'Cat Kibble / Dry Food', 
+      tier: 'Urgent', 
+      desc: 'Adult cat maintenance or mother & kitten formula',
+      category: 'Nutrition'
+    },
+    { 
+      name: 'Dog Kibble / Dry Food', 
+      tier: 'Urgent', 
+      desc: 'All-breed dog maintenance kibble for campus canine companions',
+      category: 'Nutrition'
+    },
+    { 
+      name: 'Canned Wet Recovery Food', 
+      tier: 'High', 
+      desc: 'Chicken/tuna loaf for sick, recovering, or post-surgery pets',
+      category: 'Clinical Care'
+    },
+    { 
+      name: 'Antiseptic & Wound Care', 
+      tier: 'High', 
+      desc: 'Povidone-iodine (Betadine), sterile gauze, medical tape, cotton',
+      category: 'First Aid'
+    },
+    { 
+      name: 'Anti-Flea & Tick Treatment', 
+      tier: 'Moderate', 
+      desc: 'Topical drops (Frontline/NexGard) or antiparasitic dog soaps',
+      category: 'Preventive'
+    },
+    { 
+      name: 'Clumping Cat Litter', 
+      tier: 'Moderate', 
+      desc: 'Bentonite or tofu cat litter for hospital and observation crates',
+      category: 'Sanitation'
+    },
+    { 
+      name: 'Reflective Safety Collars', 
+      tier: 'Ongoing', 
+      desc: 'Breakaway safety collars for tagging registered companions',
+      category: 'Tagging'
+    },
   ];
 
   const DROP_OFF_POINTS = [
@@ -29,13 +64,13 @@ export default function SupportAndVolunteers({ session }) {
       location: 'CIT-U Main Gate Security Post',
       hours: 'Open 24 Hours / 7 Days a week',
       instructions: 'Label package with "ATTN: Task Force Bruno Pet Welfare" and deposit with on-duty safety marshals.',
-      icon: '🏛️'
+      tag: 'Security Post'
     },
     {
       location: 'MDC Office / Campus Clinic',
       hours: 'Monday – Friday: 8:00 AM – 5:00 PM',
       instructions: 'Student Affairs Complex. Hand directly to the animal welfare officer or nurse on duty.',
-      icon: '🏥'
+      tag: 'Clinic Center'
     }
   ];
 
@@ -48,12 +83,19 @@ export default function SupportAndVolunteers({ session }) {
       return;
     }
 
-    // Save in localStorage so the user can see their confirmed volunteer application
+    // Save in localStorage so staff reviewer can screen and approve
     const existing = JSON.parse(localStorage.getItem('tfb_volunteer_applications') || '[]');
-    existing.push({
-      ...volunteerForm,
+    existing.unshift({
+      application_id: `VOL-${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`,
+      full_name: volunteerForm.name.trim(),
+      student_id: volunteerForm.studentId.trim() || 'N/A',
+      contact_number: volunteerForm.contactNum.trim(),
+      program: volunteerForm.program.trim() || 'General Student Body',
+      role: volunteerForm.role,
+      availability: volunteerForm.availability.trim(),
       email: session?.email || 'student@cit.edu',
-      submittedAt: new Date().toISOString()
+      status: 'Pending',
+      created_at: new Date().toISOString()
     });
     localStorage.setItem('tfb_volunteer_applications', JSON.stringify(existing));
 
@@ -81,11 +123,17 @@ export default function SupportAndVolunteers({ session }) {
         </div>
 
         <div className="flex flex-wrap gap-2.5 shrink-0 font-mono text-[10px] font-bold">
-          <span className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200">
-            🐾 100% Volunteer Driven
+          <span className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+            </svg>
+            100% Volunteer Driven
           </span>
-          <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-900 border border-emerald-200">
-            💉 Veterinary Care Funded
+          <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-900 border border-emerald-200 flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5 text-emerald-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+            Veterinary Care Funded
           </span>
         </div>
       </div>
@@ -111,9 +159,11 @@ export default function SupportAndVolunteers({ session }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {WISHLIST_ITEMS.map((item, idx) => (
                 <div key={idx} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 hover:border-slate-200 transition-colors flex items-start gap-3">
-                  <span className="text-xl shrink-0 p-1 bg-white rounded-xl shadow-xs border border-slate-100">
-                    {item.icon}
-                  </span>
+                  <div className="shrink-0 p-2 bg-white rounded-xl shadow-xs border border-slate-200 text-[#5C0612]">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
+                    </svg>
+                  </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-1">
                       <h4 className="font-bold text-slate-800 text-xs truncate">{item.name}</h4>
@@ -144,7 +194,10 @@ export default function SupportAndVolunteers({ session }) {
                 {DROP_OFF_POINTS.map((dp, i) => (
                   <div key={i} className="p-3.5 rounded-2xl bg-amber-50/50 border border-amber-200/60 space-y-1">
                     <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
-                      <span>{dp.icon}</span>
+                      <svg className="w-3.5 h-3.5 text-[#5C0612]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                      </svg>
                       <span>{dp.location}</span>
                     </div>
                     <p className="font-mono text-[10px] text-amber-800 font-medium">{dp.hours}</p>
@@ -200,7 +253,9 @@ export default function SupportAndVolunteers({ session }) {
         <div className="lg:col-span-5 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5">
           <div className="border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2">
-              <span className="text-base">🙋</span>
+              <svg className="w-4 h-4 text-[#5C0612]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
+              </svg>
               <h3 className="font-bold text-slate-900 text-sm">Join the Volunteer Taskforce</h3>
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5">
@@ -210,12 +265,12 @@ export default function SupportAndVolunteers({ session }) {
 
           {submitted ? (
             <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-3 animate-fade-in">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto text-xl">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto text-xl font-bold">
                 ✓
               </div>
               <h4 className="font-bold text-emerald-900 text-sm">Volunteer Application Received!</h4>
               <p className="text-xs text-emerald-700 leading-relaxed">
-                Thank you for offering your time and care for CIT-U companions. The Task Force Bruno student committee will reach out to you via your CIT-U email.
+                Thank you for offering your time and care for CIT-U companions. The Task Force Bruno staff committee will review your application and reach out via your CIT-U email.
               </p>
               <button
                 type="button"
@@ -309,10 +364,10 @@ export default function SupportAndVolunteers({ session }) {
                   onChange={(e) => setVolunteerForm({ ...volunteerForm, role: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-xs font-semibold text-slate-800"
                 >
-                  <option value="Feeding Patrol">🥣 Campus Daily Feeding Patrol (Morning/Late Afternoon)</option>
-                  <option value="Clinic Assistant">🏥 Clinic & TNR Surgical Recovery Assistant</option>
-                  <option value="Rescue Marshal">🚨 Emergency Sighting & Rescue Marshal</option>
-                  <option value="Media & Photography">📸 Pet Photography & Adoption Gallery Content</option>
+                  <option value="Feeding Patrol">Campus Daily Feeding Patrol (Morning/Late Afternoon)</option>
+                  <option value="Clinic Assistant">Clinic & TNR Surgical Recovery Assistant</option>
+                  <option value="Rescue Marshal">Emergency Sighting & Rescue Marshal</option>
+                  <option value="Media & Photography">Pet Photography & Adoption Gallery Content</option>
                 </select>
               </div>
 

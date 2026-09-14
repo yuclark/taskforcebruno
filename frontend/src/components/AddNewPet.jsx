@@ -30,7 +30,7 @@ export default function AddNewPet({ onRefresh }) {
     found_near: 'Wildcat Innovation Labs',
     rescue_date: new Date().toISOString().split('T')[0],
     current_conditions: 'None',
-    behavior_notes: '',
+    behavior_notes: 'Friendly',
     about_text: '',
     description: ''
   });
@@ -60,9 +60,27 @@ export default function AddNewPet({ onRefresh }) {
   const [formMessage, setFormMessage] = useState({ type: '', text: '' });
   const [submitting, setSubmitting] = useState(false);
 
+  const calculateSizeCategory = (weightVal) => {
+    const num = parseFloat(weightVal);
+    if (isNaN(num) || num <= 0) return 'Small';
+    if (num < 10) return 'Small';
+    if (num <= 25) return 'Medium';
+    return 'Large';
+  };
+
   const handleCreateChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setNewPetForm({ ...newPetForm, [name]: type === 'checkbox' ? checked : value });
+    const updatedValue = type === 'checkbox' ? checked : value;
+    if (name === 'weight') {
+      const calculatedSize = calculateSizeCategory(updatedValue);
+      setNewPetForm(prev => ({
+        ...prev,
+        weight: updatedValue,
+        size: calculatedSize
+      }));
+    } else {
+      setNewPetForm(prev => ({ ...prev, [name]: updatedValue }));
+    }
   };
 
   const handleFileChange = (e) => {
@@ -145,9 +163,9 @@ export default function AddNewPet({ onRefresh }) {
         setFormMessage({ type: 'success', text: `Animal profile registered successfully for ${finalizedName} (${finalizedPetId})!` });
         setNewPetForm({
           pet_id: '', name: '', species: 'Cat', pet_type: 'Campus Pet', breed: '', gender: 'Male', age: '', weight: '', size: 'Small',
-          vaccination_status: 'Fully Vaccinated', spayed_neutered: true, adoption_status: 'Available',
+          vaccination_status: 'Fully Vaccinated', spayed_neutered: true, adoption_status: 'Permanent Resident',
           found_near: 'Wildcat Innovation Labs', rescue_date: new Date().toISOString().split('T')[0], current_conditions: 'None',
-          behavior_notes: '', about_text: '', description: ''
+          behavior_notes: 'Friendly', about_text: '', description: ''
         });
         setImageFile(null);
         setImagePreviewUrl(null);
@@ -363,14 +381,15 @@ export default function AddNewPet({ onRefresh }) {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Size Category
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Size Category</span>
+                    <span className="text-[9px] font-mono text-slate-400 lowercase">(auto-calculated)</span>
                   </label>
                   <select
                     name="size"
                     value={newPetForm.size}
-                    onChange={handleCreateChange}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800"
+                    disabled
+                    className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 font-semibold cursor-not-allowed opacity-90 select-none"
                   >
                     <option value="Small">Small (&lt; 10 kg)</option>
                     <option value="Medium">Medium (10 - 25 kg)</option>
@@ -460,7 +479,6 @@ export default function AddNewPet({ onRefresh }) {
                     {!isStrayMode ? (
                       <>
                         <option value="Permanent Resident">Permanent Campus Resident (Not for Adoption)</option>
-                        <option value="Campus Mascot">Campus Mascot</option>
                         <option value="Fostered">Temporary Campus Foster</option>
                       </>
                     ) : (
@@ -498,16 +516,18 @@ export default function AddNewPet({ onRefresh }) {
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Behavioral Assessment Notes
+                    Behavioral Assessment Notes *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     name="behavior_notes"
                     value={newPetForm.behavior_notes}
                     onChange={handleCreateChange}
-                    placeholder="e.g. Friendly with students, docile, timid near crowds"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800"
-                  />
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800 font-medium"
+                  >
+                    <option value="Friendly">Friendly</option>
+                    <option value="Not Friendly">Not Friendly</option>
+                    <option value="Friendly but be cautious">Friendly but be cautious</option>
+                  </select>
                 </div>
               </div>
 
