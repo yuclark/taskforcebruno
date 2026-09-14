@@ -12,6 +12,7 @@ export default function PendingApplications() {
   const [volunteerApplications, setVolunteerApplications] = useState([]);
   const [volunteerFilter, setVolunteerFilter] = useState('all'); // 'all' | 'Pending' | 'Approved' | 'Declined'
   const [volunteerModal, setVolunteerModal] = useState({ isOpen: false, appId: null, status: null, name: null });
+  const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
   const showToast = (msg) => {
@@ -117,11 +118,14 @@ export default function PendingApplications() {
 
   // Volunteer handlers
   const handlePurgeAllVolunteers = () => {
-    if (window.confirm('Are you sure you want to clear all volunteer applicant records from browser storage?')) {
-      localStorage.removeItem('tfb_volunteer_applications');
-      setVolunteerApplications([]);
-      showToast('All volunteer application records have been cleared.');
-    }
+    setIsPurgeModalOpen(true);
+  };
+
+  const confirmPurgeAllVolunteers = () => {
+    localStorage.removeItem('tfb_volunteer_applications');
+    setVolunteerApplications([]);
+    setIsPurgeModalOpen(false);
+    showToast('All volunteer application records have been permanently cleared.');
   };
 
   const openVolunteerModal = (appId, status, name) => {
@@ -684,6 +688,49 @@ export default function PendingApplications() {
                 }`}
               >
                 Confirm {volunteerModal.status}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* PURGE ALL VOLUNTEERS CONFIRMATION MODAL */}
+      {/* ===================================================================== */}
+      {isPurgeModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 text-center space-y-4 animate-scale-up">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto border bg-rose-50 text-rose-700 border-rose-200">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+              </svg>
+            </div>
+            
+            <h3 className="text-base font-black text-slate-900">
+              Clear All Volunteer Applicant Records?
+            </h3>
+            
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Are you sure you want to permanently delete all volunteer applicant records from the screening register? This action cannot be undone.
+            </p>
+
+            <div className="flex gap-2.5 pt-2">
+              <button 
+                type="button"
+                onClick={() => setIsPurgeModalOpen(false)} 
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs uppercase tracking-wide transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button"
+                onClick={confirmPurgeAllVolunteers} 
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs uppercase tracking-wide shadow-md transition-all flex items-center justify-center gap-1.5"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                </svg>
+                Confirm Clear All
               </button>
             </div>
           </div>
