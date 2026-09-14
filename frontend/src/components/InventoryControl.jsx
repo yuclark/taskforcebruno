@@ -1,5 +1,27 @@
 import React, { useState } from 'react';
 
+const CATEGORY_UNITS = {
+  Food: [
+    { value: 'kg', label: 'kg (Kilograms)' },
+    { value: 'cans', label: 'cans (Canned Wet Food)' },
+    { value: 'bags', label: 'bags (Sacks / Pouches)' },
+    { value: 'packs', label: 'packs (Portion Packs)' },
+    { value: 'g', label: 'g (Grams)' }
+  ],
+  Medical: [
+    { value: 'vials', label: 'vials (Injectables / Vaccines)' },
+    { value: 'pcs', label: 'pcs (Pieces / Tablets)' },
+    { value: 'bottles', label: 'bottles (Liquid Solutions)' },
+    { value: 'boxes', label: 'boxes (Cases / Kits)' },
+    { value: 'packs', label: 'packs (Sterile Packs)' }
+  ],
+  Supplies: [
+    { value: 'pcs', label: 'pcs (Pieces / Collars)' },
+    { value: 'units', label: 'units (Equipment Sets)' },
+    { value: 'boxes', label: 'boxes (Cases)' }
+  ]
+};
+
 export default function InventoryControl({ 
   inventoryItems = [], 
   transactionLedger = [], 
@@ -21,6 +43,23 @@ export default function InventoryControl({
   });
   const [formMessage, setFormMessage] = useState({ type: '', text: '' });
 
+  // Confirmation Modals
+  const [deductionModal, setDeductionModal] = useState({
+    isOpen: false,
+    item: null,
+    qtyDelta: 0,
+    reason: '',
+    supplier_donor: '',
+    submitting: false
+  });
+
+  const [purgeModal, setPurgeModal] = useState({
+    isOpen: false,
+    itemId: null,
+    itemName: '',
+    submitting: false
+  });
+
   // --- SUMMARY METRICS ---
   const totalItemsCount = inventoryItems.length;
   const lowStockItems = inventoryItems.filter(item => (item.quantity || 0) <= (item.min_threshold || 10));
@@ -33,6 +72,16 @@ export default function InventoryControl({
     const matchesSearch = !searchQuery || item.item_name?.toLowerCase().includes(searchQuery.toLowerCase()) || item.supplier_donor?.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
+
+  const handleCategoryChange = (e) => {
+    const nextCat = e.target.value;
+    const defaultUnit = CATEGORY_UNITS[nextCat]?.[0]?.value || 'pcs';
+    setNewInventoryForm(prev => ({
+      ...prev,
+      category: nextCat,
+      unit: defaultUnit
+    }));
+  };
 
   // --- CRUD: CREATE WITH FIXED TYPE CASTING ---
   const handleInventoryCreate = async (e) => {
@@ -74,47 +123,99 @@ export default function InventoryControl({
     }
   };
 
-  // --- CRUD: UPDATE THROUGH TRANSACTIONS ---
-  const handleTransactionSubmit = async (e) => {
+  // --- CRUD: UPDATE THROUGH TRANSACTIONS WITH CONFIRMATION ON DEDUCTION ---
+  const handleTransactionSubmit = (e, targetItem) => {
     e.preventDefault();
     const qtyDelta = parseInt(actionForm.quantity_changed, 10);
     if (isNaN(qtyDelta) || qtyDelta <= 0) {
-      alert('Please specify a valid positive quantity.');
+      alert('Please specify a valid positive quantity amount.');
       return;
     }
 
+    // If removing stocks (OUT), trigger confirmation modal
+    if (actionForm.transaction_type === 'OUT') {
+      setDeductionModal({
+        isOpen: true,
+        item: targetItem,
+        qtyDelta: qtyDelta,
+        reason: actionForm.reason.trim() || 'Dispensation / Patrol feeding refill',
+        supplier_donor: actionForm.supplier_donor.trim(),
+        submitting: false
+      });
+      return;
+    }
+
+    // Direct inflow transaction execution
+    executeTransactionApi(targetItem.item_id, 'IN', qtyDelta, actionForm.reason, actionForm.supplier_donor);
+  };
+
+  const executeTransactionApi = async (itemId, type, qtyDelta, reason, supplier) => {
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/inventory/transactions/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          item_id: selectedActionItemId, 
-          ...actionForm,
-          quantity_changed: qtyDelta 
+          item_id: itemId, 
+          transaction_type: type,
+          quantity_changed: qtyDelta,
+          reason: reason,
+          supplier_donor: supplier || null
         })
       });
       if (res.ok) {
         setSelectedActionItemId(null);
         setActionForm({ transaction_type: 'IN', quantity_changed: '', reason: 'Bulk Purchase / Donation', supplier_donor: '', expiration_date: '' });
+        setDeductionModal({ isOpen: false, item: null, qtyDelta: 0, reason: '', supplier_donor: '', submitting: false });
         onRefresh();
+      } else {
+        alert('Server rejected transaction logging request.');
       }
     } catch (err) {
       console.error(err);
+      alert('Network failure connecting to inventory ledger.');
     }
   };
 
-  const executeInventoryItemPurge = async (itemId) => {
-    if (!window.confirm('Are you sure you want to remove this item from active inventory records?')) return;
+  const handleConfirmDeduction = async () => {
+    if (!deductionModal.item) return;
+    setDeductionModal(prev => ({ ...prev, submitting: true }));
+    await executeTransactionApi(
+      deductionModal.item.item_id,
+      'OUT',
+      deductionModal.qtyDelta,
+      deductionModal.reason,
+      deductionModal.supplier_donor
+    );
+  };
+
+  const openPurgeModal = (item) => {
+    setPurgeModal({
+      isOpen: true,
+      itemId: item.item_id,
+      itemName: item.item_name,
+      submitting: false
+    });
+  };
+
+  const executeInventoryItemPurge = async () => {
+    if (!purgeModal.itemId) return;
+    setPurgeModal(prev => ({ ...prev, submitting: true }));
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/inventory/${itemId}/`, { method: 'DELETE' });
-      if (res.ok) onRefresh();
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/inventory/${purgeModal.itemId}/`, { method: 'DELETE' });
+      if (res.ok) {
+        setPurgeModal({ isOpen: false, itemId: null, itemName: '', submitting: false });
+        onRefresh();
+      } else {
+        alert('Server rejected item removal request.');
+      }
     } catch (err) {
       console.error(err);
+      alert('Network error connecting to inventory registers.');
     }
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 text-xs text-slate-700 animate-fade-in pb-12">
+    <div className="w-full max-w-7xl mx-auto space-y-6 text-xs text-slate-700 animate-fade-in pb-12 text-left font-sans">
       
       {/* Top Banner with Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 select-none">
@@ -209,7 +310,7 @@ export default function InventoryControl({
             </select>
             <button
               onClick={onRefresh}
-              className="p-1.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600"
+              className="p-1.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-colors"
               title="Refresh"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -291,7 +392,7 @@ export default function InventoryControl({
                                 {selectedActionItemId === item.item_id ? 'Close' : 'Adjust Stock'}
                               </button>
                               <button 
-                                onClick={() => executeInventoryItemPurge(item.item_id)} 
+                                onClick={() => openPurgeModal(item)} 
                                 className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                                 title="Remove Item"
                               >
@@ -307,10 +408,10 @@ export default function InventoryControl({
                         {selectedActionItemId === item.item_id && (
                           <tr className="bg-slate-50/80">
                             <td colSpan={6} className="p-5 border-y border-slate-200">
-                              <form onSubmit={handleTransactionSubmit} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-inner space-y-3">
+                              <form onSubmit={(e) => handleTransactionSubmit(e, item)} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-inner space-y-3">
                                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                                   <span className="font-bold text-slate-900 text-xs">
-                                    Log Stock Inflow / Outflow for {item.item_name}
+                                    Log Stock Movement for {item.item_name}
                                   </span>
                                   <span className="text-[10px] font-mono text-slate-400">Current Balance: {item.quantity} {item.unit}</span>
                                 </div>
@@ -320,7 +421,7 @@ export default function InventoryControl({
                                     <select 
                                       value={actionForm.transaction_type} 
                                       onChange={(e) => setActionForm({ ...actionForm, transaction_type: e.target.value })} 
-                                      className="w-full p-2 border rounded-xl bg-slate-50 text-xs font-semibold"
+                                      className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
                                     >
                                       <option value="IN">Stock In (+ Inflow)</option>
                                       <option value="OUT">Stock Out (- Deduction)</option>
@@ -331,10 +432,11 @@ export default function InventoryControl({
                                     <input 
                                       type="number" 
                                       required 
+                                      min="1"
                                       placeholder="Amount" 
                                       value={actionForm.quantity_changed} 
                                       onChange={(e) => setActionForm({ ...actionForm, quantity_changed: e.target.value })} 
-                                      className="w-full p-2 border rounded-xl focus:bg-white focus:outline-none text-xs font-mono" 
+                                      className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-xs font-mono text-slate-800" 
                                     />
                                   </div>
                                   <div>
@@ -342,28 +444,32 @@ export default function InventoryControl({
                                     <input 
                                       type="text" 
                                       required 
-                                      placeholder="e.g. Feeding station refill" 
+                                      placeholder="e.g. Daily feeding station replenishment" 
                                       value={actionForm.reason} 
                                       onChange={(e) => setActionForm({ ...actionForm, reason: e.target.value })} 
-                                      className="w-full p-2 border rounded-xl focus:bg-white focus:outline-none text-xs" 
+                                      className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-xs text-slate-800" 
                                     />
                                   </div>
                                   <div>
-                                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Source / Donor</label>
+                                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Source / Recipient</label>
                                     <input 
                                       type="text" 
-                                      placeholder="Optional source" 
+                                      placeholder="Optional notes" 
                                       value={actionForm.supplier_donor} 
                                       onChange={(e) => setActionForm({ ...actionForm, supplier_donor: e.target.value })} 
-                                      className="w-full p-2 border rounded-xl focus:bg-white focus:outline-none text-xs" 
+                                      className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-xs text-slate-800" 
                                     />
                                   </div>
                                   <div className="flex flex-col justify-end">
                                     <button 
                                       type="submit" 
-                                      className="w-full py-2 bg-[#5C0612] hover:bg-[#42040B] text-white font-bold rounded-xl text-xs uppercase tracking-wide border-b-2 border-[#D4AF37] transition-all"
+                                      className={`w-full py-2 text-white font-bold rounded-xl text-xs uppercase tracking-wide border-b-2 shadow-sm transition-all ${
+                                        actionForm.transaction_type === 'OUT'
+                                          ? 'bg-rose-700 hover:bg-rose-800 border-rose-900'
+                                          : 'bg-[#5C0612] hover:bg-[#42040B] border-[#D4AF37]'
+                                      }`}
                                     >
-                                      Record Entry
+                                      {actionForm.transaction_type === 'OUT' ? 'Deduct Stock...' : 'Record Inflow'}
                                     </button>
                                   </div>
                                 </div>
@@ -415,8 +521,8 @@ export default function InventoryControl({
                 <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">Category *</label>
                 <select 
                   value={newInventoryForm.category} 
-                  onChange={(e) => setNewInventoryForm({ ...newInventoryForm, category: e.target.value })} 
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-medium text-xs"
+                  onChange={handleCategoryChange} 
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-medium text-xs text-slate-800"
                 >
                   <option value="Food">Food / Rations</option>
                   <option value="Medical">Medical Supplies</option>
@@ -426,11 +532,11 @@ export default function InventoryControl({
 
               {newInventoryForm.category === 'Food' && (
                 <div className="sm:col-span-1">
-                  <label className="block font-bold text-[#5C0612] uppercase text-[10px] mb-1">Ration Type</label>
+                  <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">Ration Type</label>
                   <select 
                     value={newInventoryForm.food_type} 
                     onChange={(e) => setNewInventoryForm({ ...newInventoryForm, food_type: e.target.value })} 
-                    className="w-full p-2.5 bg-amber-50/40 border border-amber-200 text-slate-900 font-bold rounded-xl focus:outline-none text-xs"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 text-slate-800 font-medium rounded-xl focus:bg-white focus:outline-none text-xs"
                   >
                     <option value="Cat Food">Cat Food</option>
                     <option value="Dog Food">Dog Food</option>
@@ -443,6 +549,7 @@ export default function InventoryControl({
                 <input 
                   type="number" 
                   required 
+                  min="0"
                   placeholder="0" 
                   value={newInventoryForm.quantity} 
                   onChange={(e) => setNewInventoryForm({ ...newInventoryForm, quantity: e.target.value })} 
@@ -455,14 +562,11 @@ export default function InventoryControl({
                 <select 
                   value={newInventoryForm.unit} 
                   onChange={(e) => setNewInventoryForm({ ...newInventoryForm, unit: e.target.value })} 
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-medium text-xs"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-medium text-xs text-slate-800"
                 >
-                  <option value="kg">kg (Kilograms)</option>
-                  <option value="pcs">pcs (Pieces)</option>
-                  <option value="cans">cans (Canned Wet)</option>
-                  <option value="vials">vials (Injectables)</option>
-                  <option value="bags">bags (Sacks)</option>
-                  <option value="boxes">boxes (Cases)</option>
+                  {(CATEGORY_UNITS[newInventoryForm.category] || CATEGORY_UNITS.Food).map(u => (
+                    <option key={u.value} value={u.value}>{u.label}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -517,7 +621,7 @@ export default function InventoryControl({
           <div className="p-4 border-b border-slate-100 flex justify-between items-center">
             <div>
               <h4 className="font-bold text-slate-900 text-sm">Inventory Transaction Audit Trail</h4>
-              <p className="text-[11px] text-slate-400 mt-0.5">Immutable record of all stock adjustments, replenishments, and withdrawals.</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Immutable ledger of all stock adjustments, disbursements, and restocking entries.</p>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -557,6 +661,105 @@ export default function InventoryControl({
           </div>
         </div>
       )}
+
+      {/* CONFIRMATION MODAL: STOCK DEDUCTION / REMOVAL */}
+      {deductionModal.isOpen && deductionModal.item && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 text-center space-y-4 animate-scale-up">
+            <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 text-rose-600">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
+            </div>
+            
+            <h3 className="text-base font-black text-slate-900">
+              Confirm Stock Deduction
+            </h3>
+            
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Are you sure you want to deduct <strong className="text-rose-700 font-mono text-sm">-{deductionModal.qtyDelta} {deductionModal.item.unit}</strong> from{' '}
+              <strong className="text-slate-900">{deductionModal.item.item_name}</strong>?
+            </p>
+
+            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 text-[11px] text-left space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-mono">Current Stock:</span>
+                <span className="font-bold text-slate-800">{deductionModal.item.quantity} {deductionModal.item.unit}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-mono">Stock Balance After:</span>
+                <span className="font-bold text-rose-700 font-mono">
+                  {Math.max(0, deductionModal.item.quantity - deductionModal.qtyDelta)} {deductionModal.item.unit}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-slate-200/60 pt-1 mt-1">
+                <span className="text-slate-400 font-mono">Audit Reason:</span>
+                <span className="text-slate-700 italic truncate max-w-[200px]">{deductionModal.reason}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button 
+                type="button"
+                disabled={deductionModal.submitting}
+                onClick={() => setDeductionModal({ isOpen: false, item: null, qtyDelta: 0, reason: '', supplier_donor: '', submitting: false })} 
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs uppercase tracking-wide transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button"
+                disabled={deductionModal.submitting}
+                onClick={handleConfirmDeduction} 
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs uppercase tracking-wide shadow-md transition-all disabled:opacity-50"
+              >
+                {deductionModal.submitting ? 'Deducting...' : 'Confirm Deduction'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRMATION MODAL: DELETE / PURGE ITEM */}
+      {purgeModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 text-center space-y-4 animate-scale-up">
+            <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 text-rose-600">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+              </svg>
+            </div>
+            
+            <h3 className="text-base font-black text-slate-900">
+              Remove Inventory Item
+            </h3>
+            
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Are you sure you want to remove <strong className="text-slate-900">"{purgeModal.itemName}"</strong> from active inventory records?
+            </p>
+
+            <div className="flex gap-2.5 pt-2">
+              <button 
+                type="button"
+                disabled={purgeModal.submitting}
+                onClick={() => setPurgeModal({ isOpen: false, itemId: null, itemName: '', submitting: false })} 
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs uppercase tracking-wide transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button"
+                disabled={purgeModal.submitting}
+                onClick={executeInventoryItemPurge} 
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs uppercase tracking-wide shadow-md transition-all disabled:opacity-50"
+              >
+                {purgeModal.submitting ? 'Removing...' : 'Delete Item'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

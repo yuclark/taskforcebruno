@@ -341,9 +341,8 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Gender</label><select name="gender" value={editFormData.gender || 'Male'} onChange={handleEditChange} className="w-full p-2 border rounded-lg"><option value="Male">Male</option><option value="Female">Female</option></select></div>
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Age</label><input type="text" name="age" value={editFormData.age || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none" /></div>
                               <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5 flex items-center justify-between">
-                                  <span>Size Scale</span>
-                                  <span className="text-[8px] lowercase font-normal text-slate-400">(auto)</span>
+                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">
+                                  Size Scale
                                 </label>
                                 <select name="size" value={editFormData.size || 'Small'} disabled className="w-full p-2 border bg-slate-100 text-slate-600 rounded-lg cursor-not-allowed opacity-90 select-none">
                                   <option value="Small">Small (&lt; 10 kg)</option>

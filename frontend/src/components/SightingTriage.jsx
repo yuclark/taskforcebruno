@@ -98,7 +98,7 @@ export default function SightingTriage({ session }) {
             </span>
             {urgentCount > 0 && (
               <span className="px-2.5 py-0.5 rounded-full bg-rose-600 text-white font-mono text-[10px] font-bold animate-pulse">
-                🚨 {urgentCount} Urgent Emergency
+                {urgentCount} Urgent Emergency
               </span>
             )}
           </div>
@@ -121,7 +121,7 @@ export default function SightingTriage({ session }) {
       <div className="flex gap-2 overflow-x-auto pb-1 font-mono text-[11px] font-bold">
         {[
           { key: 'Active', label: 'Active Queue' },
-          { key: 'Urgent', label: `🚨 Urgent Only (${urgentCount})` },
+          { key: 'Urgent', label: `Urgent Only (${urgentCount})` },
           { key: 'Pending', label: 'Pending Review' },
           { key: 'Investigated', label: 'Investigated' },
           { key: 'All', label: 'All Archived' },
@@ -176,7 +176,7 @@ export default function SightingTriage({ session }) {
                         </h3>
                         {isUrgent && (
                           <span className="px-2.5 py-0.5 rounded-lg font-mono text-[9px] font-black uppercase tracking-wider bg-rose-600 text-white animate-pulse">
-                            🚨 URGENT EMERGENCY
+                            URGENT EMERGENCY
                           </span>
                         )}
                         <span className={`px-2.5 py-0.5 rounded-lg font-mono text-[9px] font-bold uppercase tracking-wider border ${

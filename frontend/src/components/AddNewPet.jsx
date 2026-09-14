@@ -381,9 +381,8 @@ export default function AddNewPet({ onRefresh }) {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center justify-between">
-                    <span>Size Category</span>
-                    <span className="text-[9px] font-mono text-slate-400 lowercase">(auto-calculated)</span>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Size Category
                   </label>
                   <select
                     name="size"

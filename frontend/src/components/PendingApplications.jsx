@@ -51,6 +51,12 @@ export default function PendingApplications() {
   const [volunteerApplications, setVolunteerApplications] = useState([]);
   const [volunteerFilter, setVolunteerFilter] = useState('all'); // 'all' | 'Pending' | 'Approved' | 'Declined'
   const [volunteerModal, setVolunteerModal] = useState({ isOpen: false, appId: null, status: null, name: null });
+  const [toastMessage, setToastMessage] = useState('');
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 4000);
+  };
 
   const fetchActiveApplicationsQueue = async () => {
     setLoadingAdoptions(true);
@@ -66,16 +72,40 @@ export default function PendingApplications() {
     }
   };
 
+  const normalizeVolunteerList = (rawList) => {
+    return rawList.map((item, idx) => {
+      const id = item.application_id || item.id || `VOL-${idx + 1}-${Date.now().toString().slice(-4)}`;
+      return {
+        ...item,
+        application_id: id,
+        full_name: item.full_name || item.name || 'Anonymous Student',
+        student_id: item.student_id || item.studentId || 'N/A',
+        contact_number: item.contact_number || item.contactNum || 'N/A',
+        program: item.program || 'General Student Body',
+        role: item.role || 'Feeding Patrol',
+        availability: item.availability || 'Flexible schedule',
+        status: item.status || 'Pending',
+        created_at: item.created_at || item.submittedAt || new Date().toISOString()
+      };
+    });
+  };
+
   const loadVolunteerApplications = () => {
     try {
       const raw = localStorage.getItem('tfb_volunteer_applications');
       if (raw) {
         const parsed = JSON.parse(raw);
-        setVolunteerApplications(parsed);
-      } else {
-        localStorage.setItem('tfb_volunteer_applications', JSON.stringify(SEED_VOLUNTEERS));
-        setVolunteerApplications(SEED_VOLUNTEERS);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const normalized = normalizeVolunteerList(parsed);
+          setVolunteerApplications(normalized);
+          localStorage.setItem('tfb_volunteer_applications', JSON.stringify(normalized));
+          return;
+        }
       }
+      // Seed default entries
+      const normalizedSeeds = normalizeVolunteerList(SEED_VOLUNTEERS);
+      localStorage.setItem('tfb_volunteer_applications', JSON.stringify(normalizedSeeds));
+      setVolunteerApplications(normalizedSeeds);
     } catch (err) {
       console.error('Error loading volunteer applications:', err);
       setVolunteerApplications(SEED_VOLUNTEERS);
@@ -106,6 +136,7 @@ export default function PendingApplications() {
 
       if (res.ok) {
         setDecisionModal({ isOpen: false, appId: null, status: null, petId: null });
+        showToast(`Adoption application #${appId} successfully marked as ${status}.`);
         fetchActiveApplicationsQueue();
       } else {
         alert('Server rejected application status update.');
@@ -120,17 +151,24 @@ export default function PendingApplications() {
     setVolunteerModal({ isOpen: true, appId, status, name });
   };
 
-  const confirmVolunteerTriage = () => {
-    const { appId, status } = volunteerModal;
-    const updated = volunteerApplications.map(vol => {
-      if (vol.application_id === appId || vol.id === appId) {
-        return { ...vol, status, reviewed_at: new Date().toISOString() };
-      }
-      return vol;
+  const executeVolunteerStatusChange = (appId, newStatus) => {
+    setVolunteerApplications(prevList => {
+      const updatedList = prevList.map(vol => {
+        if (vol.application_id === appId || vol.id === appId) {
+          return {
+            ...vol,
+            status: newStatus,
+            reviewed_at: new Date().toISOString()
+          };
+        }
+        return vol;
+      });
+      localStorage.setItem('tfb_volunteer_applications', JSON.stringify(updatedList));
+      return updatedList;
     });
-    setVolunteerApplications(updated);
-    localStorage.setItem('tfb_volunteer_applications', JSON.stringify(updated));
+
     setVolunteerModal({ isOpen: false, appId: null, status: null, name: null });
+    showToast(`Volunteer application successfully marked as ${newStatus}.`);
   };
 
   const pendingAdoptions = adoptionApplications.filter(app => app.application_status === 'Pending');
@@ -145,6 +183,19 @@ export default function PendingApplications() {
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 text-xs text-slate-700 animate-fade-in pb-12 text-left font-sans">
       
+      {/* Toast Notification Banner */}
+      {toastMessage && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center justify-between font-medium animate-fade-in">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+            </svg>
+            <span>{toastMessage}</span>
+          </div>
+          <button onClick={() => setToastMessage('')} className="text-emerald-500 hover:text-emerald-800 text-xs font-bold">✕</button>
+        </div>
+      )}
+
       {/* Top Banner Stats & View Mode Switcher */}
       <div className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -358,7 +409,7 @@ export default function PendingApplications() {
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
               <span className="font-mono text-[10px] uppercase font-bold text-slate-500">
-                Registered Volunteer Candidates ({filteredVolunteers.length})
+                Volunteer Screening Register ({filteredVolunteers.length})
               </span>
             </div>
 
@@ -367,6 +418,7 @@ export default function PendingApplications() {
               {['all', 'Pending', 'Approved', 'Declined'].map(f => (
                 <button
                   key={f}
+                  type="button"
                   onClick={() => setVolunteerFilter(f)}
                   className={`px-3 py-1 rounded-lg transition-all ${
                     volunteerFilter === f
@@ -395,7 +447,7 @@ export default function PendingApplications() {
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
               {filteredVolunteers.map((vol) => {
-                const volId = vol.application_id || vol.id || 'VOL-APP';
+                const volId = vol.application_id;
                 const volStatus = vol.status || 'Pending';
                 
                 return (
@@ -414,16 +466,16 @@ export default function PendingApplications() {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                         <div>
                           <div className="flex items-center gap-2">
-                            <h3 className="text-sm md:text-base font-black text-slate-900">{vol.full_name || vol.name}</h3>
+                            <h3 className="text-sm md:text-base font-black text-slate-900">{vol.full_name}</h3>
                             <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                              ID: {vol.student_id || vol.studentId || 'N/A'}
+                              ID: {vol.student_id}
                             </span>
                           </div>
                           <p className="font-mono text-[10px] text-slate-500 mt-1">
-                            Contact: <strong className="text-slate-800">{vol.contact_number || vol.contactNum}</strong> &bull; Email: <strong className="text-slate-800">{vol.email}</strong>
+                            Contact: <strong className="text-slate-800">{vol.contact_number}</strong> &bull; Email: <strong className="text-slate-800">{vol.email}</strong>
                           </p>
                           <p className="text-[11px] text-slate-600 font-medium mt-0.5">
-                            Program: {vol.program || 'General Student Body'}
+                            Program: {vol.program}
                           </p>
                         </div>
 
@@ -462,12 +514,13 @@ export default function PendingApplications() {
                         </div>
 
                         <div className="sm:col-span-2 border-t border-slate-200/60 pt-2 flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                          <span>Applied: {new Date(vol.created_at || vol.submittedAt || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                          <span>Applied: {new Date(vol.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                           <a
                             href={`mailto:${vol.email}?subject=Task%20Force%20Bruno%20Volunteer%20Application`}
-                            className="text-[#5C0612] font-bold hover:underline"
+                            className="text-[#5C0612] font-bold hover:underline flex items-center gap-1"
                           >
-                            Contact Student &rarr;
+                            <span>Contact Student</span>
+                            <span>&rarr;</span>
                           </a>
                         </div>
                       </div>
@@ -478,7 +531,7 @@ export default function PendingApplications() {
                       {volStatus !== 'Declined' && (
                         <button
                           type="button"
-                          onClick={() => openVolunteerModal(volId, 'Declined', vol.full_name || vol.name)}
+                          onClick={() => openVolunteerModal(volId, 'Declined', vol.full_name)}
                           className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl transition-all uppercase tracking-wide text-[10px] flex items-center gap-1.5"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -491,7 +544,7 @@ export default function PendingApplications() {
                       {volStatus !== 'Approved' && (
                         <button
                           type="button"
-                          onClick={() => openVolunteerModal(volId, 'Approved', vol.full_name || vol.name)}
+                          onClick={() => openVolunteerModal(volId, 'Approved', vol.full_name)}
                           className="px-5 py-2 bg-[#5C0612] hover:bg-[#42040B] text-white font-bold rounded-xl border-b-2 border-[#D4AF37] shadow-sm transition-all uppercase tracking-wide text-[10px] flex items-center gap-1.5"
                         >
                           <svg className="w-3.5 h-3.5 text-[#D4AF37]" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -594,13 +647,15 @@ export default function PendingApplications() {
 
             <div className="flex gap-2.5 pt-2">
               <button 
+                type="button"
                 onClick={() => setVolunteerModal({ isOpen: false, appId: null, status: null, name: null })} 
                 className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs uppercase tracking-wide transition-colors"
               >
                 Cancel
               </button>
               <button 
-                onClick={confirmVolunteerTriage} 
+                type="button"
+                onClick={() => executeVolunteerStatusChange(volunteerModal.appId, volunteerModal.status)} 
                 className={`flex-1 py-2.5 text-white font-bold rounded-xl text-xs uppercase tracking-wide shadow-md transition-all ${
                   volunteerModal.status === 'Approved' 
                     ? 'bg-[#5C0612] hover:bg-[#42040B] border-b-2 border-[#D4AF37]' 

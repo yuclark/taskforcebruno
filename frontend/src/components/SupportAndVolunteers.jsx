@@ -19,84 +19,167 @@ export default function SupportAndVolunteers({ session }) {
       name: 'Cat Kibble / Dry Food', 
       tier: 'Urgent', 
       desc: 'Adult cat maintenance or mother & kitten formula',
-      category: 'Nutrition'
+      iconKey: 'cat-food'
     },
     { 
       name: 'Dog Kibble / Dry Food', 
       tier: 'Urgent', 
       desc: 'All-breed dog maintenance kibble for campus canine companions',
-      category: 'Nutrition'
+      iconKey: 'dog-food'
     },
     { 
       name: 'Canned Wet Recovery Food', 
       tier: 'High', 
       desc: 'Chicken/tuna loaf for sick, recovering, or post-surgery pets',
-      category: 'Clinical Care'
+      iconKey: 'canned-food'
     },
     { 
       name: 'Antiseptic & Wound Care', 
       tier: 'High', 
       desc: 'Povidone-iodine (Betadine), sterile gauze, medical tape, cotton',
-      category: 'First Aid'
+      iconKey: 'first-aid'
     },
     { 
       name: 'Anti-Flea & Tick Treatment', 
       tier: 'Moderate', 
       desc: 'Topical drops (Frontline/NexGard) or antiparasitic dog soaps',
-      category: 'Preventive'
+      iconKey: 'treatment'
     },
     { 
       name: 'Clumping Cat Litter', 
       tier: 'Moderate', 
       desc: 'Bentonite or tofu cat litter for hospital and observation crates',
-      category: 'Sanitation'
+      iconKey: 'litter'
     },
     { 
       name: 'Reflective Safety Collars', 
       tier: 'Ongoing', 
       desc: 'Breakaway safety collars for tagging registered companions',
-      category: 'Tagging'
+      iconKey: 'collar'
     },
   ];
+
+  const renderWishlistIcon = (key) => {
+    switch (key) {
+      case 'cat-food':
+        return (
+          <svg className="w-4 h-4 text-amber-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4 21l3.39-.97C8.93 20.66 10.42 21 12 21c4.97 0 9-4.03 9-9s-4.03-9-9-9Zm-3 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm6 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm-3 4c-1.5 0-2.5-1-2.5-1h5s-1 1-2.5 1Z" />
+          </svg>
+        );
+      case 'dog-food':
+        return (
+          <svg className="w-4 h-4 text-indigo-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5a3.75 3.75 0 1 1 7.5 0v.667a4.5 4.5 0 0 1 3.42 4.382c0 2.45-1.97 4.451-4.42 4.451H9.25C6.8 14 4.83 12 4.83 9.55a4.5 4.5 0 0 1 3.42-4.383V4.5ZM7 18h10a2 2 0 0 0 2-2v-1H5v1a2 2 0 0 0 2 2Z" />
+          </svg>
+        );
+      case 'canned-food':
+        return (
+          <svg className="w-4 h-4 text-rose-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5c0 2.485-3.694 4.5-8.25 4.5S3.75 9.985 3.75 7.5m16.5 0c0-2.485-3.694-4.5-8.25-4.5S3.75 5.015 3.75 7.5m16.5 0v9c0 2.485-3.694 4.5-8.25 4.5s-8.25-2.015-8.25-4.5v-9m16.5 4.5c0 2.485-3.694 4.5-8.25 4.5s-8.25-2.015-8.25-4.5" />
+          </svg>
+        );
+      case 'first-aid':
+        return (
+          <svg className="w-4 h-4 text-emerald-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15M4.5 4.5h15v15h-15z" />
+          </svg>
+        );
+      case 'treatment':
+        return (
+          <svg className="w-4 h-4 text-cyan-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 1-6.23.693L5 15.3" />
+          </svg>
+        );
+      case 'litter':
+        return (
+          <svg className="w-4 h-4 text-amber-800" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
+          </svg>
+        );
+      case 'collar':
+        return (
+          <svg className="w-4 h-4 text-purple-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.386a11.97 11.97 0 0 0 3.585-3.585c.486-.827.313-1.908-.386-2.607L9.568 3Z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" />
+          </svg>
+        );
+      default:
+        return (
+          <svg className="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+          </svg>
+        );
+    }
+  };
 
   const DROP_OFF_POINTS = [
     {
       location: 'CIT-U Main Gate Security Post',
       hours: 'Open 24 Hours / 7 Days a week',
       instructions: 'Label package with "ATTN: Task Force Bruno Pet Welfare" and deposit with on-duty safety marshals.',
-      tag: 'Security Post'
     },
     {
       location: 'MDC Office / Campus Clinic',
       hours: 'Monday – Friday: 8:00 AM – 5:00 PM',
       instructions: 'Student Affairs Complex. Hand directly to the animal welfare officer or nurse on duty.',
-      tag: 'Clinic Center'
     }
   ];
+
+  const ID_PATTERN = /^\d{2}-\d{4}-\d{3}$/;
+  const PHONE_PATTERN = /^(09|\+639)\d{9}$/;
 
   const handleVolunteerSubmit = (e) => {
     e.preventDefault();
     setError('');
 
-    if (!volunteerForm.name.trim() || !volunteerForm.contactNum.trim() || !volunteerForm.availability.trim()) {
-      setError('Please provide your name, contact number, and general availability.');
+    const trimmedName = volunteerForm.name.trim();
+    const trimmedId = volunteerForm.studentId.trim();
+    const trimmedContact = volunteerForm.contactNum.trim().replace(/[-\s]/g, '');
+    const trimmedProgram = volunteerForm.program.trim();
+    const trimmedAvailability = volunteerForm.availability.trim();
+
+    if (!trimmedName || trimmedName.length < 2) {
+      setError('Please provide your full legal or institutional name.');
+      return;
+    }
+
+    if (!trimmedId || !ID_PATTERN.test(trimmedId)) {
+      setError('Student ID must follow institutional format XX-XXXX-XXX (e.g., 22-4102-184).');
+      return;
+    }
+
+    if (!trimmedContact || !PHONE_PATTERN.test(trimmedContact)) {
+      setError('Please enter a valid 11-digit Philippine mobile phone number (e.g., 09171234567).');
+      return;
+    }
+
+    if (!trimmedProgram || trimmedProgram.length < 2) {
+      setError('Please provide your department or degree program (e.g., BS Information Technology / CEA).');
+      return;
+    }
+
+    if (!trimmedAvailability || trimmedAvailability.length < 5) {
+      setError('Please describe your general availability (e.g., MWF after 4:00 PM, or Saturday mornings).');
       return;
     }
 
     // Save in localStorage so staff reviewer can screen and approve
     const existing = JSON.parse(localStorage.getItem('tfb_volunteer_applications') || '[]');
-    existing.unshift({
+    const newRecord = {
       application_id: `VOL-${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`,
-      full_name: volunteerForm.name.trim(),
-      student_id: volunteerForm.studentId.trim() || 'N/A',
+      full_name: trimmedName,
+      student_id: trimmedId,
       contact_number: volunteerForm.contactNum.trim(),
-      program: volunteerForm.program.trim() || 'General Student Body',
+      program: trimmedProgram,
       role: volunteerForm.role,
-      availability: volunteerForm.availability.trim(),
+      availability: trimmedAvailability,
       email: session?.email || 'student@cit.edu',
       status: 'Pending',
       created_at: new Date().toISOString()
-    });
+    };
+    
+    existing.unshift(newRecord);
     localStorage.setItem('tfb_volunteer_applications', JSON.stringify(existing));
 
     setSubmitted(true);
@@ -159,10 +242,8 @@ export default function SupportAndVolunteers({ session }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {WISHLIST_ITEMS.map((item, idx) => (
                 <div key={idx} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 hover:border-slate-200 transition-colors flex items-start gap-3">
-                  <div className="shrink-0 p-2 bg-white rounded-xl shadow-xs border border-slate-200 text-[#5C0612]">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
-                    </svg>
+                  <div className="shrink-0 p-2 bg-white rounded-xl shadow-xs border border-slate-200">
+                    {renderWishlistIcon(item.iconKey)}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-1">
@@ -306,7 +387,7 @@ export default function SupportAndVolunteers({ session }) {
                 <input
                   type="text"
                   required
-                  placeholder="e.g., Juan Dela Cruz"
+                  placeholder="e.g. Juan Dela Cruz"
                   value={volunteerForm.name}
                   onChange={(e) => setVolunteerForm({ ...volunteerForm, name: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#5C0612]/20 text-xs"
@@ -316,15 +397,17 @@ export default function SupportAndVolunteers({ session }) {
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
-                    Student ID
+                    Student ID *
                   </label>
                   <input
                     type="text"
+                    required
                     placeholder="XX-XXXX-XXX"
                     value={volunteerForm.studentId}
                     onChange={(e) => setVolunteerForm({ ...volunteerForm, studentId: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white font-mono text-xs"
                   />
+                  <span className="text-[9px] text-slate-400 font-mono mt-0.5 block">Format: 22-4102-184</span>
                 </div>
 
                 <div>
@@ -339,16 +422,18 @@ export default function SupportAndVolunteers({ session }) {
                     onChange={(e) => setVolunteerForm({ ...volunteerForm, contactNum: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white font-mono text-xs"
                   />
+                  <span className="text-[9px] text-slate-400 font-mono mt-0.5 block">11-digit PH mobile</span>
                 </div>
               </div>
 
               <div>
                 <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
-                  Department / Degree Program
+                  Department / Degree Program *
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g., BS Information Technology / CEA"
+                  required
+                  placeholder="e.g. BS Information Technology / CEA"
                   value={volunteerForm.program}
                   onChange={(e) => setVolunteerForm({ ...volunteerForm, program: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-xs"
@@ -378,7 +463,7 @@ export default function SupportAndVolunteers({ session }) {
                 <textarea
                   rows="2"
                   required
-                  placeholder="e.g., MWF after 4:00 PM, or Saturday mornings"
+                  placeholder="e.g. MWF after 4:00 PM, or Saturday mornings"
                   value={volunteerForm.availability}
                   onChange={(e) => setVolunteerForm({ ...volunteerForm, availability: e.target.value })}
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-xs resize-none"
