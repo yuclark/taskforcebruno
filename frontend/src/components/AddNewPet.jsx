@@ -201,25 +201,25 @@ export default function AddNewPet({ onRefresh }) {
             type="button"
             onClick={() => {
               setIsStrayMode(false);
-              setNewPetForm(prev => ({ ...prev, pet_type: 'Campus Pet', adoption_status: 'Permanent Resident' }));
+              setNewPetForm(prev => ({ ...prev, pet_type: 'Campus Pet', adoption_status: 'Campus Pet' }));
             }}
             className={`flex-1 sm:flex-none px-4 py-2 rounded-lg transition-all ${
               !isStrayMode ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            Standard Campus Pet
+            Campus Pet
           </button>
           <button
             type="button"
             onClick={() => {
               setIsStrayMode(true);
-              setNewPetForm(prev => ({ ...prev, pet_type: 'For Adoption', adoption_status: 'Available' }));
+              setNewPetForm(prev => ({ ...prev, pet_type: 'Pet for Adoption', adoption_status: 'Available' }));
             }}
             className={`flex-1 sm:flex-none px-4 py-2 rounded-lg transition-all ${
               isStrayMode ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            Intake Stray Dog / Cat
+            Pet for Adoption
           </button>
         </div>
       </div>
@@ -303,13 +303,13 @@ export default function AddNewPet({ onRefresh }) {
                   </label>
                   <select
                     name="pet_type"
-                    value={isStrayMode ? 'For Adoption' : newPetForm.pet_type}
+                    value={isStrayMode ? 'Pet for Adoption' : newPetForm.pet_type}
                     onChange={handleCreateChange}
                     disabled={isStrayMode}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800 disabled:opacity-60"
                   >
-                    <option value="Campus Pet">Campus Resident Pet</option>
-                    <option value="For Adoption">For Adoption (Rescue)</option>
+                    <option value="Campus Pet">Campus Pet</option>
+                    <option value="Pet for Adoption">Pet for Adoption</option>
                   </select>
                 </div>
 
@@ -329,13 +329,13 @@ export default function AddNewPet({ onRefresh }) {
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Sex / Gender
+                    Gender *
                   </label>
                   <select
                     name="gender"
                     value={newPetForm.gender}
                     onChange={handleCreateChange}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800 font-semibold"
                   >
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
@@ -344,16 +344,16 @@ export default function AddNewPet({ onRefresh }) {
               </div>
             </div>
 
-            {/* 2. Physical Vitals & Sterilization */}
+            {/* 2. Biometrics, Sizing & Health */}
             <div className="space-y-3 border-b border-slate-100 pb-5">
               <span className="text-[10px] font-bold text-slate-400 font-mono uppercase tracking-wider block">
-                2. Physical Vitals & Medical Baseline
+                2. Sizing, Health & Sterilization
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Estimated Age
+                    Approximate Age
                   </label>
                   <input
                     type="text"
@@ -467,7 +467,7 @@ export default function AddNewPet({ onRefresh }) {
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    {isStrayMode ? 'Adoption Pipeline Stage' : 'Campus Residency Status'}
+                    {newPetForm.pet_type === 'Campus Pet' && !isStrayMode ? 'Campus Residency Status' : 'Adoption Pipeline Stage'}
                   </label>
                   <select
                     name="adoption_status"
@@ -475,16 +475,13 @@ export default function AddNewPet({ onRefresh }) {
                     onChange={handleCreateChange}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800 font-semibold"
                   >
-                    {!isStrayMode ? (
-                      <>
-                        <option value="Permanent Resident">Permanent Campus Resident (Not for Adoption)</option>
-                        <option value="Fostered">Temporary Campus Foster</option>
-                      </>
+                    {newPetForm.pet_type === 'Campus Pet' && !isStrayMode ? (
+                      <option value="Campus Pet">Campus Pet (Not for Adoption)</option>
                     ) : (
                       <>
                         <option value="Available">Available for Adoption</option>
-                        <option value="Fostered">Fostered</option>
                         <option value="Adopted">Adopted</option>
+                        <option value="Pending">Pending Application</option>
                       </>
                     )}
                   </select>

@@ -98,22 +98,25 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     return 'Large';
   };
 
+  const isCampusPet = (type) => {
+    if (!type) return false;
+    const str = type.toLowerCase();
+    return str.includes('campus') || str.includes('resident') || str === 'not for adoption';
+  };
+
   const startEditing = (pet) => {
     setIsEditingId(pet.pet_id);
     const numericWeight = pet.weight ? pet.weight.toString().replace(/[^0-9.]/g, '') : '';
     const initialSize = pet.size || calculateSizeCategory(numericWeight);
+    const isCampus = isCampusPet(pet.pet_type) || isCampusPet(pet.adoption_status);
     setEditFormData({ 
       ...pet, 
+      pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption',
+      adoption_status: isCampus ? 'Campus Pet' : (pet.adoption_status || 'Available'),
       weight: numericWeight,
       size: initialSize,
       behavior_notes: pet.behavior_notes || 'Friendly'
     });
-  };
-
-  const isCampusResident = (type) => {
-    if (!type) return false;
-    const str = type.toLowerCase();
-    return str.includes('campus') || str.includes('resident');
   };
 
   const handleEditChange = (e) => {
@@ -128,19 +131,18 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
         size: calculatedSize
       }));
     } else if (name === 'pet_type') {
-      const isResident = isCampusResident(updatedValue);
-      const nextAdoptionStatus = isResident ? 'Not for Adoption' : 'Available';
+      const isCampus = isCampusPet(updatedValue);
       setEditFormData(prev => ({
         ...prev,
-        pet_type: isResident ? 'Campus Resident Pet' : 'For Adoption',
-        adoption_status: nextAdoptionStatus
+        pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption',
+        adoption_status: isCampus ? 'Campus Pet' : 'Available'
       }));
     } else if (name === 'adoption_status') {
-      const isAvail = updatedValue === 'Available' || updatedValue === 'Adopted' || updatedValue === 'Under Review';
+      const isForAdoption = updatedValue === 'Available' || updatedValue === 'Adopted' || updatedValue === 'Pending';
       setEditFormData(prev => ({
         ...prev,
         adoption_status: updatedValue,
-        pet_type: isAvail ? 'For Adoption' : prev.pet_type
+        pet_type: isForAdoption ? 'Pet for Adoption' : 'Campus Pet'
       }));
     } else {
       setEditFormData(prev => ({ ...prev, [name]: updatedValue }));
@@ -151,8 +153,11 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     e.preventDefault();
     setErrorMessage('');
 
+    const isCampus = isCampusPet(editFormData.pet_type);
     const finalizedPayload = {
       ...editFormData,
+      pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption',
+      adoption_status: isCampus ? 'Campus Pet' : (editFormData.adoption_status || 'Available'),
       weight: editFormData.weight ? `${editFormData.weight.toString().trim()} kg` : 'N/A'
     };
 
@@ -315,13 +320,15 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                       <span className={`px-2 py-0.5 rounded font-bold text-[9px] border ${
                         pet.adoption_status === 'Adopted'
                           ? 'bg-slate-100 text-slate-700 border-slate-300 shadow-sm'
-                          : pet.pet_id?.startsWith('STRAY-')
-                          ? 'bg-rose-50 text-rose-800 border-rose-200'
-                          : pet.pet_type === 'For Adoption' 
-                          ? 'bg-amber-50 text-amber-800 border-amber-200' 
-                          : 'bg-purple-50 text-purple-800 border-purple-200'
+                          : isCampusPet(pet.pet_type) || isCampusPet(pet.adoption_status)
+                          ? 'bg-purple-50 text-purple-800 border-purple-200'
+                          : 'bg-amber-50 text-amber-800 border-amber-200'
                       }`}>
-                        {pet.adoption_status === 'Adopted' ? 'Adopted' : pet.pet_id?.startsWith('STRAY-') ? 'Stray Animal' : (pet.pet_type || 'Campus Pet')}
+                        {pet.adoption_status === 'Adopted' 
+                          ? 'Adopted' 
+                          : isCampusPet(pet.pet_type) || isCampusPet(pet.adoption_status)
+                          ? 'Campus Pet' 
+                          : 'Pet for Adoption'}
                       </span>
                     </td>
                     <td className="p-4 text-slate-600">{pet.species} &bull; {pet.breed || 'Mix'}</td>
@@ -346,12 +353,12 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                                 <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Classification</label>
                                 <select 
                                   name="pet_type" 
-                                  value={isCampusResident(editFormData.pet_type) ? 'Campus Resident Pet' : 'For Adoption'} 
+                                  value={isCampusPet(editFormData.pet_type) ? 'Campus Pet' : 'Pet for Adoption'} 
                                   onChange={handleEditChange} 
-                                  className="w-full p-2 border rounded-lg"
+                                  className="w-full p-2 border rounded-lg font-medium"
                                 >
-                                  <option value="Campus Resident Pet">Campus Resident Pet</option>
-                                  <option value="For Adoption">For Adoption</option>
+                                  <option value="Campus Pet">Campus Pet</option>
+                                  <option value="Pet for Adoption">Pet for Adoption</option>
                                 </select>
                               </div>
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Breed</label><input type="text" name="breed" value={editFormData.breed || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none" /></div>
@@ -383,25 +390,21 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Immunization Profile</label><select name="vaccination_status" value={editFormData.vaccination_status || 'Fully Vaccinated'} onChange={handleEditChange} className="w-full p-2 border rounded-lg"><option value="Fully Vaccinated">Fully Vaccinated</option><option value="Partially Vaccinated">Partially Vaccinated</option><option value="Not Vaccinated">Not Vaccinated</option></select></div>
                               <div>
                                 <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">
-                                  {isCampusResident(editFormData.pet_type) ? 'Campus Residency Status' : 'Adoption Pipeline Stage'}
+                                  {isCampusPet(editFormData.pet_type) ? 'Residency Status' : 'Adoption Stage'}
                                 </label>
                                 <select 
                                   name="adoption_status" 
-                                  value={editFormData.adoption_status || (isCampusResident(editFormData.pet_type) ? 'Not for Adoption' : 'Available')} 
+                                  value={isCampusPet(editFormData.pet_type) ? 'Campus Pet' : (editFormData.adoption_status || 'Available')} 
                                   onChange={handleEditChange} 
                                   className="w-full p-2 border rounded-lg font-medium"
                                 >
-                                  {isCampusResident(editFormData.pet_type) ? (
-                                    <>
-                                      <option value="Not for Adoption">Permanent Campus Resident (Not for Adoption)</option>
-                                      <option value="Permanent Resident">Permanent Resident</option>
-                                      <option value="Fostered">Temporary Campus Foster</option>
-                                    </>
+                                  {isCampusPet(editFormData.pet_type) ? (
+                                    <option value="Campus Pet">Campus Pet (Not for Adoption)</option>
                                   ) : (
                                     <>
                                       <option value="Available">Available for Adoption</option>
-                                      <option value="Fostered">Fostered</option>
                                       <option value="Adopted">Adopted</option>
+                                      <option value="Pending">Pending Application</option>
                                     </>
                                   )}
                                 </select>
@@ -468,7 +471,8 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                                 <div>Weight Mass: <strong className="text-slate-900 font-mono font-medium">{expandedPetData?.weight || 'N/A'}</strong></div>
                                 <div>Size Tier: <strong className="text-slate-900 font-medium">{expandedPetData?.size || 'Medium'}</strong></div>
                                 <div>Sterilized: <strong className="text-slate-900 font-medium">{expandedPetData?.spayed_neutered ? 'Yes (Neutered)' : 'No'}</strong></div>
-                                <div>{isCampusResident(expandedPetData?.pet_type) ? 'Residency Status' : 'Pipeline Stage'}: <strong className="text-slate-900 font-medium">{expandedPetData?.adoption_status}</strong></div>
+                                <div>Classification: <strong className="text-slate-900 font-medium">{isCampusPet(expandedPetData?.pet_type) ? 'Campus Pet' : 'Pet for Adoption'}</strong></div>
+                                <div>Status: <strong className="text-slate-900 font-medium">{expandedPetData?.adoption_status === 'Adopted' ? 'Adopted' : isCampusPet(expandedPetData?.pet_type) || isCampusPet(expandedPetData?.adoption_status) ? 'Campus Pet' : 'Available for Adoption'}</strong></div>
                                 <div className="col-span-2">Rescue Colony: <strong className="text-slate-900 font-medium">{getNormalizedLocation(expandedPetData?.found_near, expandedPetData?.pet_id)}</strong></div>
                                 <div>Rescue Date: <strong className="text-slate-900 font-mono font-medium">{expandedPetData?.rescue_date}</strong></div>
                                 <div className="col-span-3 border-t pt-1.5 mt-1 text-rose-800">Clinical Conditions: <span className="text-slate-700 font-mono font-medium">{expandedPetData?.current_conditions || 'None'}</span></div>
