@@ -105,7 +105,7 @@ export default function DashboardContainer({ session, onLogout }) {
                 currentTab === 'newsfeed' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
-              <span>📰</span> Community Newsfeed
+              Community Newsfeed
             </button>
 
             <button
@@ -114,7 +114,7 @@ export default function DashboardContainer({ session, onLogout }) {
                 currentTab === 'scanner' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
-              <span>📷</span> Collar QR Scanner
+              Collar QR Scanner
             </button>
 
             <button
@@ -123,7 +123,7 @@ export default function DashboardContainer({ session, onLogout }) {
                 currentTab === 'adoption' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
-              <span>🐾</span> Adoption Placement Portal
+              Adoption Placement Portal
             </button>
 
             <button
@@ -132,7 +132,7 @@ export default function DashboardContainer({ session, onLogout }) {
                 currentTab === 'report' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
-              <span>🚨</span> Report Animal Sighting
+              Report Animal Sighting
             </button>
 
             <button
@@ -141,7 +141,7 @@ export default function DashboardContainer({ session, onLogout }) {
                 currentTab === 'support' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
-              <span>🤝</span> Support & Volunteers
+              Support & Volunteers
             </button>
 
             <button
@@ -150,7 +150,7 @@ export default function DashboardContainer({ session, onLogout }) {
                 currentTab === 'resources' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
               }`}
             >
-              <span>📦</span> Supply Logistics Hub
+              Supply Logistics Hub
             </button>
 
             <div className="pt-2 border-t border-white/10 mt-2">
@@ -158,7 +158,7 @@ export default function DashboardContainer({ session, onLogout }) {
                 onClick={() => { setIsGuideOpen(true); setIsMobileOpen(false); }}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold text-[#D4AF37] hover:bg-white/10 transition-all text-left"
               >
-                <span>🧭</span> System User Guide
+                System User Guide
               </button>
             </div>
           </nav>
@@ -224,7 +224,6 @@ export default function DashboardContainer({ session, onLogout }) {
               onClick={() => setIsGuideOpen(true)}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[#5C0612] rounded-xl font-mono text-[11px] font-bold transition-colors"
             >
-              <span>🧭</span>
               <span>System Guide</span>
             </button>
 
