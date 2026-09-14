@@ -72,10 +72,13 @@ export default function AdoptionGallery({ session }) {
     fetch('https://taskforcebruno.onrender.com/api/pets/')
       .then((res) => res.json())
       .then((data) => {
-        const adoptionPlacements = data.filter(p => 
-          (p.adoption_status === 'Available' || p.pet_type === 'For Adoption' || p.pet_id?.startsWith('STRAY-')) &&
-          p.adoption_status !== 'Adopted' && p.adoption_status !== 'Not for Adoption' && p.adoption_status !== 'Permanent Resident'
-        );
+        const adoptionPlacements = data.filter(p => {
+          const type = (p.pet_type || '').toLowerCase();
+          const status = (p.adoption_status || '').toLowerCase();
+          const isCampus = type.includes('campus') || type.includes('resident') || status.includes('campus') || status === 'not for adoption';
+          const isAdopted = status === 'adopted';
+          return !isCampus && !isAdopted && (status === 'available' || type.includes('adoption') || p.pet_id?.startsWith('STRAY-'));
+        });
         setPets(adoptionPlacements);
         setFilteredPets(adoptionPlacements);
         setLoading(false);

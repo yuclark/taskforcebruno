@@ -135,14 +135,14 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
       setEditFormData(prev => ({
         ...prev,
         pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption',
-        adoption_status: isCampus ? 'Campus Pet' : 'Available'
+        adoption_status: isCampus ? 'Campus Pet' : (prev.adoption_status === 'Campus Pet' ? 'Available' : prev.adoption_status || 'Available')
       }));
     } else if (name === 'adoption_status') {
-      const isForAdoption = updatedValue === 'Available' || updatedValue === 'Adopted' || updatedValue === 'Pending';
+      const isCampus = isCampusPet(updatedValue);
       setEditFormData(prev => ({
         ...prev,
-        adoption_status: updatedValue,
-        pet_type: isForAdoption ? 'Pet for Adoption' : 'Campus Pet'
+        adoption_status: isCampus ? 'Campus Pet' : updatedValue,
+        pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption'
       }));
     } else {
       setEditFormData(prev => ({ ...prev, [name]: updatedValue }));
@@ -153,11 +153,11 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     e.preventDefault();
     setErrorMessage('');
 
-    const isCampus = isCampusPet(editFormData.pet_type);
+    const isCampus = isCampusPet(editFormData.pet_type) || isCampusPet(editFormData.adoption_status);
     const finalizedPayload = {
       ...editFormData,
       pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption',
-      adoption_status: isCampus ? 'Campus Pet' : (editFormData.adoption_status || 'Available'),
+      adoption_status: isCampus ? 'Campus Pet' : (editFormData.adoption_status === 'Campus Pet' ? 'Available' : (editFormData.adoption_status || 'Available')),
       weight: editFormData.weight ? `${editFormData.weight.toString().trim()} kg` : 'N/A'
     };
 
@@ -390,23 +390,18 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Immunization Profile</label><select name="vaccination_status" value={editFormData.vaccination_status || 'Fully Vaccinated'} onChange={handleEditChange} className="w-full p-2 border rounded-lg"><option value="Fully Vaccinated">Fully Vaccinated</option><option value="Partially Vaccinated">Partially Vaccinated</option><option value="Not Vaccinated">Not Vaccinated</option></select></div>
                               <div>
                                 <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">
-                                  {isCampusPet(editFormData.pet_type) ? 'Residency Status' : 'Adoption Stage'}
+                                  Current Program &amp; Status *
                                 </label>
                                 <select 
                                   name="adoption_status" 
-                                  value={isCampusPet(editFormData.pet_type) ? 'Campus Pet' : (editFormData.adoption_status || 'Available')} 
+                                  value={isCampusPet(editFormData.pet_type) || isCampusPet(editFormData.adoption_status) ? 'Campus Pet' : (editFormData.adoption_status || 'Available')} 
                                   onChange={handleEditChange} 
-                                  className="w-full p-2 border rounded-lg font-medium"
+                                  className="w-full p-2 border rounded-lg font-medium text-xs text-slate-800"
                                 >
-                                  {isCampusPet(editFormData.pet_type) ? (
-                                    <option value="Campus Pet">Campus Pet (Not for Adoption)</option>
-                                  ) : (
-                                    <>
-                                      <option value="Available">Available for Adoption</option>
-                                      <option value="Adopted">Adopted</option>
-                                      <option value="Pending">Pending Application</option>
-                                    </>
-                                  )}
+                                  <option value="Campus Pet">Campus Pet (Not for Adoption)</option>
+                                  <option value="Available">Available for Adoption</option>
+                                  <option value="Adopted">Adopted</option>
+                                  <option value="Pending">Pending Application</option>
                                 </select>
                               </div>
                               <div className="flex items-center h-full pt-4 pl-2">

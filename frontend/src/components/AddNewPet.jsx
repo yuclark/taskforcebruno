@@ -78,6 +78,20 @@ export default function AddNewPet({ onRefresh }) {
         weight: updatedValue,
         size: calculatedSize
       }));
+    } else if (name === 'pet_type') {
+      const isCampus = updatedValue === 'Campus Pet';
+      setNewPetForm(prev => ({
+        ...prev,
+        pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption',
+        adoption_status: isCampus ? 'Campus Pet' : (prev.adoption_status === 'Campus Pet' ? 'Available' : prev.adoption_status || 'Available')
+      }));
+    } else if (name === 'adoption_status') {
+      const isCampus = updatedValue === 'Campus Pet';
+      setNewPetForm(prev => ({
+        ...prev,
+        adoption_status: updatedValue,
+        pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption'
+      }));
     } else {
       setNewPetForm(prev => ({ ...prev, [name]: updatedValue }));
     }
