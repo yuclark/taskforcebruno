@@ -40,26 +40,41 @@ export default function QRScannerView({ onProfileIdentified }) {
     if (!rawText) return '';
     const trimmed = rawText.trim();
     
-    // 1. If full URL (e.g. https://taskforcebruno.vercel.app/pet/TF-BRUNO-01 or ?pet=TF-BRUNO-01)
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    // 1. If full URL (e.g. https://taskforcebruno.vercel.app/?pet=ADOPT-01 or https://taskforcebruno.vercel.app/pet/TF-BRUNO-01)
+    if (/^https?:\/\//i.test(trimmed)) {
       try {
         const url = new URL(trimmed);
-        const queryParam = url.searchParams.get('pet') || url.searchParams.get('id');
-        if (queryParam) return queryParam.trim().toUpperCase();
         
+        // Check query parameters case-insensitively (e.g. pet, PET, id, ID, pet_id, animal_id)
+        for (const [key, val] of url.searchParams.entries()) {
+          if (['pet', 'id', 'pet_id', 'petid', 'animal_id', 'animalid'].includes(key.toLowerCase()) && val) {
+            return decodeURIComponent(val).trim().toUpperCase();
+          }
+        }
+        
+        // Check pathname segments (e.g. /pet/ADOPT-01)
         const segments = url.pathname.split('/').filter(Boolean);
         if (segments.length > 0) {
-          return decodeURIComponent(segments[segments.length - 1]).trim().toUpperCase();
+          const lastSegment = decodeURIComponent(segments[segments.length - 1]).trim();
+          if (lastSegment && !['app', 'pet', 'index.html'].includes(lastSegment.toLowerCase())) {
+            return lastSegment.toUpperCase();
+          }
         }
       } catch {}
     }
+
+    // 2. Query param regex match without full scheme (e.g. "?pet=ADOPT-01" or "taskforcebruno.vercel.app/?pet=ADOPT-01")
+    const queryMatch = trimmed.match(/[?&](?:pet|id|pet_id|petid|animal_id)=([^&#\s]+)/i);
+    if (queryMatch) {
+      return decodeURIComponent(queryMatch[1]).trim().toUpperCase();
+    }
     
-    // 2. Look for standard patterns like TF-BRUNO-01, STRAY-1024, PET-01, etc.
-    const match = trimmed.match(/(?:PET|STRAY|TF|CIT)[-_A-Z0-9]+/i);
+    // 3. Look for standard identifier patterns
+    const match = trimmed.match(/(?:PET|STRAY|TF|CIT|ADOPT)[-_A-Z0-9]+/i);
     if (match) return match[0].toUpperCase();
     
-    // 3. Clean fallback
-    return trimmed.replace(/^[#\/]+/, '').toUpperCase();
+    // 4. Clean fallback
+    return trimmed.replace(/^[#\/]+/, '').trim().toUpperCase();
   };
 
   const resolveCard1Profile = async (rawTarget) => {
@@ -68,14 +83,32 @@ export default function QRScannerView({ onProfileIdentified }) {
     setQrErrorMessage('');
     setLoadingCard1Profile(true);
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(targetId)}/`);
+      // First attempt direct ID query
+      let res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(targetId)}/`);
       if (res.ok) {
         const data = await res.json();
         setCard1PetData(data);
-      } else {
-        setQrErrorMessage(`Animal ID "${targetId}" was not found in the campus registry.`);
+        return;
       }
+
+      // Second attempt: Fallback search across all active pets (case-insensitive ID or Name match)
+      const listRes = await fetch('https://taskforcebruno.onrender.com/api/pets/');
+      if (listRes.ok) {
+        const allPets = await listRes.json();
+        const cleanTarget = targetId.toLowerCase();
+        const matched = allPets.find(p => 
+          (p.pet_id && p.pet_id.toLowerCase() === cleanTarget) ||
+          (p.name && p.name.toLowerCase() === cleanTarget)
+        );
+        if (matched) {
+          setCard1PetData(matched);
+          return;
+        }
+      }
+
+      setQrErrorMessage(`Animal ID "${targetId}" was not found in the campus registry.`);
     } catch (err) {
+      console.error('QR resolve error:', err);
       setQrErrorMessage('Unable to connect to server. Please check your network connection.');
     } finally {
       setLoadingCard1Profile(false);
@@ -176,11 +209,8 @@ export default function QRScannerView({ onProfileIdentified }) {
 
     if (qrCode) {
       const rawDecodedText = qrCode.data.trim();
-      const assetMatch = rawDecodedText.match(/(PET|STRAY)-\d+/i);
-
       stopCameraStream();
-      const resolvedId = assetMatch ? assetMatch[0].toUpperCase() : rawDecodedText.toUpperCase();
-      resolveCard1Profile(resolvedId);
+      resolveCard1Profile(rawDecodedText);
     } else {
       animationFrameRef.current = requestAnimationFrame(tickScanLoop);
     }
@@ -216,9 +246,7 @@ export default function QRScannerView({ onProfileIdentified }) {
 
           if (qrCode) {
             const rawDecodedText = qrCode.data.trim();
-            const assetMatch = rawDecodedText.match(/(PET|STRAY)-\d+/i);
-            const resolvedId = assetMatch ? assetMatch[0].toUpperCase() : rawDecodedText.toUpperCase();
-            resolveCard1Profile(resolvedId);
+            resolveCard1Profile(rawDecodedText);
           } else {
             setQrErrorMessage('No valid QR code detected. Please ensure the QR code is clear and in focus.');
           }
