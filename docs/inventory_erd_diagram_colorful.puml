@@ -1,0 +1,81 @@
+@startuml
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam defaultFontName "Segoe UI"
+
+skinparam entity {
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontSize 12
+    FontStyle bold
+    HeaderBackgroundColor #E2E8F0
+}
+
+entity "inventory" as inventory #F3E8FF {
+    * item_id : serial <<PK>>
+    --
+    * item_name : varchar(150)
+    * <color:#7C3AED>category : varchar(50)</color>
+    food_type : varchar(50)
+    * <color:#2563EB>quantity : integer</color>
+    * unit : varchar(20)
+    * <color:#DC2626>min_threshold : integer</color>
+    supplier_donor : varchar(150)
+    expiration_date : date
+    created_at : timestamptz
+    updated_at : timestamptz
+}
+
+entity "inventory_transactions" as transactions #FEF3C7 {
+    * id : serial <<PK>>
+    --
+    * <color:#7C3AED>item_id : integer <<FK -> inventory.item_id>></color>
+    * <color:#D97706>transaction_type : varchar(10)</color>
+    * quantity_changed : integer
+    * reason : varchar(255)
+    supplier_donor : varchar(150)
+    logged_by : uuid <<FK -> auth_user.id>>
+    * <color:#2563EB>logged_at : timestamptz</color>
+}
+
+entity "auth_user" as users #DBEAFE {
+    * id : uuid <<PK>>
+    --
+    * username : varchar(150) <<UQ>>
+    * email : varchar(254)
+    first_name : varchar(150)
+    last_name : varchar(150)
+    <color:#2563EB>is_staff : boolean</color>
+    is_active : boolean
+}
+
+entity "pet_pet" as pets #D1FAE5 {
+    * id : uuid <<PK>>
+    --
+    * name : varchar(100)
+    * species : varchar(50)
+    * <color:#059669>qr_code_id : varchar(50) <<UQ>></color>
+    adoption_status : varchar(30)
+    photo_url : varchar(500)
+    created_at : timestamptz
+}
+
+entity "pet_medical_record" as medical #FCE7F3 {
+    * id : uuid <<PK>>
+    --
+    * pet_id : uuid <<FK -> pet_pet.id>>
+    inventory_item_id : integer <<FK -> inventory.item_id>>
+    * record_type : varchar(50)
+    description : text
+    administered_date : date
+    administered_by : uuid <<FK -> auth_user.id>>
+    created_at : timestamptz
+}
+
+inventory ||--[#7C3AED]o{ transactions : "item_id\n(audit ledger trail)"
+users ||--[#2563EB]o{ transactions : "logged_by\n(audit identity)"
+inventory ||--[#DB2777]o{ medical : "inventory_item_id\n(vaccine/med disbursement)"
+pets ||--[#059669]o{ medical : "pet_id\n(patient medical history)"
+users ||--[#2563EB]o{ medical : "administered_by\n(attending staff)"
+@enduml

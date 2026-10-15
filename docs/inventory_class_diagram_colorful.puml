@@ -1,0 +1,132 @@
+@startuml
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam handwritten false
+skinparam defaultFontName "Segoe UI"
+
+skinparam class {
+    BackgroundColor white
+    ArrowColor #2563EB
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontSize 12
+}
+
+skinparam package {
+    BackgroundColor #F1F5F9
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontColor #0F172A
+    FontStyle bold
+}
+
+package "Frontend Presentation Layer (React 19 / Vite)" #EFF6FF {
+    class InventoryControlComponent <<React Component>> #DBEAFE {
+        - inventoryItems: InventoryItem[]
+        - transactionLedger: InventoryTransaction[]
+        - inventorySubTab: string
+        - selectedActionItemId: number
+        - categoryFilter: string
+        - deductionModal: DeductionModalState
+        - purgeModal: PurgeModalState
+        --
+        + handleInventoryCreate(e: FormEvent): Promise<void>
+        + handleTransactionSubmit(e: FormEvent, item: InventoryItem): void
+        + executeTransactionApi(itemId: number, type: string, qty: number, reason: string): Promise<void>
+        + handlePurgeItem(itemId: number): Promise<void>
+        + renderActiveStockTable(): JSX.Element
+        + renderTransactionLedger(): JSX.Element
+    }
+
+    class CollarTagGeneratorComponent <<React Utility>> #DBEAFE {
+        - selectedPets: Pet[]
+        - qrSize: number
+        - tagLayout: string
+        --
+        + generateCollarMatrix(petList: Pet[]): void
+        + exportToPrintablePDF(): void
+        + renderTagCanvasPreview(): JSX.Element
+    }
+}
+
+package "Backend REST API Layer (Django REST Framework)" #ECFDF5 {
+    class InventoryAPIView <<APIView>> #D1FAE5 {
+        + permission_classes: [IsAuthenticatedOrReadOnly]
+        --
+        + get(request: Request): Response
+        + post(request: Request): Response
+    }
+
+    class InventoryDetailAPIView <<APIView>> #D1FAE5 {
+        + permission_classes: [IsMDCStaffOrAdmin]
+        --
+        + put(request: Request, item_id: int): Response
+        + delete(request: Request, item_id: int): Response
+    }
+
+    class InventoryTransactionAPIView <<APIView>> #D1FAE5 {
+        + permission_classes: [IsMDCStaffOrAdmin]
+        --
+        + get(request: Request): Response
+        + post(request: Request): Response
+    }
+
+    class InventoryTransactionHandler <<Python Module / Service>> #FEF08A {
+        + validate_transaction_payload(data: dict): dict
+        + calculate_stock_balance(current_qty: int, delta: int, tx_type: str): int
+        + execute_stock_movement(item_id: int, tx_type: str, qty_delta: int, reason: str, donor: str): dict
+        + check_low_stock_threshold(item_id: int, new_qty: int): boolean
+    }
+}
+
+package "Persistence Layer (Supabase PostgreSQL / Tables)" #FAF5FF {
+    class InventoryItem <<Database Table / Schema>> #F3E8FF {
+        + item_id: Serial [PK]
+        + item_name: Varchar(150)
+        + category: Varchar(50)
+        + food_type: Varchar(50)
+        + quantity: Integer
+        + unit: Varchar(20)
+        + min_threshold: Integer
+        + supplier_donor: Varchar(150)
+        + expiration_date: Date
+        + created_at: TimestampTz
+        + updated_at: TimestampTz
+    }
+
+    class InventoryTransaction <<Database Table / Schema>> #EDE9FE {
+        + id: Serial [PK]
+        + item_id: Integer [FK -> inventory.item_id]
+        + transaction_type: Varchar(10)
+        + quantity_changed: Integer
+        + reason: Varchar(255)
+        + supplier_donor: Varchar(150)
+        + logged_by: Uuid [FK -> auth_user.id]
+        + logged_at: TimestampTz
+    }
+
+    class PetCollarRecord <<Database Table / Schema>> #FCE7F3 {
+        + id: Uuid [PK]
+        + name: Varchar(100)
+        + qr_code_id: Varchar(50) [UQ]
+        + species: Varchar(50)
+        + collar_tag_printed: Boolean
+        + last_profile_scanned: TimestampTz
+    }
+}
+
+InventoryControlComponent ..[#2563EB]> InventoryAPIView : "<color:#1D4ED8><b>HTTP GET /api/inventory/</b></color>"
+InventoryControlComponent ..[#2563EB]> InventoryDetailAPIView : "<color:#1D4ED8><b>HTTP PUT/DELETE /api/inventory/{id}/</b></color>"
+InventoryControlComponent ..[#2563EB]> InventoryTransactionAPIView : "<color:#1D4ED8><b>HTTP POST /api/inventory/transactions/</b></color>"
+CollarTagGeneratorComponent ..[#2563EB]> PetCollarRecord : "Compiles printable QR matrices"
+
+InventoryAPIView --[#059669]> InventoryItem : "Queries stock / Inserts new SKU"
+InventoryDetailAPIView --[#059669]> InventoryItem : "Mutates attributes / Deletes SKU"
+InventoryTransactionAPIView --[#D97706]> InventoryTransactionHandler : "Delegates stock mutation & ledger audit"
+
+InventoryTransactionHandler --[#7C3AED]> InventoryItem : "Updates quantity balance"
+InventoryTransactionHandler --[#7C3AED]> InventoryTransaction : "Appends immutable audit record"
+
+InventoryItem "1" *--[#6366F1] "0..*" InventoryTransaction : "tracks transactions (item_id)"
+@enduml

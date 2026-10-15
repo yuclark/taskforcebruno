@@ -225,11 +225,18 @@ export default function NewsfeedView({ session }) {
     : feedItems.filter(i => i.item_type === 'pet').length;
 
   const petsAwaitingHomeCount = petsData.length > 0
-    ? petsData.filter(p => 
-        (p.pet_type === 'For Adoption' || p.pet_id?.startsWith('STRAY-')) && 
-        p.adoption_status === 'Available'
-      ).length
-    : feedItems.filter(i => i.item_type === 'pet' && (i.badge_text === 'Available' || i.badge_text === 'For Adoption')).length;
+    ? petsData.filter(p => {
+        const type = (p.pet_type || '').toLowerCase();
+        const status = (p.adoption_status || '').toLowerCase();
+        const isCampus = type.includes('campus') || type.includes('resident') || status.includes('campus') || status === 'not for adoption';
+        const isAdopted = status === 'adopted';
+        return !isCampus && !isAdopted && (status === 'available' || type.includes('adoption') || p.pet_id?.startsWith('STRAY-'));
+      }).length
+    : feedItems.filter(i => {
+        if (i.item_type !== 'pet') return false;
+        const badge = (i.badge_text || '').toLowerCase();
+        return badge === 'available' || badge.includes('adoption');
+      }).length;
 
   const sightingsCount = feedItems.filter(i => i.item_type === 'sighting').length;
 

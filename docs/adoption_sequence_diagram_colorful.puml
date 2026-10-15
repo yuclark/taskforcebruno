@@ -1,0 +1,107 @@
+@startuml
+autonumber
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam sequenceMessageAlign center
+skinparam defaultFontName "Segoe UI"
+
+skinparam sequence {
+    ArrowColor #2563EB
+    ArrowThickness 1.5
+    LifeLineBorderColor #3B82F6
+    LifeLineBackgroundColor #EFF6FF
+    ParticipantBorderThickness 1.5
+    ActorBorderThickness 1.5
+    GroupBorderColor #64748B
+    GroupBackgroundColor #F1F5F9
+    GroupHeaderFontColor #0F172A
+    DividerBackgroundColor #E2E8F0
+    DividerFontColor #0F172A
+    DividerBorderColor #94A3B8
+}
+
+actor "Campus Adopter" as Adopter #BFDBFE
+actor "MDC Staff Officer" as Staff #FED7AA
+
+participant "Vite/React Frontend\n(AdoptionGallery & PendingApps)" as Frontend #DBEAFE
+participant "Django REST API\n(Adoption Views & Serializers)" as API #D1FAE5
+participant "Adoption Workflow\nService" as Service #FEF08A
+participant "Supabase Database\n(PostgreSQL ORM)" as DB #EDE9FE
+participant "Notification Service\n(Django Mail / SMTP)" as Mail #FCE7F3
+
+== <color:#1E40AF><b>Phase 1: Application Submission & Validation</b></color> ==
+Adopter -> Frontend: Browse pets in Adoption Gallery & click "Apply to Adopt"
+activate Frontend #DBEAFE
+Frontend --> Adopter: Render multi-step questionnaire modal
+Adopter -> Frontend: Fill housing, fence, budget, moving plan & Submit
+Frontend -> API: <color:#1D4ED8><b>POST /api/pets/applications/</b></color>\n(pet_id, applicant_details, answers)
+activate API #D1FAE5
+
+API -> API: Validate request payload & CSRF/Auth token
+alt <color:#DC2626><b>[Validation Failed] Invalid Form Data</b></color>
+    API --> Frontend: <color:#DC2626>400 Bad Request (Validation errors)</color>
+    Frontend --> Adopter: Highlight missing or invalid fields with error tooltips
+else <color:#16A34A><b>[Validation Passed] Valid Form Data</b></color>
+    API -> DB: Query pet status (id = pet_id)
+    activate DB #EDE9FE
+    DB --> API: Return Pet record (adoption_status = 'Available')
+    deactivate DB
+    
+    API -> DB: <color:#7C3AED><b>INSERT INTO pet_adoption_application</b></color>\n(pet_id, applicant_user_id, status='Pending', answers)
+    activate DB #EDE9FE
+    DB --> API: 201 Created (Application record & UUID)
+    deactivate DB
+
+    API --> Frontend: <color:#16A34A><b>201 Created JSON response</b></color>
+    deactivate API
+    Frontend --> Adopter: Display "Application Submitted! MDC will review." toast
+end
+deactivate Frontend
+
+== <color:#C2410C><b>Phase 2: MDC Staff Review and Automated Approval Cascade</b></color> ==
+Staff -> Frontend: Access Staff Portal -> "Pending Applications" queue
+activate Frontend #DBEAFE
+Frontend -> API: <color:#1D4ED8><b>GET /api/pets/applications/?status=Pending</b></color>
+activate API #D1FAE5
+API -> DB: SELECT * FROM pet_adoption_application WHERE status = 'Pending'
+activate DB #EDE9FE
+DB --> API: List of pending applications with Pet details
+deactivate DB
+API --> Frontend: 200 OK (Array of application dossiers)
+deactivate API
+Frontend --> Staff: Display triage table with applicant summaries & filters
+
+Staff -> Frontend: Click "Review Dossier" for specific applicant
+Frontend --> Staff: Open modal with living condition check & questions
+Staff -> Frontend: Click "Approve Adoption" & enter review notes
+Frontend -> API: <color:#1D4ED8><b>PATCH /api/pets/applications/{id}/</b></color>\n{ action: "approve", notes: "Approved after home check" }
+activate API #D1FAE5
+
+API -> Service: <color:#B45309><b>approve_application(application_id, staff_id, notes)</b></color>
+activate Service #FEF08A
+
+group <color:#7C3AED><b>Database Atomic Transaction (ACID Guaranteed)</b></color>
+    Service -> DB: <color:#7C3AED><b>BEGIN TRANSACTION</b></color>
+    activate DB #EDE9FE
+    Service -> DB: UPDATE pet_adoption_application\nSET application_status = 'Approved',\nreviewed_by = staff_id, reviewed_at = NOW()\nWHERE id = application_id
+    Service -> DB: UPDATE pet_pet\nSET adoption_status = 'Adopted'\nWHERE id = pet_id
+    Service -> DB: INSERT INTO campus_announcement\n(title="Happy Tails!", category="Adoption", pet_id=pet_id)
+    Service -> DB: <color:#7C3AED><b>COMMIT TRANSACTION</b></color>
+    deactivate DB
+end
+
+Service -> Mail: <color:#DB2777><b>send_adoption_congratulations_email(applicant_email, pet_name)</b></color>
+activate Mail #FCE7F3
+Mail --> Service: 200 SMTP Delivery Acknowledged
+deactivate Mail
+
+Service --> API: ApplicationApprovalResult(status="Approved", pet_status="Adopted")
+deactivate Service
+
+API --> Frontend: <color:#16A34A><b>200 OK JSON (Updated application & pet state)</b></color>
+deactivate API
+
+Frontend --> Staff: Update table row to "Approved", remove from triage queue
+deactivate Frontend
+@enduml

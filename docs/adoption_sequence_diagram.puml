@@ -1,0 +1,84 @@
+@startuml
+skinparam defaultFontName "Segoe UI"
+skinparam roundCorner 8
+skinparam shadowing false
+skinparam ArrowColor #334155
+skinparam ArrowThickness 1.3
+
+actor "Prospective Adopter\n(Student / Faculty)" as adopter #800000
+participant "AdoptionGallery\n(React UI)" as gallery #F5F3FF
+participant "AdoptionApplicationAPIView\n(Django REST Framework)" as submit_api #EEF2FF
+participant "PendingApplications\n(React Admin)" as admin_grid #FFFBEB
+participant "AdoptionApplicationDetailAPIView\n(Django REST Framework)" as detail_api #EEF2FF
+participant "AdoptionNotificationMailer\n(Django SMTP)" as mailer #ECFDF5
+database "Supabase PostgreSQL\n(Database)" as db #059669
+actor "Shelter Staff / MDC\n(Evaluator)" as staff #1E3A8A
+
+autonumber 1 "<b>(#)</b>"
+
+== Phase 1: Application Submission Pipeline ==
+adopter -> gallery : Browses available pets & clicks "Adopt this Pet"
+activate gallery
+gallery --> adopter : Renders Multi-Stage Adoption Questionnaire Modal
+adopter -> gallery : Fills form (housing, yard fence, care budget, plan if moving) & submits
+gallery -> submit_api : POST /api/pets/applications/ {applicant_id, pet_id, ...}
+activate submit_api
+
+submit_api -> db : INSERT INTO adoption_applications (status='Pending')
+activate db
+db --> submit_api : Return created application record (application_id)
+deactivate db
+
+submit_api -> db : UPDATE pets SET adoption_status = 'Pending' WHERE pet_id = id
+activate db
+db --> submit_api : Acknowledge pet availability state mutation
+deactivate db
+
+submit_api --> gallery : 201 Created {application_id, status: 'Pending'}
+deactivate submit_api
+gallery --> adopter : Displays submission confirmation toast & tracking ref
+deactivate gallery
+
+== Phase 2: Administrative Review & State Transition ==
+staff -> admin_grid : Opens Shelter Admin Portal (Pending Review tab)
+activate admin_grid
+admin_grid -> detail_api : GET /api/pets/applications/?status=Pending
+activate detail_api
+detail_api -> db : SELECT * FROM adoption_applications JOIN pets ...
+activate db
+db --> detail_api : Return populated application rows
+deactivate db
+detail_api --> admin_grid : 200 OK (List of pending applications)
+deactivate detail_api
+admin_grid --> staff : Displays candidate dossier (housing, fence, budget)
+
+staff -> admin_grid : Reviews suitability & clicks "Approve Application"
+admin_grid -> detail_api : PATCH /api/pets/applications/{id}/ {status: 'Approved'}
+activate detail_api
+
+detail_api -> db : UPDATE adoption_applications SET application_status = 'Approved'
+activate db
+db --> detail_api : Confirm application state updated
+deactivate db
+
+detail_api -> db : UPDATE pets SET adoption_status = 'Adopted' WHERE pet_id = id
+activate db
+db --> detail_api : Companion record permanently locked to 'Adopted'
+deactivate db
+
+detail_api -> db : INSERT INTO campus_announcements (category='Adoption Milestone')
+activate db
+db --> detail_api : Public celebration bulletin published
+deactivate db
+
+detail_api -> mailer : trigger_adoption_status_email(applicant_email, 'Approved')
+activate mailer
+mailer -> adopter : Sends automated congratulatory adoption email [SMTP]
+deactivate mailer
+
+detail_api --> admin_grid : 200 OK (State Transition Complete)
+deactivate detail_api
+admin_grid --> staff : Displays success toast & removes row from triage queue
+deactivate admin_grid
+
+@enduml

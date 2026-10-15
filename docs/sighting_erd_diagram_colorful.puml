@@ -1,0 +1,69 @@
+@startuml
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam defaultFontName "Segoe UI"
+
+skinparam entity {
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontSize 12
+    FontStyle bold
+    HeaderBackgroundColor #E2E8F0
+}
+
+entity "animal_sightings" as sightings #EDE9FE {
+    * sighting_id : serial <<PK>>
+    --
+    * animal_type : varchar(50)
+    * <color:#7C3AED>location_details : varchar(200)</color>
+    distinct_features : text
+    * <color:#D97706>status : varchar(50)</color>
+    * reporter_email : varchar(254)
+    image_url : varchar(500)
+    <color:#2563EB>converted_pet_id : varchar(50) <<FK -> pets.pet_id>></color>
+    * logged_at : timestamptz
+}
+
+entity "pets" as pets #F3E8FF {
+    * pet_id : varchar(50) <<PK>>
+    --
+    * name : varchar(100)
+    * species : varchar(50)
+    pet_type : varchar(50)
+    breed : varchar(100)
+    gender : varchar(20)
+    age : varchar(50)
+    weight : varchar(50)
+    * <color:#7C3AED>adoption_status : varchar(50)</color>
+    * <color:#7C3AED>found_near : varchar(150)</color>
+    rescue_date : date
+    current_conditions : text
+    primary_image : varchar(500)
+    created_at : timestamptz
+}
+
+entity "auth_user" as users #DBEAFE {
+    * id : uuid <<PK>>
+    --
+    * email : varchar(254) <<UQ>>
+    username : varchar(150)
+    <color:#2563EB>is_staff : boolean</color>
+    is_active : boolean
+}
+
+entity "campus_announcements" as announcements #FCE7F3 {
+    * announcement_id : serial <<PK>>
+    --
+    * title : varchar(200)
+    * content : text
+    author_email : varchar(254)
+    image_url : varchar(500)
+    created_at : timestamptz
+}
+
+users ||--[#2563EB]o{ sightings : "reporter_email\n(submits telemetry)"
+sightings ||--[#D97706]o| pets : "converted_pet_id\n(1-click intake linkage)"
+users ||--[#2563EB]o{ pets : "admitted_by\n(triages and rescues)"
+sightings ||--[#DB2777]o{ announcements : "sighting_id\n(urgent broadcast alert)"
+@enduml

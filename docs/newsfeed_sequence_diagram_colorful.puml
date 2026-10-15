@@ -1,0 +1,113 @@
+@startuml
+autonumber
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam sequenceMessageAlign center
+skinparam defaultFontName "Segoe UI"
+
+skinparam sequence {
+    ArrowColor #2563EB
+    ArrowThickness 1.5
+    LifeLineBorderColor #3B82F6
+    LifeLineBackgroundColor #EFF6FF
+    ParticipantBorderThickness 1.5
+    ActorBorderThickness 1.5
+    GroupBorderColor #64748B
+    GroupBackgroundColor #F1F5F9
+    GroupHeaderFontColor #0F172A
+    DividerBackgroundColor #E2E8F0
+    DividerFontColor #0F172A
+    DividerBorderColor #94A3B8
+}
+
+actor "CIT-U Student / User" as User #BFDBFE
+actor "MDC Welfare Officer" as Staff #FED7AA
+
+participant "Vite/React Frontend\n(NewsfeedView & SightingTriage)" as Frontend #DBEAFE
+participant "Django REST API\n(Newsfeed Endpoints)" as API #D1FAE5
+participant "Newsfeed Interaction\nHandler" as Handler #FEF08A
+participant "Supabase PostgreSQL\n(Multi-Stream Tables)" as DB #EDE9FE
+participant "Supabase Storage\n(Image Buckets)" as Storage #FCE7F3
+
+== <color:#1E40AF><b>Phase 1: Multi-Stream Activity Feed Aggregation</b></color> ==
+User -> Frontend: Navigate to Homepage / Newsfeed Timeline
+activate Frontend #DBEAFE
+Frontend -> API: <color:#1D4ED8><b>GET /api/newsfeed/?email=student@cit.edu</b></color>
+activate API #D1FAE5
+
+API -> Handler: <color:#B45309><b>aggregate_feed_streams(user_email="student@cit.edu")</b></color>
+activate Handler #FEF08A
+
+group <color:#7C3AED><b>Supabase Parallel Stream Queries</b></color>
+    Handler -> DB: SELECT * FROM campus_announcements ORDER BY created_at DESC
+    activate DB #EDE9FE
+    DB --> Handler: Return official administrative bulletins
+    deactivate DB
+
+    Handler -> DB: SELECT * FROM animal_sightings WHERE status != 'Resolved'
+    activate DB #EDE9FE
+    DB --> Handler: Return verified/emergency sighting reports
+    deactivate DB
+
+    Handler -> DB: SELECT * FROM pets ORDER BY created_at DESC LIMIT 10
+    activate DB #EDE9FE
+    DB --> Handler: Return newest companion admissions
+    deactivate DB
+
+    Handler -> DB: SELECT * FROM feed_likes
+    activate DB #EDE9FE
+    DB --> Handler: Return social like registers
+    deactivate DB
+
+    Handler -> DB: SELECT * FROM feed_comments ORDER BY created_at ASC
+    activate DB #EDE9FE
+    DB --> Handler: Return comment threads
+    deactivate DB
+end
+
+Handler -> Handler: Compile unified timeline, inject likes_count, is_liked_by_me, and comment subtrees
+Handler --> API: UnifiedTimelineArray(sorted by timestamp DESC)
+deactivate Handler
+
+API --> Frontend: <color:#16A34A><b>200 OK JSON (Combined bulletins, sightings, companions)</b></color>
+deactivate API
+Frontend --> User: Render social timeline with interaction buttons & badge markers
+deactivate Frontend
+
+== <color:#C2410C><b>Phase 2: Social Reaction & Comment Interaction</b></color> ==
+User -> Frontend: Click "Heart / Like" icon on Sighting Post (feed_id: "sighting_42")
+activate Frontend #DBEAFE
+Frontend -> API: <color:#1D4ED8><b>POST /api/newsfeed/like/</b></color>\n{ feed_id: "sighting_42", user_email: "student@cit.edu" }
+activate API #D1FAE5
+
+API -> Handler: <color:#B45309><b>toggle_feed_like("sighting_42", "student@cit.edu")</b></color>
+activate Handler #FEF08A
+
+Handler -> DB: SELECT * FROM feed_likes WHERE feed_id = 'sighting_42' AND user_email = 'student@cit.edu'
+activate DB #EDE9FE
+DB --> Handler: Empty set (User has not yet liked)
+deactivate DB
+
+Handler -> DB: <color:#7C3AED><b>INSERT INTO feed_likes (feed_id, user_email, created_at)</b></color>
+activate DB #EDE9FE
+DB --> Handler: 201 Created (Like record stored)
+deactivate DB
+
+Handler --> API: { liked: true, likes_count: 8 }
+deactivate Handler
+API --> Frontend: 200 OK JSON { liked: true, likes_count: 8 }
+deactivate API
+
+Frontend --> User: Fill heart icon with RED badge and increment like count to 8
+deactivate Frontend
+
+== <color:#059669><b>Phase 3: Sighting Moderation & 1-Click Intake Hand-off</b></color> ==
+Staff -> Frontend: Access "Sighting Triage" dashboard
+activate Frontend #DBEAFE
+Staff -> Frontend: Inspect Landmark: "NGE Building Grounds", Sighting #42
+Staff -> Frontend: Click "1-Click Admit & Intake Stray"
+Frontend --> Staff: Auto-populate AddNewPet modal with landmark, description, and photo URL
+Staff -> Frontend: Confirm admission & create official Pet Registry entry
+deactivate Frontend
+@enduml

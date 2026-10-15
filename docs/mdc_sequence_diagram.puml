@@ -1,0 +1,67 @@
+@startuml
+skinparam defaultFontName "Segoe UI"
+skinparam roundCorner 8
+skinparam shadowing false
+skinparam ArrowColor #334155
+skinparam ArrowThickness 1.3
+
+actor "MDC Staff (Clinic)" as staff
+participant "LoginView\n(React UI)" as login_ui #EFF6FF
+participant "LoginAPIView\n(DRF Gate)" as auth_gate #EEF2FF
+participant "MDCDashboardView\n(React UI)" as dash_ui #F0FDF4
+participant "IncidentReportForm\n(React UI)" as incident_ui #FFF1F2
+participant "MedicalRecordsAPIView\n(Django REST Framework)" as med_api #EEF2FF
+participant "ClinicalBiosecurityService\n(Python / Supabase)" as bio_svc #ECFDF5
+database "Supabase PostgreSQL\n(Database)" as db #059669
+
+autonumber 1 "<b>(#)</b>"
+
+staff -> login_ui : Enters institutional credentials (@cit.edu)
+activate login_ui
+login_ui -> auth_gate : POST /api/login/ {email, password}
+activate auth_gate
+auth_gate -> db : Verify staff credentials & role = 'MDC_STAFF'
+activate db
+db --> auth_gate : Return profile & authenticated JWT session
+deactivate db
+auth_gate --> login_ui : 200 OK {token, role: 'MDC_STAFF'}
+deactivate auth_gate
+login_ui --> staff : Redirects to MDC Dashboard
+deactivate login_ui
+
+staff -> dash_ui : Selects animal & clicks "Log Bite/Scratch Incident"
+activate dash_ui
+dash_ui -> incident_ui : Mounts Incident Form (petId)
+deactivate dash_ui
+activate incident_ui
+
+staff -> incident_ui : Submits incident (Victim info, Campus Landmark, Bite severity)
+incident_ui -> med_api : POST /api/medical/{pet_id}/ (JWT Bearer Token)
+activate med_api
+
+med_api -> med_api : Validate JWT role & sanitize incident payload
+med_api -> bio_svc : create_incident_quarantine(payload)
+activate bio_svc
+
+bio_svc -> db : INSERT into medical_records (is_incident=True, quarantine_active=True)
+activate db
+db --> bio_svc : Record inserted (record_id)
+deactivate db
+
+bio_svc -> db : UPDATE pets SET vaccination_status = 'Under 14-Day Quarantine'
+activate db
+db --> bio_svc : Status updated
+deactivate db
+
+bio_svc --> med_api : Return confirmed incident & quarantine metadata
+deactivate bio_svc
+med_api --> incident_ui : 201 Created {quarantine_countdown: 14 days, protocol: "RA 9482"}
+deactivate med_api
+
+incident_ui -> dash_ui : Refresh telemetry & mount QuarantineTracker
+deactivate incident_ui
+activate dash_ui
+dash_ui --> staff : Displays active 14-day countdown & PEP clinical alerts
+deactivate dash_ui
+
+@enduml

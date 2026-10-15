@@ -1,0 +1,125 @@
+@startuml
+autonumber
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam sequenceMessageAlign center
+skinparam defaultFontName "Segoe UI"
+
+skinparam sequence {
+    ArrowColor #2563EB
+    ArrowThickness 1.5
+    LifeLineBorderColor #3B82F6
+    LifeLineBackgroundColor #EFF6FF
+    ParticipantBorderThickness 1.5
+    ActorBorderThickness 1.5
+    GroupBorderColor #64748B
+    GroupBackgroundColor #F1F5F9
+    GroupHeaderFontColor #0F172A
+    DividerBackgroundColor #E2E8F0
+    DividerFontColor #0F172A
+    DividerBorderColor #94A3B8
+}
+
+actor "Campus Student / Reporter" as Reporter #BFDBFE
+actor "MDC Welfare Officer" as Staff #FED7AA
+
+participant "Vite/React Frontend\n(ReportSightingView)" as ReportUI #DBEAFE
+participant "Vite/React Frontend\n(SightingTriage & AddNewPet)" as TriageUI #DBEAFE
+participant "Django REST API\n(Sightings Endpoints)" as API #D1FAE5
+participant "Sighting Telemetry\nHandler" as Handler #FEF08A
+participant "Supabase Storage\n('sightings' Bucket)" as Storage #FCE7F3
+participant "Supabase PostgreSQL\n(animal_sightings & pets)" as DB #EDE9FE
+
+== <color:#1E40AF><b>Phase 1: Landmark-Assisted Sighting Telemetry Submission</b></color> ==
+Reporter -> ReportUI: Open "Report Stray" on mobile web
+activate ReportUI #DBEAFE
+ReportUI --> Reporter: Display structured CIT-U landmark selector
+Reporter -> ReportUI: Select Zone: "[NGE Building 1st Floor]", Animal: "Dog"
+Reporter -> ReportUI: Toggle "🚨 Urgent Emergency (Limping/Injured)", Attach Photo
+Reporter -> ReportUI: Click "Submit Telemetry Report"
+
+ReportUI -> API: <color:#1D4ED8><b>POST /api/sightings/</b></color>\n(Multipart: landmark, animal_type, features, image)
+activate API #D1FAE5
+
+API -> Handler: <color:#B45309><b>process_sighting_intake(request.data, request.FILES)</b></color>
+activate Handler #FEF08A
+
+Handler -> Storage: <color:#DB2777><b>upload("sighting_UUID.jpg", binary_data)</b></color>
+activate Storage #FCE7F3
+Storage --> Handler: 200 OK (Uploaded to Supabase CDN)
+deactivate Storage
+
+Handler -> Handler: Prepend location "[NGE Building]" & emergency sentinel "[🚨 URGENT EMERGENCY]"
+
+group <color:#7C3AED><b>Supabase Telemetry Persist</b></color>
+    Handler -> DB: <color:#7C3AED><b>INSERT INTO animal_sightings</b></color>\n(location="[NGE Building 1st Floor]", status="Pending",\nfeatures="[🚨 URGENT EMERGENCY] Limping", image_url=CDN_URL)
+    activate DB #EDE9FE
+    DB --> Handler: 201 Created (Sighting Record #42)
+    deactivate DB
+end
+
+Handler --> API: SightingCreationResult(sighting_id=42, status="Pending")
+deactivate Handler
+
+API --> ReportUI: <color:#16A34A><b>201 Created JSON (Case #42 Logged)</b></color>
+deactivate API
+
+ReportUI --> Reporter: Display "Emergency Sighting Broadcasted to MDC Dispatch" toast
+deactivate ReportUI
+
+== <color:#C2410C><b>Phase 2: Administrative Triage & Verification</b></color> ==
+Staff -> TriageUI: Open Staff Portal -> "Sighting Reports" Triage Center
+activate TriageUI #DBEAFE
+TriageUI -> API: <color:#1D4ED8><b>GET /api/sightings/</b></color>
+activate API #D1FAE5
+API -> DB: SELECT * FROM animal_sightings ORDER BY logged_at DESC
+activate DB #EDE9FE
+DB --> API: Return telemetry list (Case #42 flagged in RED at top)
+deactivate DB
+API --> TriageUI: 200 OK JSON
+deactivate API
+
+TriageUI --> Staff: Render Case #42 with glowing RED Emergency Badge & landmark card
+Staff -> TriageUI: Dispatch patrol & click "Mark as Investigated"
+TriageUI -> API: <color:#1D4ED8><b>PUT /api/sightings/42/</b></color> { status: "Investigated" }
+activate API #D1FAE5
+API -> DB: UPDATE animal_sightings SET status = 'Investigated' WHERE sighting_id = 42
+activate DB #EDE9FE
+DB --> API: 200 OK (Updated row)
+deactivate DB
+API --> TriageUI: 200 OK JSON (Status: Investigated)
+deactivate API
+TriageUI --> Staff: Update status pill to Blue 'Investigated'
+deactivate TriageUI
+
+== <color:#059669><b>Phase 3: Seamless 1-Click Sighting-to-Intake Hand-off</b></color> ==
+Staff -> TriageUI: Animal rescued! Click "Admit & Intake Stray" on Case #42
+activate TriageUI #DBEAFE
+
+TriageUI -> TriageUI: Package handoff payload into sessionStorage:\n{ found_near: "[NGE Building 1st Floor]", species: "Dog",\ndescription: "Limping stray", sighting_id: 42 }
+TriageUI -> TriageUI: Route navigation to "Add New Pet" intake view
+TriageUI --> Staff: Auto-populate AddNewPet form with auto-generated ID "STRAY-4289",\npre-filled landmark origin, and initial medical diagnosis
+
+Staff -> TriageUI: Confirm biometrics & click "Register Companion"
+TriageUI -> API: <color:#1D4ED8><b>POST /api/pets/</b></color> (Finalized pet profile)
+activate API #D1FAE5
+API -> DB: INSERT INTO pets (pet_id="STRAY-4289", name="Stray Dog #4", found_near="[NGE Building]")
+activate DB #EDE9FE
+DB --> API: 201 Created
+deactivate DB
+API --> TriageUI: 201 Created
+deactivate API
+
+TriageUI -> API: <color:#1D4ED8><b>PUT /api/sightings/42/</b></color> { status: "Resolved" }
+activate API #D1FAE5
+API -> DB: UPDATE animal_sightings SET status = 'Resolved', converted_pet_id = 'STRAY-4289' WHERE sighting_id = 42
+activate DB #EDE9FE
+DB --> API: 200 OK
+deactivate DB
+API --> TriageUI: 200 OK JSON
+deactivate API
+
+TriageUI --> Staff: Display "Stray admitted to official Wildcat Registry. Telemetry resolved!"
+deactivate TriageUI
+@enduml

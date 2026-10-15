@@ -1,0 +1,87 @@
+@startuml
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam defaultFontName "Segoe UI"
+
+skinparam entity {
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontSize 12
+    FontStyle bold
+    HeaderBackgroundColor #E2E8F0
+}
+
+entity "campus_announcements" as announcements #FCE7F3 {
+    * announcement_id : serial <<PK>>
+    --
+    * title : varchar(200)
+    * content : text
+    * <color:#DB2777>author_email : varchar(254)</color>
+    image_url : varchar(500)
+    * created_at : timestamptz
+}
+
+entity "animal_sightings" as sightings #EDE9FE {
+    * sighting_id : serial <<PK>>
+    --
+    * animal_type : varchar(50)
+    * <color:#7C3AED>location_details : varchar(200)</color>
+    distinct_features : text
+    * <color:#D97706>status : varchar(50)</color>
+    * reporter_email : varchar(254)
+    image_url : varchar(500)
+    * logged_at : timestamptz
+}
+
+entity "pets" as pets #F3E8FF {
+    * pet_id : serial <<PK>>
+    --
+    * name : varchar(100)
+    * species : varchar(50)
+    breed : varchar(100)
+    * <color:#7C3AED>adoption_status : varchar(50)</color>
+    found_near : varchar(150)
+    primary_image : varchar(500)
+    about_text : text
+    created_at : timestamptz
+}
+
+entity "feed_likes" as likes #FEF3C7 {
+    * id : serial <<PK>>
+    --
+    * <color:#2563EB>feed_id : varchar(100)</color>
+    * <color:#2563EB>user_email : varchar(254)</color>
+    * created_at : timestamptz
+}
+
+entity "feed_comments" as comments #FEF3C7 {
+    * comment_id : serial <<PK>>
+    --
+    * <color:#2563EB>feed_id : varchar(100)</color>
+    * <color:#2563EB>user_email : varchar(254)</color>
+    * comment_text : text
+    * created_at : timestamptz
+}
+
+entity "auth_user" as users #DBEAFE {
+    * id : uuid <<PK>>
+    --
+    * email : varchar(254) <<UQ>>
+    username : varchar(150)
+    <color:#2563EB>is_staff : boolean</color>
+}
+
+users ||--[#2563EB]o{ likes : "user_email\n(authorizes reaction)"
+users ||--[#2563EB]o{ comments : "user_email\n(posts comment)"
+users ||--[#DB2777]o{ announcements : "author_email\n(publishes official bulletin)"
+users ||--[#7C3AED]o{ sightings : "reporter_email\n(submits sighting)"
+
+sightings ||--[#D97706]o{ likes : "feed_id\n(sighting reactions)"
+announcements ||--[#D97706]o{ likes : "feed_id\n(bulletin reactions)"
+pets ||--[#D97706]o{ likes : "feed_id\n(companion reactions)"
+
+sightings ||--[#D97706]o{ comments : "feed_id\n(sighting comments)"
+announcements ||--[#D97706]o{ comments : "feed_id\n(bulletin comments)"
+pets ||--[#D97706]o{ comments : "feed_id\n(companion comments)"
+@enduml

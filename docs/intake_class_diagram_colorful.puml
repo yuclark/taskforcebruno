@@ -1,0 +1,147 @@
+@startuml
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam handwritten false
+skinparam defaultFontName "Segoe UI"
+
+skinparam class {
+    BackgroundColor white
+    ArrowColor #2563EB
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontSize 12
+}
+
+skinparam package {
+    BackgroundColor #F1F5F9
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontColor #0F172A
+    FontStyle bold
+}
+
+package "Frontend Presentation Layer (React 19 / Vite)" #EFF6FF {
+    class AddNewPetComponent <<React Component>> #DBEAFE {
+        - newPetForm: PetRegistrationState
+        - isStrayMode: boolean
+        - imageFile: File
+        - imagePreviewUrl: string
+        - submitting: boolean
+        --
+        + handleCreateChange(e: ChangeEvent): void
+        + handleFileChange(e: ChangeEvent): void
+        + calculateSizeCategory(weight: string): string
+        + handleCreateSubmit(e: FormEvent): Promise<void>
+        + renderIntakeForm(): JSX.Element
+    }
+
+    class PetListingsComponent <<React Component>> #DBEAFE {
+        - pets: Pet[]
+        - searchFilter: string
+        - statusFilter: string
+        - selectedPetForTag: Pet
+        --
+        + fetchPetListings(): Promise<void>
+        + handleStatusFilter(status: string): void
+        + openTagGeneratorModal(pet: Pet): void
+        + renderPetDirectoryGrid(): JSX.Element
+    }
+
+    class CollarTagGeneratorComponent <<React Utility / Modal>> #DBEAFE {
+        - petId: string
+        - petName: string
+        - qrMatrixCanvas: HTMLCanvasElement
+        --
+        + generatePrintableMatrix(petId: string): void
+        + exportThermalPrintPDF(): void
+        + renderPreviewModal(): JSX.Element
+    }
+}
+
+package "Backend REST API Layer (Django REST Framework)" #ECFDF5 {
+    class PetListAPIView <<APIView>> #D1FAE5 {
+        + parser_classes: [MultiPartParser, FormParser]
+        + permission_classes: [IsMDCStaffOrAdmin]
+        --
+        + get(request: Request): Response
+        + post(request: Request): Response
+    }
+
+    class PetDetailAPIView <<APIView>> #D1FAE5 {
+        + permission_classes: [IsAuthenticatedOrReadOnly]
+        --
+        + get(request: Request, pet_id: str): Response
+        + put(request: Request, pet_id: str): Response
+        + delete(request: Request, pet_id: str): Response
+    }
+
+    class PetAISearchAPIView <<APIView>> #D1FAE5 {
+        + permission_classes: [AllowAny]
+        --
+        + post(request: Request): Response
+        - parse_negations(raw_query: str): set
+        - normalize_synonyms(tokens: list): list
+        - rank_trait_matches(candidates: list): list
+    }
+
+    class PetIntakeStorageHandler <<Python Module / Service>> #FEF08A {
+        + validate_image_payload(file: UploadedFile): boolean
+        + generate_storage_key(pet_id: str, ext: str): str
+        + stream_to_supabase_bucket(file_data: bytes, key: str): str
+        + scrub_orphaned_assets(pet_id: str): void
+    }
+}
+
+package "Persistence Layer (Supabase PostgreSQL & Cloud Storage)" #FAF5FF {
+    class Pet <<Database Table / Schema>> #F3E8FF {
+        + pet_id: Varchar(50) [PK]
+        + name: Varchar(100)
+        + species: Varchar(50)
+        + pet_type: Varchar(50)
+        + breed: Varchar(100)
+        + gender: Varchar(20)
+        + age: Varchar(50)
+        + weight: Varchar(50)
+        + size: Varchar(20)
+        + vaccination_status: Varchar(50)
+        + spayed_neutered: Boolean
+        + adoption_status: Varchar(50)
+        + found_near: Varchar(150)
+        + rescue_date: Date
+        + current_conditions: Text
+        + behavior_notes: Text
+        + about_text: Text
+        + primary_image: Varchar(500)
+        + created_at: TimestampTz
+    }
+
+    class PetImage <<Database Table / Schema>> #EDE9FE {
+        + id: Serial [PK]
+        + pet_id: Varchar(50) [FK -> pets.pet_id]
+        + image_url: Varchar(500)
+        + is_primary: Boolean
+        + uploaded_at: TimestampTz
+    }
+
+    class SupabaseStorageBucket <<Supabase Storage>> #FCE7F3 {
+        + bucket_name: "petpictures"
+        + partition: "/pet_{uuid}.{ext}"
+        + public_url_access: HTTPS CDN
+    }
+}
+
+AddNewPetComponent ..[#2563EB]> PetListAPIView : "<color:#1D4ED8><b>HTTP POST /api/pets/ (multipart)</b></color>"
+AddNewPetComponent ..[#2563EB]> CollarTagGeneratorComponent : "Auto-invokes upon registration"
+PetListingsComponent ..[#2563EB]> PetListAPIView : "<color:#1D4ED8><b>HTTP GET /api/pets/</b></color>"
+PetListingsComponent ..[#2563EB]> PetAISearchAPIView : "<color:#1D4ED8><b>HTTP POST /api/pets/ai-search/</b></color>"
+PetListingsComponent ..[#2563EB]> CollarTagGeneratorComponent : "Print Tag Action"
+
+PetListAPIView --[#D97706]> PetIntakeStorageHandler : "Streams image payload"
+PetIntakeStorageHandler --[#DB2777]> SupabaseStorageBucket : "Stores binary photo"
+PetListAPIView --[#059669]> Pet : "INSERT into pets table"
+PetListAPIView --[#059669]> PetImage : "INSERT primary image pointer"
+PetAISearchAPIView --[#7C3AED]> Pet : "Semantic token search & negation ranking"
+
+Pet "1" *--[#6366F1] "1..*" PetImage : "pet_id (multi-photo gallery)"
+@enduml

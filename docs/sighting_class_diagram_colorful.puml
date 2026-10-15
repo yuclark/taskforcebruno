@@ -1,0 +1,132 @@
+@startuml
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam handwritten false
+skinparam defaultFontName "Segoe UI"
+
+skinparam class {
+    BackgroundColor white
+    ArrowColor #2563EB
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontSize 12
+}
+
+skinparam package {
+    BackgroundColor #F1F5F9
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontColor #0F172A
+    FontStyle bold
+}
+
+package "Frontend Presentation Layer (React 19 / Vite)" #EFF6FF {
+    class ReportSightingViewComponent <<React Component>> #DBEAFE {
+        - campusZones: string[]
+        - selectedZone: string
+        - animalType: string
+        - locationDetails: string
+        - distinctFeatures: string
+        - isEmergency: boolean
+        - photoFile: File
+        - isSubmitting: boolean
+        --
+        + handleZoneSelect(zone: string): void
+        + handlePhotoAttachment(e: ChangeEvent): void
+        + handleSubmitReport(e: FormEvent): Promise<void>
+        + renderLandmarkDropdown(): JSX.Element
+    }
+
+    class SightingTriageComponent <<React Component>> #DBEAFE {
+        - reports: SightingReport[]
+        - activeFilter: string
+        - triageModal: TriageModalState
+        - loading: boolean
+        --
+        + fetchActiveReports(): Promise<void>
+        + handleStatusMutation(sightingId: number, status: string): Promise<void>
+        + handle1ClickIntakeHandoff(report: SightingReport): void
+        + renderTelemetryGrid(): JSX.Element
+        + renderEmergencyBanners(): JSX.Element
+    }
+
+    class AddNewPetIntakeBridge <<React Form Consumer>> #DBEAFE {
+        - preloadedSightingData: StrayHandoff
+        - isStrayMode: boolean
+        --
+        + hydrateFromSightingSession(): void
+        + finalizeIntakeRegistration(e: FormEvent): Promise<void>
+    }
+}
+
+package "Backend REST API Layer (Django REST Framework)" #ECFDF5 {
+    class AnimalSightingAPIView <<APIView>> #D1FAE5 {
+        + parser_classes: [MultiPartParser, FormParser]
+        + permission_classes: [AllowAny]
+        --
+        + get(request: Request): Response
+        + post(request: Request): Response
+    }
+
+    class AnimalSightingDetailAPIView <<APIView>> #D1FAE5 {
+        + permission_classes: [IsMDCStaffOrAdmin]
+        --
+        + put(request: Request, sighting_id: int): Response
+    }
+
+    class SightingTelemetryHandler <<Python Module / Service>> #FEF08A {
+        + validate_sighting_payload(data: dict): dict
+        + prepend_emergency_sentinel(features: str, is_urgent: bool): str
+        + stream_sighting_photo(file: UploadedFile): str
+        + transition_triage_state(sighting_id: int, new_status: str): dict
+        + export_to_intake_contract(sighting_id: int): dict
+    }
+}
+
+package "Persistence Layer (Supabase PostgreSQL & Storage)" #FAF5FF {
+    class AnimalSighting <<Database Table / Schema>> #EDE9FE {
+        + sighting_id: Serial [PK]
+        + animal_type: Varchar(50)
+        + location_details: Varchar(200)
+        + distinct_features: Text
+        + status: Varchar(50)
+        + reporter_email: Varchar(254)
+        + image_url: Varchar(500)
+        + converted_pet_id: Varchar(50) [FK -> pets.pet_id]
+        + logged_at: TimestampTz
+    }
+
+    class Pet <<Database Table / Schema>> #F3E8FF {
+        + pet_id: Varchar(50) [PK]
+        + name: Varchar(100)
+        + species: Varchar(50)
+        + adoption_status: Varchar(50)
+        + found_near: Varchar(150)
+        + description: Text
+        + primary_image: Varchar(500)
+        + created_at: TimestampTz
+    }
+
+    class SupabaseSightingsBucket <<Supabase Storage>> #FCE7F3 {
+        + bucket_name: "sightings"
+        + partition: "/sighting_{uuid}.{ext}"
+        + public_cdn_url: HTTPS URL
+    }
+}
+
+ReportSightingViewComponent ..[#2563EB]> AnimalSightingAPIView : "<color:#1D4ED8><b>HTTP POST /api/sightings/ (multipart)</b></color>"
+SightingTriageComponent ..[#2563EB]> AnimalSightingAPIView : "<color:#1D4ED8><b>HTTP GET /api/sightings/</b></color>"
+SightingTriageComponent ..[#2563EB]> AnimalSightingDetailAPIView : "<color:#1D4ED8><b>HTTP PUT /api/sightings/{id}/</b></color>"
+SightingTriageComponent ..[#2563EB]> AddNewPetIntakeBridge : "1-Click Intake Hand-off (sessionStorage)"
+
+AnimalSightingAPIView --[#D97706]> SightingTelemetryHandler : "Delegates payload parsing"
+AnimalSightingDetailAPIView --[#D97706]> SightingTelemetryHandler : "Delegates status update"
+
+SightingTelemetryHandler --[#DB2777]> SupabaseSightingsBucket : "Stores photo binary"
+SightingTelemetryHandler --[#7C3AED]> AnimalSighting : "Inserts telemetry row (status='Pending')"
+SightingTelemetryHandler --[#7C3AED]> AnimalSighting : "Updates status ('Investigated', 'Resolved')"
+
+AddNewPetIntakeBridge --[#059669]> Pet : "Creates official admitted Pet row"
+AnimalSighting "0..1" --[#6366F1] "1" Pet : "converted_pet_id (origin traceability)"
+@enduml

@@ -1,0 +1,125 @@
+@startuml
+skinparam defaultFontName "Segoe UI"
+skinparam roundCorner 8
+skinparam shadowing false
+skinparam classFontSize 12
+skinparam classAttributeFontSize 11
+skinparam ArrowColor #334155
+skinparam ArrowThickness 1.3
+
+class User <<Supabase Auth / Profiles>> #EFF6FF {
+    +UUID id
+    +String user_id
+    +String full_name
+    +String email
+    +String role
+    +login() : SessionToken
+    +logout() : void
+}
+
+class ProspectiveAdopter <<Client Role>> #F0FDF4 {
+    +String housing_type
+    +String contact_number
+    +Boolean has_secure_fence
+    +Boolean household_agreement
+    +String pet_care_budget
+    +browsePets() : void
+    +submitApplication(pet_id, formData) : void
+    +trackApplicationStatus() : void
+}
+
+class ShelterStaff <<Staff Role>> #FEF2F2 {
+    +String employee_id
+    +String department
+    +reviewApplication(application_id) : void
+    +updateApplicationStatus(id, status) : void
+    +publishAdoptionAnnouncement() : void
+}
+
+class AdoptionGallery <<React UI Component>> #F5F3FF {
+    -Array availablePets
+    -Object filterCriteria
+    -Boolean modalOpen
+    +filterBySpecies(species) : void
+    +openApplicationModal(pet) : void
+    +handleFormSubmit(e) : void
+    +render() : JSX
+}
+
+class PendingApplications <<React Admin Table>> #FFFBEB {
+    -Array applicationsList
+    -String filterStatus
+    -Boolean isProcessing
+    +fetchPendingApplications() : void
+    +handleApprove(applicationId, petId) : void
+    +handleDeny(applicationId) : void
+    +renderTriageGrid() : JSX
+}
+
+class AdoptionApplicationAPIView <<Django REST Framework>> #EEF2FF {
+    +get(request) : Response
+    +post(request) : Response
+    -validate_application_payload(data) : dict
+}
+
+class AdoptionApplicationDetailAPIView <<Django REST Framework>> #EEF2FF {
+    +patch(request, application_id) : Response
+    -transition_application_state(id, status) : void
+    -sync_pet_adopted_status(pet_id) : void
+    -trigger_celebration_announcement(pet_id) : void
+}
+
+class AdoptionNotificationMailer <<Django Core Mail / SMTP>> #ECFDF5 {
+    +send_approval_email(adopter_email, pet_name) : void
+    +send_denial_email(adopter_email, pet_name) : void
+}
+
+class AdoptionApplication <<Supabase Entity>> #FFF1F2 {
+    +BigInt application_id <<PK>>
+    +String pet_id <<FK>>
+    +UUID applicant_id <<FK>>
+    +String full_name
+    +String contact_number
+    +String email
+    +Text residential_address
+    +String experience_level
+    +String housing_type
+    +Boolean has_secure_fence
+    +Boolean household_agreement
+    +String pet_care_budget
+    +Text plan_if_moving
+    +String application_status
+    +DateTime submitted_at
+}
+
+class Pet <<Supabase Entity>> #F0FDF4 {
+    +String pet_id <<PK>>
+    +String name
+    +String species
+    +String breed
+    +String adoption_status
+    +getProfile() : dict
+    +updateStatus(new_status) : void
+}
+
+' Inheritance & Role Specialization
+User <|-- ProspectiveAdopter
+User <|-- ShelterStaff
+
+' UI Navigation & Interactions
+ProspectiveAdopter --> AdoptionGallery : Interacts with Catalog
+ShelterStaff --> PendingApplications : Operates Triage Queue
+
+AdoptionGallery ..> AdoptionApplicationAPIView : HTTP POST /api/pets/applications/
+PendingApplications ..> AdoptionApplicationDetailAPIView : HTTP PATCH /api/pets/applications/{id}/
+
+' Backend Service Flow
+AdoptionApplicationAPIView ..> AdoptionApplication : Inserts (Status = 'Pending')
+AdoptionApplicationDetailAPIView ..> AdoptionApplication : Updates Status (Approved / Denied)
+AdoptionApplicationDetailAPIView ..> Pet : Sets Status = 'Adopted'
+AdoptionApplicationDetailAPIView ..> AdoptionNotificationMailer : Dispatches Status Alert
+
+AdoptionApplication "0..*" --> "1" Pet : For Companion
+AdoptionApplication "0..*" --> "1" User : Submitted By
+
+@enduml

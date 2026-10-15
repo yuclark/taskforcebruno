@@ -1,0 +1,92 @@
+@startuml
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam defaultFontName "Segoe UI"
+
+skinparam entity {
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontSize 12
+    FontStyle bold
+    HeaderBackgroundColor #E2E8F0
+}
+
+entity "pet_pet" as pets #F3E8FF {
+    * id : uuid <<PK>>
+    --
+    * name : varchar(100)
+    * species : varchar(50)
+    breed : varchar(100)
+    age : varchar(50)
+    gender : varchar(20)
+    * <color:#7C3AED>adoption_status : varchar(30)</color>
+    is_active : boolean
+    qr_code_id : varchar(50) <<UQ>>
+    photo_url : varchar(500)
+    description : text
+    created_at : timestamptz
+}
+
+entity "auth_user" as users #DBEAFE {
+    * id : uuid <<PK>>
+    --
+    * username : varchar(150) <<UQ>>
+    * email : varchar(254)
+    first_name : varchar(150)
+    last_name : varchar(150)
+    <color:#2563EB>is_staff : boolean</color>
+    is_active : boolean
+}
+
+entity "pet_adoption_application" as applications #FEF3C7 {
+    * id : uuid <<PK>>
+    --
+    * <color:#7C3AED>pet_id : uuid <<FK>></color>
+    <color:#2563EB>applicant_user_id : uuid <<FK>></color>
+    * applicant_name : varchar(150)
+    * applicant_email : varchar(254)
+    * applicant_phone : varchar(50)
+    * housing_type : varchar(50)
+    * has_secure_fence : boolean
+    * household_agreement : boolean
+    * pet_care_budget : numeric(10,2)
+    * pet_experience : text
+    * plan_if_moving : text
+    * <color:#D97706>application_status : varchar(30)</color>
+    review_notes : text
+    <color:#2563EB>reviewed_by_id : uuid <<FK>></color>
+    reviewed_at : timestamptz
+    * created_at : timestamptz
+}
+
+entity "campus_announcement" as announcements #FCE7F3 {
+    * id : uuid <<PK>>
+    --
+    * title : varchar(200)
+    * content : text
+    * <color:#DB2777>category : varchar(50)</color>
+    <color:#7C3AED>pet_id : uuid <<FK>></color>
+    <color:#2563EB>author_id : uuid <<FK>></color>
+    is_pinned : boolean
+    * created_at : timestamptz
+}
+
+entity "pet_medical_record" as medical #D1FAE5 {
+    * id : uuid <<PK>>
+    --
+    * <color:#7C3AED>pet_id : uuid <<FK>></color>
+    * record_type : varchar(50)
+    description : text
+    administered_date : date
+    vet_clinic_name : varchar(150)
+    created_at : timestamptz
+}
+
+pets ||--[#7C3AED]o{ applications : "pet_id\n(receives apps)"
+users ||--[#2563EB]o{ applications : "applicant_user_id\n(submits)"
+users ||--[#D97706]o{ applications : "reviewed_by_id\n(triages)"
+pets ||--[#059669]o{ medical : "pet_id\n(health history)"
+pets ||--[#DB2777]o{ announcements : "pet_id\n(happy tails story)"
+users ||--[#2563EB]o{ announcements : "author_id\n(posts)"
+@enduml

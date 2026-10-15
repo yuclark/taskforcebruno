@@ -1,0 +1,92 @@
+@startuml
+skinparam defaultFontName "Segoe UI"
+skinparam roundCorner 8
+skinparam shadowing false
+skinparam linetype ortho
+skinparam ArrowColor #334155
+skinparam ArrowThickness 1.3
+
+skinparam class {
+    BackgroundColor #F8FAFC
+    BorderColor #64748B
+    HeaderBackgroundColor #E2E8F0
+}
+
+entity "profiles (USERS)" as users #EFF6FF {
+    * id : uuid <<PK, FK auth.users>>
+    --
+    * user_id : varchar(20) <<CIT-U ID>>
+    * first_name : varchar(100)
+    * last_name : varchar(100)
+    * email : varchar(150) <<@cit.edu>>
+    contact_number : varchar(30)
+    role : varchar(30) <<STUDENT, FACULTY, MDC_STAFF>>
+    is_staff : boolean
+    created_at : timestamptz
+}
+
+entity "pets" as pets #F0FDF4 {
+    * pet_id : varchar(50) <<PK>>
+    --
+    * name : varchar(100)
+    species : varchar(30) <<Cat, Dog>>
+    breed : varchar(50)
+    gender : varchar(10)
+    age : varchar(30)
+    adoption_status : varchar(30) <<Available, Pending, Adopted>>
+    vaccination_status : varchar(30)
+    primary_image : text
+    qr_collar_tag_code : varchar(50)
+    behavior_notes : text
+    about_text : text
+}
+
+entity "adoption_applications" as applications #FFF1F2 {
+    * application_id : bigint <<PK, identity>>
+    --
+    * pet_id : varchar(50) <<FK pets.pet_id>>
+    applicant_id : uuid <<FK profiles.id>>
+    full_name : varchar(150)
+    contact_number : varchar(30)
+    email : varchar(150)
+    residential_address : text
+    experience_level : varchar(50)
+    housing_type : varchar(50) <<Apartment, Own House, Dorm>>
+    has_secure_fence : boolean
+    household_agreement : boolean
+    pet_care_budget : varchar(50)
+    plan_if_moving : text
+    application_status : varchar(30) <<Pending, Approved, Denied>>
+    submitted_at : timestamptz
+    reviewed_by : uuid <<FK profiles.id>>
+    reviewed_at : timestamptz
+}
+
+entity "pet_images" as images #FDF2F8 {
+    * image_id : bigint <<PK, identity>>
+    --
+    * pet_id : varchar(50) <<FK pets.pet_id>>
+    image_url : text
+    is_primary : boolean
+    uploaded_at : timestamptz
+}
+
+entity "campus_announcements" as bulletins #FFFBEB {
+    * announcement_id : bigint <<PK, identity>>
+    --
+    title : varchar(200) <<Happy Rehoming!>>
+    content : text
+    category : varchar(50) <<Adoption Milestone>>
+    image_url : text
+    author_id : uuid <<FK profiles.id>>
+    created_at : timestamptz
+}
+
+' Entity Relationships
+users ||--o{ applications : "submits (1:N)"
+pets ||--o{ applications : "receives (1:N)"
+pets ||--o{ images : "has (1:N)"
+users ||--o{ applications : "evaluates / reviews (1:N)"
+pets ||--o| bulletins : "celebrated in (1:1)"
+
+@enduml

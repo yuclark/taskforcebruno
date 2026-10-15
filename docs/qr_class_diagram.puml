@@ -1,0 +1,90 @@
+@startuml
+skinparam defaultFontName "Segoe UI"
+skinparam roundCorner 8
+skinparam shadowing false
+skinparam classFontSize 12
+skinparam classAttributeFontSize 11
+skinparam ArrowColor #334155
+skinparam ArrowThickness 1.3
+
+class ProfileRouter <<React Logic>> #EFF6FF {
+    -String currentPath
+    +parsePetID(path) : String
+    +routeTo(view) : void
+}
+
+class QRScannerView <<React UI Component>> #F0FDF4 {
+    -String manualId
+    -Boolean isProcessing
+    -String statusMessage
+    -String errorMessage
+    +onProfileIdentified(id) : void
+    +handleManualSubmit(e) : void
+    +simulateCameraScan() : void
+    +handleFileUpload(e) : void
+    +render() : JSX
+}
+
+class PetProfileView <<React UI Component>> #F5F3FF {
+    -String petId
+    -Object petData
+    -Boolean loading
+    -Boolean showApplyForm
+    -Object applicationForm
+    -String successMessage
+    +onBackToScanner() : void
+    +useEffect() : void
+    +handleApplySubmit(e) : void
+    +render() : JSX
+}
+
+class PetPassportView <<React Emergency UI>> #FFF1F2 {
+    -String petId
+    -Object passportData
+    -Boolean isEmergencyMode
+    -String clinicHotline
+    +onDialClinic() : void
+    +renderRabiesBadge() : JSX
+    +render() : JSX
+}
+
+class PetDetailAPIView <<Django REST Framework APIView>> #EEF2FF {
+    +get(request, pet_id) : Response
+    +get_passport(request, pet_id) : Response
+    -sanitize_public_payload(record) : dict
+}
+
+class PetProfileQueryHandler <<Python / Supabase Handler>> #ECFDF5 {
+    -Client supabase_client
+    +fetch_pet_record(pet_id) : dict
+    +verify_rabies_status(pet_id) : dict
+    +resolve_media_bucket_url(path) : str
+}
+
+class PetEntity <<Supabase / Relational Model>> #FFFBEB {
+    +String pet_id
+    +String name
+    +String species
+    +String breed
+    +String gender
+    +String age
+    +String pet_type
+    +String adoption_status
+    +String vaccination_status
+    +Boolean spayed_neutered
+    +DateTime last_rabies_vaccination
+    +String qr_collar_tag_code
+}
+
+' Navigation & Dependency Flow
+ProfileRouter --> QRScannerView : Renders Initially
+QRScannerView --> ProfileRouter : Triggers with ID
+ProfileRouter --> PetProfileView : Mounts with petId prop (Detailed)
+ProfileRouter --> PetPassportView : Routes Unauthenticated Scanners (Emergency Passport)
+
+PetProfileView ..> PetDetailAPIView : HTTP GET /api/pets/{id}
+PetPassportView ..> PetDetailAPIView : HTTP GET /api/pets/{id}/ (Sanitized)
+PetDetailAPIView ..> PetProfileQueryHandler : Validates & Invokes
+PetProfileQueryHandler ..> PetEntity : Queries Supabase 'pets' Table
+
+@enduml

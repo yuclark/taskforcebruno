@@ -1,0 +1,75 @@
+@startuml
+skinparam defaultFontName "Segoe UI"
+skinparam roundCorner 8
+skinparam shadowing false
+skinparam ArrowColor #334155
+skinparam ArrowThickness 1.3
+
+actor "Campus User / Adopter" as user
+participant "QRScannerView\n(React)" as scanner #F0FDF4
+participant "ProfileRouter\n(React)" as router #EFF6FF
+participant "PetPassportView\n(React Emergency)" as passport #FFF1F2
+participant "PetProfileView\n(React Detailed)" as profile #F5F3FF
+participant "PetDetailAPIView\n(Django REST Framework)" as drf_view #EEF2FF
+participant "PetProfileQueryHandler\n(Python / Supabase)" as handler #ECFDF5
+database "Supabase PostgreSQL\n(Database & Buckets)" as db #059669
+
+autonumber 1 "<b>(#)</b>"
+
+user -> scanner : Interacts with Interface
+activate scanner
+
+alt Method A: Optic Scan Stream (Hardware Camera)
+    scanner -> scanner : scanFrame() via jsQR decoder
+else Method B: Matrix Upload (Gallery File Fallback)
+    scanner -> scanner : handleFileUpload() + decode via jsQR
+else Method C: Console Override Terminal
+    scanner -> scanner : handleManualSubmit(e)
+end
+
+scanner -> router : onProfileIdentified(petId)
+deactivate scanner
+activate router
+
+alt Unauthenticated / Emergency Scan (Public User)
+    router -> passport : Mounts component with petId prop
+    activate passport
+    passport -> drf_view : HTTP GET /api/pets/{pet_id}/ (Public Passport)
+    activate drf_view
+    drf_view -> handler : fetch_pet_record(pet_id)
+    activate handler
+    handler -> db : Query profile & rabies metrics where pet_id = id
+    activate db
+    db --> handler : Return relational datasets
+    deactivate db
+    handler --> drf_view : Return structured pet record
+    deactivate handler
+    drf_view -> drf_view : sanitize_public_payload() (Strip internal clinic logs)
+    drf_view --> passport : 200 OK (Rabies Status, Vaccine Badges, Hotline)
+    deactivate drf_view
+    passport --> user : Renders Emergency Pet Passport (Verified Rabies Badge, Hotline)
+    deactivate passport
+
+else Authenticated / Detailed Profile View (Adoption & Clinical)
+    router -> profile : Mounts component with petId prop
+    activate profile
+    profile -> drf_view : HTTP GET /api/pets/{pet_id}/ (Full Details)
+    activate drf_view
+    drf_view -> handler : fetch_pet_record(pet_id)
+    activate handler
+    handler -> db : Query comprehensive profile metrics
+    activate db
+    db --> handler : Return full relational dataset
+    deactivate db
+    handler --> drf_view : Return complete pet entity object
+    deactivate handler
+    drf_view --> profile : Deliver verified JSON response payload
+    deactivate drf_view
+    profile -> profile : setPetData(data) & toggle loading false
+    profile --> user : Renders full Mobile UI Layout (Vitals, Diagnostics, Bio, Adoption)
+    deactivate profile
+end
+
+deactivate router
+
+@enduml

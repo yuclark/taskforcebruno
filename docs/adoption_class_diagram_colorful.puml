@@ -1,0 +1,150 @@
+@startuml
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam handwritten false
+skinparam defaultFontName "Segoe UI"
+
+skinparam class {
+    BackgroundColor white
+    ArrowColor #2563EB
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontSize 12
+}
+
+skinparam package {
+    BackgroundColor #F1F5F9
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontColor #0F172A
+    FontStyle bold
+}
+
+package "Frontend Presentation Layer (React 19 / Vite)" #EFF6FF {
+    class AdoptionGalleryComponent <<React Component>> #DBEAFE {
+        - selectedPet: Pet
+        - isApplicationModalOpen: boolean
+        - formData: AdoptionFormPayload
+        - isSubmitting: boolean
+        - submitSuccess: boolean
+        --
+        + handleOpenModal(pet: Pet): void
+        + handleInputChange(field: string, val: any): void
+        + handleSubmit(e: FormEvent): Promise<void>
+        + renderQuestionnaireModal(): JSX.Element
+    }
+
+    class PendingApplicationsComponent <<React Component>> #DBEAFE {
+        - applications: AdoptionApplication[]
+        - selectedApp: AdoptionApplication
+        - triageFilter: ApplicationStatus
+        - isReviewModalOpen: boolean
+        - isProcessing: boolean
+        --
+        + fetchPendingApplications(): Promise<void>
+        + handleApprove(applicationId: string): Promise<void>
+        + handleReject(applicationId: string, reason: string): Promise<void>
+        + renderTriageTable(): JSX.Element
+        + renderApplicantDossierModal(): JSX.Element
+    }
+}
+
+package "Backend REST API Layer (Django REST Framework)" #ECFDF5 {
+    class AdoptionApplicationAPIView <<APIView>> #D1FAE5 {
+        + permission_classes: [IsAuthenticatedOrReadOnly]
+        --
+        + get(request: Request): Response
+        + post(request: Request): Response
+    }
+
+    class AdoptionApplicationDetailAPIView <<APIView>> #D1FAE5 {
+        + permission_classes: [IsMDCStaffOrAdmin]
+        --
+        + get(request: Request, pk: UUID): Response
+        + patch(request: Request, pk: UUID): Response
+    }
+
+    class AdoptionApplicationSerializer <<ModelSerializer>> #FEF3C7 {
+        + id: UUIDField
+        + pet: PrimaryKeyRelatedField
+        + applicant_name: CharField
+        + applicant_email: EmailField
+        + applicant_phone: CharField
+        + housing_type: ChoiceField
+        + has_secure_fence: BooleanField
+        + pet_experience: CharField
+        + application_status: ChoiceField
+        --
+        + validate_housing_type(value: str): str
+        + validate_pet_availability(value: UUID): Pet
+    }
+
+    class AdoptionWorkflowService <<Service>> #FEF08A {
+        + submit_application(payload: dict, user_id: UUID): AdoptionApplication
+        + approve_application(app_id: UUID, staff_id: UUID): AdoptionApplication
+        + reject_application(app_id: UUID, staff_id: UUID, reason: str): AdoptionApplication
+        - send_status_notification(application: AdoptionApplication): void
+        - broadcast_adoption_announcement(pet: Pet, applicant_name: str): void
+    }
+}
+
+package "Persistence Layer (Supabase PostgreSQL / ORM)" #FAF5FF {
+    class Pet <<Django Model>> #F3E8FF {
+        + id: UUID [PK]
+        + name: CharField
+        + species: CharField
+        + breed: CharField
+        + age: CharField
+        + gender: CharField
+        + adoption_status: CharField
+        + is_active: BooleanField
+        + qr_code_id: CharField
+        + photo_url: URLField
+    }
+
+    class AdoptionApplication <<Django Model>> #EDE9FE {
+        + id: UUID [PK]
+        + pet_id: ForeignKey
+        + applicant_user_id: ForeignKey
+        + applicant_name: CharField
+        + applicant_email: EmailField
+        + applicant_phone: CharField
+        + housing_type: CharField
+        + has_secure_fence: BooleanField
+        + household_agreement: BooleanField
+        + pet_care_budget: DecimalField
+        + pet_experience: TextField
+        + plan_if_moving: TextField
+        + application_status: CharField
+        + review_notes: TextField
+        + reviewed_by: ForeignKey
+        + reviewed_at: DateTimeField
+        + created_at: DateTimeField
+    }
+
+    class CampusAnnouncement <<Django Model>> #FCE7F3 {
+        + id: UUID [PK]
+        + title: CharField
+        + content: TextField
+        + category: CharField
+        + author_id: ForeignKey
+        + is_pinned: BooleanField
+        + created_at: DateTimeField
+    }
+}
+
+AdoptionGalleryComponent ..[#2563EB]> AdoptionApplicationAPIView : "<color:#1D4ED8><b>HTTP POST /api/pets/applications/</b></color>"
+PendingApplicationsComponent ..[#2563EB]> AdoptionApplicationDetailAPIView : "<color:#1D4ED8><b>HTTP PATCH /api/pets/applications/{id}/</b></color>"
+
+AdoptionApplicationAPIView --[#059669]> AdoptionApplicationSerializer : "Deserializes payload"
+AdoptionApplicationDetailAPIView --[#059669]> AdoptionApplicationSerializer : "Validates updates"
+AdoptionApplicationAPIView --[#D97706]> AdoptionWorkflowService : "Delegates submission"
+AdoptionApplicationDetailAPIView --[#D97706]> AdoptionWorkflowService : "Delegates triage"
+
+AdoptionWorkflowService --[#7C3AED]> AdoptionApplication : "Creates & updates records"
+AdoptionWorkflowService --[#7C3AED]> Pet : "Cascades status to 'Adopted'"
+AdoptionWorkflowService --[#DB2777]> CampusAnnouncement : "Publishes milestone story"
+
+AdoptionApplication "1" *--[#6366F1] "1" Pet : "references pet_id"
+@enduml

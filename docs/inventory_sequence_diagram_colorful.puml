@@ -1,0 +1,107 @@
+@startuml
+autonumber
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam sequenceMessageAlign center
+skinparam defaultFontName "Segoe UI"
+
+skinparam sequence {
+    ArrowColor #2563EB
+    ArrowThickness 1.5
+    LifeLineBorderColor #3B82F6
+    LifeLineBackgroundColor #EFF6FF
+    ParticipantBorderThickness 1.5
+    ActorBorderThickness 1.5
+    GroupBorderColor #64748B
+    GroupBackgroundColor #F1F5F9
+    GroupHeaderFontColor #0F172A
+    DividerBackgroundColor #E2E8F0
+    DividerFontColor #0F172A
+    DividerBorderColor #94A3B8
+}
+
+actor "MDC Logistics Officer" as Staff #BFDBFE
+actor "Campus Community / Donor" as Donor #FED7AA
+
+participant "Vite/React Frontend\n(InventoryControl & Modals)" as Frontend #DBEAFE
+participant "Django REST API\n(Inventory Endpoints)" as API #D1FAE5
+participant "Inventory Transaction\nHandler" as Handler #FEF08A
+participant "Supabase PostgreSQL\n(inventory & transactions)" as DB #EDE9FE
+
+== <color:#1E40AF><b>Phase 1: Inbound Stock Receipt & Donation Intake (Stock In)</b></color> ==
+Donor -> Staff: Deliver 20 cans of cat food & feeding supplies
+Staff -> Frontend: Open Staff Portal -> "Inventory Control" -> Click "Log Transaction"
+activate Frontend #DBEAFE
+
+Frontend --> Staff: Display modal (Select Item, Type: IN, Quantity, Donor Remarks)
+Staff -> Frontend: Enter Quantity: 20, Supplier/Donor: "Alumni Batch 2024", Reason: "Donation"
+Staff -> Frontend: Click "Confirm Stock Inflow"
+Frontend -> API: <color:#1D4ED8><b>POST /api/inventory/transactions/</b></color>\n{ item_id: 14, transaction_type: "IN", quantity_changed: 20, donor: "Alumni Batch 2024" }
+activate API #D1FAE5
+
+API -> Handler: <color:#B45309><b>execute_stock_movement(payload)</b></color>
+activate Handler #FEF08A
+
+Handler -> DB: SELECT quantity FROM inventory WHERE item_id = 14
+activate DB #EDE9FE
+DB --> Handler: Return current stock: 35 cans
+deactivate DB
+
+Handler -> Handler: Calculate new balance: 35 + 20 = 55 cans
+
+group <color:#7C3AED><b>Supabase Atomic Update & Ledger Append</b></color>
+    Handler -> DB: UPDATE inventory SET quantity = 55 WHERE item_id = 14
+    activate DB #EDE9FE
+    Handler -> DB: <color:#7C3AED><b>INSERT INTO inventory_transactions</b></color>\n(item_id=14, type='IN', delta=20, donor='Alumni Batch 2024', logged_at=NOW())
+    DB --> Handler: 201 Created (Transaction Ledger Record)
+    deactivate DB
+end
+
+Handler --> API: StockMovementResult(item_id=14, new_quantity=55, status="Success")
+deactivate Handler
+
+API --> Frontend: <color:#16A34A><b>201 Created JSON (Updated stock & transaction entry)</b></color>
+deactivate API
+
+Frontend --> Staff: Display "Inflow recorded: +20 cans added!" toast & update active stock
+deactivate Frontend
+
+== <color:#C2410C><b>Phase 2: Outbound Dispensation & Low-Stock Deficit Alert (Stock Out)</b></color> ==
+Staff -> Frontend: Select "Anti-Rabies Vaccine Vials" (Current: 8 vials, Min Threshold: 10)
+activate Frontend #DBEAFE
+Staff -> Frontend: Choose Type: OUT, Quantity: 4, Reason: "Campus Mass Vaccination"
+Frontend --> Staff: Trigger Deduction Confirmation Modal (Review delta & remaining balance)
+Staff -> Frontend: Click "Confirm Deduction"
+
+Frontend -> API: <color:#1D4ED8><b>POST /api/inventory/transactions/</b></color>\n{ item_id: 22, transaction_type: "OUT", quantity_changed: 4, reason: "Mass Vaccination" }
+activate API #D1FAE5
+
+API -> Handler: <color:#B45309><b>execute_stock_movement(item_id=22, OUT, 4)</b></color>
+activate Handler #FEF08A
+
+Handler -> DB: SELECT quantity, min_threshold FROM inventory WHERE item_id = 22
+activate DB #EDE9FE
+DB --> Handler: Return stock: 8, min_threshold: 10
+deactivate DB
+
+Handler -> Handler: Verify balance: 8 - 4 = 4 vials (> 0, valid dispensation)
+
+group <color:#7C3AED><b>Supabase Atomic Update & Ledger Append</b></color>
+    Handler -> DB: UPDATE inventory SET quantity = 4 WHERE item_id = 22
+    activate DB #EDE9FE
+    Handler -> DB: <color:#7C3AED><b>INSERT INTO inventory_transactions</b></color>\n(item_id=22, type='OUT', delta=4, reason='Mass Vaccination', logged_at=NOW())
+    DB --> Handler: 201 Created (Transaction Ledger Record)
+    deactivate DB
+end
+
+Handler -> Handler: check_low_stock_threshold(4 <= 10) -> TRUE (Deficit Triggered)
+Handler --> API: StockMovementResult(item_id=22, new_quantity=4, low_stock_warning=True)
+deactivate Handler
+
+API --> Frontend: <color:#16A34A><b>201 Created JSON with low_stock_warning: true</b></color>
+deactivate API
+
+Frontend --> Staff: Highlight item row in <color:#DC2626><b>RED BADGE: 'Low Stock Alert (4/10 vials remaining)'</b></color>
+deactivate Frontend
+@enduml

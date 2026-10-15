@@ -1,0 +1,103 @@
+@startuml
+autonumber
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam sequenceMessageAlign center
+skinparam defaultFontName "Segoe UI"
+
+skinparam sequence {
+    ArrowColor #2563EB
+    ArrowThickness 1.5
+    LifeLineBorderColor #3B82F6
+    LifeLineBackgroundColor #EFF6FF
+    ParticipantBorderThickness 1.5
+    ActorBorderThickness 1.5
+    GroupBorderColor #64748B
+    GroupBackgroundColor #F1F5F9
+    GroupHeaderFontColor #0F172A
+    DividerBackgroundColor #E2E8F0
+    DividerFontColor #0F172A
+    DividerBorderColor #94A3B8
+}
+
+actor "MDC Clinic Staff / Admin" as Staff #BFDBFE
+actor "Adopter / Campus Student" as Student #FED7AA
+
+participant "Vite/React Frontend\n(AddNewPet & PetListings)" as Frontend #DBEAFE
+participant "Collar Tag Generator\n(HTML5 Canvas Utility)" as TagGen #DBEAFE
+participant "Django REST API\n(PetListAPIView & AISearch)" as API #D1FAE5
+participant "Pet Intake Storage\nHandler" as StorageHandler #FEF08A
+participant "Supabase Storage\n('petpictures' Bucket)" as Bucket #FCE7F3
+participant "Supabase PostgreSQL\n('pets' Table)" as DB #EDE9FE
+
+== <color:#1E40AF><b>Phase 1: Animal Admission & Multipart Intake Pipeline</b></color> ==
+Staff -> Frontend: Open "Add New Pet" Intake Screen
+activate Frontend #DBEAFE
+Staff -> Frontend: Fill biometrics (Name: 'Bruno', Species: 'Cat', Age: '2 yrs', Weight: '4.5 kg')
+Staff -> Frontend: Select Found Near: 'Wildcat Innovation Labs' & Attach Photo file
+Staff -> Frontend: Click "Register Companion"
+Frontend -> API: <color:#1D4ED8><b>POST /api/pets/</b></color>\n(Multipart FormData: fields + image binary)
+activate API #D1FAE5
+
+API -> StorageHandler: <color:#B45309><b>process_image_upload(request.FILES['image'])</b></color>
+activate StorageHandler #FEF08A
+
+StorageHandler -> StorageHandler: Generate unique key: "pet_UUID.jpg"
+StorageHandler -> Bucket: <color:#DB2777><b>upload(path="pet_UUID.jpg", file=binary_data)</b></color>
+activate Bucket #FCE7F3
+Bucket --> StorageHandler: 200 OK (Uploaded successfully)
+StorageHandler -> Bucket: get_public_url("pet_UUID.jpg")
+Bucket --> StorageHandler: Return CDN URL: "https://supabase.../petpictures/pet_UUID.jpg"
+deactivate Bucket
+
+StorageHandler --> API: Resolved Public Image CDN URL
+deactivate StorageHandler
+
+group <color:#7C3AED><b>Supabase Pet Master Registration</b></color>
+    API -> DB: <color:#7C3AED><b>INSERT INTO pets</b></color>\n(pet_id='CIT-CAT-042', name='Bruno', species='Cat',\nweight='4.5 kg', size='Small', primary_image=CDN_URL, adoption_status='Available')
+    activate DB #EDE9FE
+    DB --> API: 201 Created (Pet Record UUID & Fields)
+    deactivate DB
+end
+
+API --> Frontend: <color:#16A34A><b>201 Created JSON (New Pet Master Record)</b></color>
+deactivate API
+
+Frontend --> Staff: Display "Bruno registered in Wildcat Welfare Portal!" banner
+deactivate Frontend
+
+== <color:#C2410C><b>Phase 2: Automated Waterproof Collar Tag Generation</b></color> ==
+Staff -> Frontend: Navigate to "Pet Listings" -> Click "Print Collar Tag" for Bruno
+activate Frontend #DBEAFE
+Frontend -> TagGen: generatePrintableMatrix(pet_id='CIT-CAT-042', name='Bruno')
+activate TagGen #DBEAFE
+
+TagGen -> TagGen: Encode URL: 'https://taskforcebruno.onrender.com/pet/CIT-CAT-042'
+TagGen -> TagGen: Render 300 DPI high-contrast optical QR pattern with CIT-U emblem
+TagGen --> Frontend: Print-Ready PDF / Canvas Modal Preview
+deactivate TagGen
+
+Staff -> Frontend: Send to Zebra Thermal Label / Color Tag Printer
+Frontend --> Staff: Waterproof Collar Tag printed for physical collar attachment
+deactivate Frontend
+
+== <color:#059669><b>Phase 3: AI Semantic Search for Registered Companions</b></color> ==
+Student -> Frontend: Type search query: "friendly ginger cat near innovation labs"
+activate Frontend #DBEAFE
+Frontend -> API: <color:#1D4ED8><b>POST /api/pets/ai-search/</b></color>\n{ "description": "friendly ginger cat near innovation labs" }
+activate API #D1FAE5
+
+API -> API: Extract negations & synonym map (ginger -> orange, kitty -> cat)
+API -> DB: SELECT * FROM pets WHERE adoption_status != 'Adopted'
+activate DB #EDE9FE
+DB --> API: Return candidate pets with traits & colony origin
+deactivate DB
+
+API -> API: Compute weighted token overlap & trait scores
+API --> Frontend: <color:#16A34A><b>200 OK JSON (Ranked companion results: Bruno #1 Match)</b></color>
+deactivate API
+
+Frontend --> Student: Display Bruno's profile card with 95% AI semantic affinity match
+deactivate Frontend
+@enduml

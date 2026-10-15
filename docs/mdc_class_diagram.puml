@@ -1,0 +1,102 @@
+@startuml
+skinparam defaultFontName "Segoe UI"
+skinparam roundCorner 8
+skinparam shadowing false
+skinparam classFontSize 12
+skinparam classAttributeFontSize 11
+skinparam ArrowColor #334155
+skinparam ArrowThickness 1.3
+
+class MDCStaffUser <<Supabase Auth / Profiles>> #EFF6FF {
+    -UUID id
+    -String employeeId
+    -String email
+    -String role
+    -Boolean isStaff
+    +login(credentials) : SessionToken
+    +logout() : void
+}
+
+class MDCDashboardView <<React UI Component>> #F0FDF4 {
+    -Array petRegistry
+    -Array activeQuarantines
+    -Boolean loading
+    -String searchFilter
+    +fetchMedicalDashboard() : void
+    +filterByLandmark(zone) : void
+    +render() : JSX
+}
+
+class IncidentReportForm <<React UI Form>> #FFF1F2 {
+    -String petId
+    -String incidentType
+    -Date incidentDate
+    -String campusLandmark
+    -String victimDetails
+    -Boolean autoQuarantineRA9482
+    +handleSubmit(e) : void
+    +flagForPEP() : void
+    +render() : JSX
+}
+
+class QuarantineTrackerComponent <<React Biosecurity Widget>> #FEF2F2 {
+    -String quarantineId
+    -String petId
+    -Date incidentDate
+    -Integer countdownDaysRemaining
+    -String clinicalStatus
+    +calculateQuarantineElapsed() : Integer
+    +dischargeQuarantine() : void
+    +renderCountdownBadge() : JSX
+}
+
+class MedicalRecordsAPIView <<Django REST Framework APIView>> #EEF2FF {
+    +get(request, pet_id) : Response
+    +post(request, pet_id) : Response
+    -validate_biosecurity_payload(data) : dict
+}
+
+class ClinicalBiosecurityService <<Python / Supabase Handler>> #ECFDF5 {
+    -Client supabase_client
+    +log_clinical_visit(payload) : dict
+    +create_incident_quarantine(payload) : dict
+    +update_vaccine_timeline(pet_id, vax_data) : void
+    +fetch_patient_history(pet_id) : dict
+}
+
+class MedicalRecord <<Supabase Entity>> #F5F3FF {
+    +BigInt record_id <<PK>>
+    +String pet_id <<FK>>
+    +String visit_type
+    +Date log_date
+    +String attending_staff
+    +Numeric weight_kg
+    +Text clinical_notes
+    +Text diagnosis
+    +Boolean is_bite_scratch_incident
+    +Boolean quarantine_14day_active
+}
+
+class Pet <<Supabase Entity>> #F0FDF4 {
+    +String pet_id <<PK>>
+    +String name
+    +String species
+    +String breed
+    +String vaccination_status
+    +DateTime last_rabies_vaccination
+}
+
+' Relationships & Navigation
+MDCStaffUser --> MDCDashboardView : Authenticates & Operates
+MDCDashboardView --> IncidentReportForm : Triggers on Bite/Scratch
+MDCDashboardView --> QuarantineTrackerComponent : Embeds RA 9482 Surveillance
+
+IncidentReportForm ..> MedicalRecordsAPIView : HTTP POST /api/medical/{pet_id}/
+MDCDashboardView ..> MedicalRecordsAPIView : HTTP GET /api/medical/{pet_id}/
+
+MedicalRecordsAPIView ..> ClinicalBiosecurityService : Validates & Calls
+ClinicalBiosecurityService ..> MedicalRecord : Persists Logs & Quarantine
+ClinicalBiosecurityService ..> Pet : Updates Health Status
+MedicalRecord --> Pet : Records Treatment for
+
+@enduml

@@ -1,0 +1,80 @@
+@startuml
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam defaultFontName "Segoe UI"
+
+skinparam entity {
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontSize 12
+    FontStyle bold
+    HeaderBackgroundColor #E2E8F0
+}
+
+entity "pets" as pets #F3E8FF {
+    * pet_id : varchar(50) <<PK>>
+    --
+    * name : varchar(100)
+    * species : varchar(50)
+    pet_type : varchar(50)
+    breed : varchar(100)
+    gender : varchar(20)
+    age : varchar(50)
+    weight : varchar(50)
+    size : varchar(20)
+    * <color:#059669>vaccination_status : varchar(50)</color>
+    spayed_neutered : boolean
+    * <color:#7C3AED>adoption_status : varchar(50)</color>
+    * found_near : varchar(150)
+    rescue_date : date
+    current_conditions : text
+    behavior_notes : text
+    about_text : text
+    * <color:#DB2777>primary_image : varchar(500)</color>
+    created_at : timestamptz
+}
+
+entity "pet_images" as images #EDE9FE {
+    * id : serial <<PK>>
+    --
+    * <color:#7C3AED>pet_id : varchar(50) <<FK -> pets.pet_id>></color>
+    * image_url : varchar(500)
+    is_primary : boolean
+    uploaded_at : timestamptz
+}
+
+entity "animal_sightings" as sightings #FEF3C7 {
+    * sighting_id : serial <<PK>>
+    --
+    * animal_type : varchar(50)
+    location_details : varchar(200)
+    distinct_features : text
+    * <color:#D97706>status : varchar(50)</color>
+    converted_pet_id : varchar(50) <<FK -> pets.pet_id>>
+    logged_at : timestamptz
+}
+
+entity "medical_records" as medical #D1FAE5 {
+    * id : serial <<PK>>
+    --
+    * <color:#7C3AED>pet_id : varchar(50) <<FK -> pets.pet_id>></color>
+    * record_type : varchar(50)
+    description : text
+    log_date : date
+    next_followup_date : date
+}
+
+entity "auth_user" as users #DBEAFE {
+    * id : uuid <<PK>>
+    --
+    * email : varchar(254) <<UQ>>
+    username : varchar(150)
+    <color:#2563EB>is_staff : boolean</color>
+}
+
+pets ||--[#7C3AED]o{ images : "pet_id\n(gallery photo assets)"
+pets ||--[#059669]o{ medical : "pet_id\n(clinical baseline vitals)"
+sightings ||--[#D97706]o| pets : "converted_pet_id\n(1-click intake origin)"
+users ||--[#2563EB]o{ pets : "admitted_by\n(attending staff)"
+@enduml

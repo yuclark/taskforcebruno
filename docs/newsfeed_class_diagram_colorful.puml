@@ -1,0 +1,170 @@
+@startuml
+skinparam backgroundColor #F8FAFC
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam handwritten false
+skinparam defaultFontName "Segoe UI"
+
+skinparam class {
+    BackgroundColor white
+    ArrowColor #2563EB
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontSize 12
+}
+
+skinparam package {
+    BackgroundColor #F1F5F9
+    BorderColor #64748B
+    BorderThickness 1.5
+    FontColor #0F172A
+    FontStyle bold
+}
+
+package "Frontend Presentation Layer (React 19 / Vite)" #EFF6FF {
+    class NewsfeedViewComponent <<React Component>> #DBEAFE {
+        - feedItems: UnifiedFeedItem[]
+        - activeFilter: string
+        - searchQuery: string
+        - currentUserEmail: string
+        - isSubmittingComment: boolean
+        --
+        + fetchUnifiedNewsfeed(): Promise<void>
+        + handleToggleLike(feedId: string): Promise<void>
+        + handleAddComment(feedId: string, text: string): Promise<void>
+        + handleDeleteComment(commentId: number): Promise<void>
+        + renderFeedCards(): JSX.Element
+    }
+
+    class SightingTriageViewComponent <<React Component>> #DBEAFE {
+        - pendingSightings: SightingReport[]
+        - selectedSighting: SightingReport
+        - isTriageProcessing: boolean
+        --
+        + fetchPendingSightings(): Promise<void>
+        + handleVerifySighting(sightingId: number): Promise<void>
+        + handleAdmitAndIntakeStray(sighting: SightingReport): void
+        + renderTriageGrid(): JSX.Element
+    }
+
+    class ReportSightingViewComponent <<React Component>> #DBEAFE {
+        - campusLandmarks: Landmark[]
+        - selectedLandmark: string
+        - animalType: string
+        - distinctFeatures: string
+        - isEmergencyAlert: boolean
+        - photoFile: File
+        --
+        + handleLandmarkSelect(landmark: string): void
+        + handlePhotoUpload(e: ChangeEvent): void
+        + handleSubmitSighting(e: FormEvent): Promise<void>
+    }
+
+    class UserGuideModalComponent <<React Modal>> #DBEAFE {
+        - activeStepIndex: number
+        - isOpen: boolean
+        --
+        + nextStep(): void
+        + prevStep(): void
+        + renderGuideStep(): JSX.Element
+    }
+}
+
+package "Backend REST API Layer (Django REST Framework)" #ECFDF5 {
+    class UnifiedNewsfeedAPIView <<APIView>> #D1FAE5 {
+        + permission_classes: [IsAuthenticatedOrReadOnly]
+        --
+        + get(request: Request): Response
+    }
+
+    class ToggleLikeAPIView <<APIView>> #D1FAE5 {
+        + permission_classes: [IsAuthenticated]
+        --
+        + post(request: Request): Response
+    }
+
+    class AddCommentAPIView <<APIView>> #D1FAE5 {
+        + permission_classes: [IsAuthenticated]
+        --
+        + post(request: Request): Response
+    }
+
+    class CampusAnnouncementAPIView <<APIView>> #D1FAE5 {
+        + parser_classes: [MultiPartParser, FormParser]
+        --
+        + get(request: Request): Response
+        + post(request: Request): Response
+    }
+
+    class NewsfeedInteractionHandler <<Python Module / Service>> #FEF08A {
+        + aggregate_feed_streams(): list
+        + toggle_feed_like(feed_id: str, user_email: str): dict
+        + append_feed_comment(feed_id: str, user_email: str, text: str): dict
+        + moderate_flagged_content(feed_id: str, staff_id: UUID): boolean
+    }
+}
+
+package "Persistence Layer (Supabase PostgreSQL / Tables)" #FAF5FF {
+    class CampusAnnouncement <<Database Table / Schema>> #FCE7F3 {
+        + announcement_id: Serial [PK]
+        + title: Varchar(200)
+        + content: Text
+        + author_email: Varchar(254)
+        + image_url: Varchar(500)
+        + created_at: TimestampTz
+    }
+
+    class AnimalSighting <<Database Table / Schema>> #EDE9FE {
+        + sighting_id: Serial [PK]
+        + animal_type: Varchar(50)
+        + location_details: Varchar(200)
+        + distinct_features: Text
+        + status: Varchar(50)
+        + reporter_email: Varchar(254)
+        + image_url: Varchar(500)
+        + logged_at: TimestampTz
+    }
+
+    class FeedLike <<Database Table / Schema>> #FEF3C7 {
+        + id: Serial [PK]
+        + feed_id: Varchar(100)
+        + user_email: Varchar(254)
+        + created_at: TimestampTz
+    }
+
+    class FeedComment <<Database Table / Schema>> #FEF3C7 {
+        + comment_id: Serial [PK]
+        + feed_id: Varchar(100)
+        + user_email: Varchar(254)
+        + comment_text: Text
+        + created_at: TimestampTz
+    }
+
+    class Pet <<Database Table / Schema>> #F3E8FF {
+        + pet_id: Serial [PK]
+        + name: Varchar(100)
+        + species: Varchar(50)
+        + breed: Varchar(100)
+        + adoption_status: Varchar(50)
+        + primary_image: Varchar(500)
+        + created_at: TimestampTz
+    }
+}
+
+NewsfeedViewComponent ..[#2563EB]> UnifiedNewsfeedAPIView : "<color:#1D4ED8><b>HTTP GET /api/newsfeed/</b></color>"
+NewsfeedViewComponent ..[#2563EB]> ToggleLikeAPIView : "<color:#1D4ED8><b>HTTP POST /api/newsfeed/like/</b></color>"
+NewsfeedViewComponent ..[#2563EB]> AddCommentAPIView : "<color:#1D4ED8><b>HTTP POST /api/newsfeed/comment/</b></color>"
+ReportSightingViewComponent ..[#2563EB]> AnimalSighting : "HTTP POST /api/sightings/"
+
+UnifiedNewsfeedAPIView --[#D97706]> NewsfeedInteractionHandler : "Delegates multi-stream aggregation"
+ToggleLikeAPIView --[#D97706]> NewsfeedInteractionHandler : "Delegates atomic like toggle"
+AddCommentAPIView --[#D97706]> NewsfeedInteractionHandler : "Sanitizes and persists comment"
+
+NewsfeedInteractionHandler --[#7C3AED]> AnimalSighting : "Reads verified sightings"
+NewsfeedInteractionHandler --[#7C3AED]> CampusAnnouncement : "Reads official bulletins"
+NewsfeedInteractionHandler --[#7C3AED]> Pet : "Reads companion introductions"
+NewsfeedInteractionHandler --[#D97706]> FeedLike : "Mutates like tuples"
+NewsfeedInteractionHandler --[#D97706]> FeedComment : "Appends social comments"
+
+SightingTriageViewComponent ..[#059669]> Pet : "1-Click Intake Hand-off"
+@enduml
