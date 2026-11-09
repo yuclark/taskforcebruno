@@ -406,24 +406,32 @@ class MedicalRecordsAPIView(APIView):
 
                 # Calculate exact 14-day statutory quarantine release timestamp
                 expiry_dt = parsed_dt + timedelta(days=14)
-                expiry_iso = expiry_dt.strftime("%Y-%m-%dT%H:%M:%SZ") if not expiry_dt.tzinfo else expiry_dt.isoformat()
-                p["quarantine_expiry_date"] = expiry_iso
-                p["is_quarantine"] = True
+                expiry_str = expiry_dt.strftime("%Y-%m-%d")
+
                 if not p.get("next_followup_date"):
-                    p["next_followup_date"] = expiry_dt.strftime("%Y-%m-%d")
+                    p["next_followup_date"] = expiry_str
 
                 # Automatically update target Pet profile to Quarantine status
                 if target_pet and target_pet != "log":
                     try:
                         supabase.table("pets").update({
                             "status": "Quarantine / Rabies Observation",
-                            "is_quarantined": True,
-                            "quarantine_expiry_date": expiry_iso
+                            "current_conditions": f"Under 14-day Rabies Observation (until {expiry_str})"
                         }).eq("pet_id", target_pet).execute()
                     except Exception as pet_err:
                         print(f"[Warning] Failed to update pet quarantine status: {pet_err}")
 
-            return Response(supabase.table("medical_records").insert(p).execute().data[0], status=status.HTTP_201_CREATED)
+            # SANITIZATION: Strict schema filtering for medical_records table.
+            # Never pass non-existent columns (like is_quarantine or quarantine_expiry_date)
+            # preventing Supabase PGRST204 schema cache errors.
+            ALLOWED_MED_FIELDS = {
+                "pet_id", "record_type", "notes", "log_date",
+                "medication_prescribed", "next_followup_date",
+                "weight_at_log", "veterinarian"
+            }
+            insert_payload = {k: v for k, v in p.items() if k in ALLOWED_MED_FIELDS and v is not None}
+
+            return Response(supabase.table("medical_records").insert(insert_payload).execute().data[0], status=status.HTTP_201_CREATED)
         except Exception as e: 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -448,7 +456,14 @@ class VaccinationLogsAPIView(APIView):
             p = dict(request.data)
             if pet_id and pet_id != "log":
                 p["pet_id"] = pet_id
-            return Response(supabase.table("vaccination_logs").insert(p).execute().data[0], status=status.HTTP_201_CREATED)
+
+            ALLOWED_VAC_FIELDS = {
+                "pet_id", "vaccine_name", "administered_date", "next_due_date",
+                "batch_lot_number", "batch_number", "weight_at_vaccination",
+                "administered_by", "expiration_date"
+            }
+            insert_payload = {k: v for k, v in p.items() if k in ALLOWED_VAC_FIELDS and v is not None}
+            return Response(supabase.table("vaccination_logs").insert(insert_payload).execute().data[0], status=status.HTTP_201_CREATED)
         except Exception as e: 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

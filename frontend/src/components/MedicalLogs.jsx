@@ -186,9 +186,7 @@ export default function MedicalLogs({ pets = [] }) {
       medication_prescribed: medPrescription.trim() || 'None / Supportive Care',
       next_followup_date: medFollowup || (computedQuarantineExpiry ? computedQuarantineExpiry.split('T')[0] : null),
       weight_at_log: medWeight ? `${medWeight} kg` : 'N/A',
-      veterinarian: medVet.trim() || 'MDC Attending Clinician',
-      quarantine_expiry_date: computedQuarantineExpiry,
-      is_quarantine: isBiteOrScratch
+      veterinarian: medVet.trim() || 'MDC Attending Clinician'
     };
 
     const savedSession = JSON.parse(localStorage.getItem('tfb_session') || '{}');
@@ -217,8 +215,7 @@ export default function MedicalLogs({ pets = [] }) {
               headers: authHeaders,
               body: JSON.stringify({
                 status: 'Quarantine / Rabies Observation',
-                is_quarantined: true,
-                quarantine_expiry_date: computedQuarantineExpiry
+                current_conditions: `Under 14-day Rabies Observation (until ${computedQuarantineExpiry ? computedQuarantineExpiry.split('T')[0] : medFollowup})`
               })
             });
           } catch (petErr) {
