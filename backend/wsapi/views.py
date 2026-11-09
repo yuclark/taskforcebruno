@@ -144,7 +144,33 @@ class PetListAPIView(APIView):
 
     def get(self, request):
         try: 
+            from datetime import datetime, date
             res_data = supabase.table("pets").select("*").execute().data or []
+            
+            # Augment pets with active rabies quarantine observation status
+            try:
+                med_logs = supabase.table("medical_records").select("pet_id, record_type, next_followup_date").execute().data or []
+                active_quarantines = {}
+                for m in med_logs:
+                    rtype = str(m.get("record_type", ""))
+                    if "Bite" in rtype or "Scratch" in rtype:
+                        followup = m.get("next_followup_date")
+                        if followup:
+                            try:
+                                f_date = datetime.strptime(str(followup).split("T")[0], "%Y-%m-%d").date()
+                                if f_date >= date.today():
+                                    active_quarantines[m.get("pet_id")] = str(followup).split("T")[0]
+                            except Exception:
+                                pass
+                for pet in res_data:
+                    p_id = pet.get("pet_id")
+                    if p_id in active_quarantines or pet.get("status") == "Quarantine / Rabies Observation" or "Observation" in str(pet.get("current_conditions", "")):
+                        pet["is_quarantined"] = True
+                        pet["status"] = "Quarantine / Rabies Observation"
+                        pet["quarantine_until"] = active_quarantines.get(p_id)
+            except Exception:
+                pass
+
             res_data.sort(key=lambda x: str(x.get('created_at') or x.get('rescue_date') or ''), reverse=True)
             return Response(res_data, status=status.HTTP_200_OK)
         except Exception as e: 
@@ -268,10 +294,12 @@ class PetDetailAPIView(APIView):
                     rtype = str(m.get("record_type", ""))
                     if "Bite" in rtype or "Scratch" in rtype or m.get("is_quarantine"):
                         pet_data["is_quarantined"] = True
+                        pet_data["status"] = "Quarantine / Rabies Observation"
+                        pet_data["quarantine_until"] = str(m.get("next_followup_date", "")).split("T")[0]
                         if m.get("quarantine_expiry_date"):
                             pet_data["quarantine_expiry_date"] = m.get("quarantine_expiry_date")
                         elif m.get("next_followup_date"):
-                            pet_data["quarantine_expiry_date"] = f"{m.get('next_followup_date')}T09:30:00Z"
+                            pet_data["quarantine_expiry_date"] = f"{str(m.get('next_followup_date')).split('T')[0]}T09:30:00Z"
                         break
             except Exception:
                 pass

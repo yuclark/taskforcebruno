@@ -335,9 +335,16 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                     <td className="p-4 font-mono text-slate-500">{pet.weight || 'N/A'}</td>
                     <td className="p-4 text-slate-600 truncate max-w-[140px]">{getNormalizedLocation(pet.found_near, pet.pet_id)}</td>
                     <td className="p-4 text-center">
-                      <span className={`inline-block px-2.5 py-0.5 rounded-md text-[10px] font-semibold border ${getVaccinationBadgeStyles(pet.vaccination_status)}`}>
-                        {pet.vaccination_status}
-                      </span>
+                      {(pet.is_quarantined || pet.status?.includes('Quarantine') || pet.current_conditions?.includes('Observation') || pet.current_conditions?.includes('Quarantine')) ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 animate-pulse">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+                          Quarantine (RA 9482)
+                        </span>
+                      ) : (
+                        <span className={`inline-block px-2.5 py-0.5 rounded-md text-[10px] font-semibold border ${getVaccinationBadgeStyles(pet.vaccination_status)}`}>
+                          {pet.vaccination_status}
+                        </span>
+                      )}
                     </td>
                   </tr>
                   
@@ -467,9 +474,28 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                                 <div>Size Tier: <strong className="text-slate-900 font-medium">{expandedPetData?.size || 'Medium'}</strong></div>
                                 <div>Sterilized: <strong className="text-slate-900 font-medium">{expandedPetData?.spayed_neutered ? 'Yes (Neutered)' : 'No'}</strong></div>
                                 <div>Classification: <strong className="text-slate-900 font-medium">{isCampusPet(expandedPetData?.pet_type) ? 'Campus Pet' : 'Pet for Adoption'}</strong></div>
-                                <div>Status: <strong className="text-slate-900 font-medium">{expandedPetData?.adoption_status === 'Adopted' ? 'Adopted' : isCampusPet(expandedPetData?.pet_type) || isCampusPet(expandedPetData?.adoption_status) ? 'Campus Pet' : 'Available for Adoption'}</strong></div>
+                                <div>Status: <strong className="text-slate-900 font-medium">
+                                  {(expandedPetData?.is_quarantined || expandedPetData?.status?.includes('Quarantine') || expandedPetData?.current_conditions?.includes('Observation')) ? (
+                                    <span className="text-rose-700 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                      Quarantine / Rabies Observation
+                                    </span>
+                                  ) : (
+                                    expandedPetData?.adoption_status === 'Adopted' ? 'Adopted' : isCampusPet(expandedPetData?.pet_type) || isCampusPet(expandedPetData?.adoption_status) ? 'Campus Pet' : 'Available for Adoption'
+                                  )}
+                                </strong></div>
                                 <div className="col-span-2">Rescue Colony: <strong className="text-slate-900 font-medium">{getNormalizedLocation(expandedPetData?.found_near, expandedPetData?.pet_id)}</strong></div>
                                 <div>Rescue Date: <strong className="text-slate-900 font-mono font-medium">{expandedPetData?.rescue_date}</strong></div>
+                                {(expandedPetData?.is_quarantined || expandedPetData?.status?.includes('Quarantine') || expandedPetData?.current_conditions?.includes('Observation')) && (
+                                  <div className="col-span-3 p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-pulse">
+                                    <div className="flex items-center gap-2">
+                                      <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping"></span>
+                                      <span className="font-bold text-[11px] font-mono uppercase tracking-wider">Campus Rabies Observation Protocol (RA 9482)</span>
+                                    </div>
+                                    <span className="font-mono text-[10px] font-bold px-2 py-0.5 bg-rose-200 rounded text-rose-900 w-fit">
+                                      Release Date: {expandedPetData?.quarantine_until || '14-Day Observation'}
+                                    </span>
+                                  </div>
+                                )}
                                 <div className="col-span-3 border-t pt-1.5 mt-1 text-rose-800">Clinical Conditions: <span className="text-slate-700 font-mono font-medium">{expandedPetData?.current_conditions || 'None'}</span></div>
                                 <div className="col-span-3 text-blue-900">Behavior Evaluation: <span className="text-slate-700 font-medium">{expandedPetData?.behavior_notes || 'Stable baseline.'}</span></div>
                               </div>
