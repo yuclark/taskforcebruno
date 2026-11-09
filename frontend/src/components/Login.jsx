@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import CollarQRScanner from './CollarQRScanner';
 
-export default function Login({ onLoginSuccess, togglePage }) {
+export default function Login({ onLoginSuccess, togglePage, onScanCollar }) {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [showScanner, setShowScanner] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -93,6 +95,34 @@ export default function Login({ onLoginSuccess, togglePage }) {
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Portal Authentication</h2>
             <p className="text-xs text-slate-500 mt-1">Sign in using your CIT-U institutional credentials (@cit.edu).</p>
           </div>
+
+          {/* Quick Collar QR Scanner Action for Public Emergency Tag Lookup (TC-QR-001) */}
+          <div className="mb-6 p-3 bg-amber-50/60 rounded-xl border border-[#D4AF37]/30 flex items-center justify-between gap-3">
+            <div className="text-left">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#5C0612] block">Found a Campus Pet?</span>
+              <span className="text-[11px] text-slate-600">Scan collar tag for instant passport</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowScanner(true)}
+              className="px-3.5 py-2 bg-[#5C0612] hover:bg-[#42040B] text-white rounded-xl text-xs font-bold tracking-wide transition-colors flex items-center gap-1.5 shadow-sm shrink-0"
+            >
+              <svg className="w-4 h-4 text-[#D4AF37]" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
+              </svg>
+              <span>Scan Collar QR</span>
+            </button>
+          </div>
+
+          {showScanner && (
+            <CollarQRScanner
+              onClose={() => setShowScanner(false)}
+              onScanSuccess={(scannedId) => {
+                setShowScanner(false);
+                if (onScanCollar) onScanCollar(scannedId);
+              }}
+            />
+          )}
 
           {message.text && (
             <div className={`p-3.5 rounded-xl text-xs mb-6 font-medium border ${

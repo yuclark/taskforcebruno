@@ -7,6 +7,7 @@ import InventoryControl from './InventoryControl';
 import SightingTriage from './SightingTriage';
 import PostAnnouncement from './PostAnnouncement';
 import NewsfeedView from './NewsfeedView';
+import EmergencyProtocolModal from './EmergencyProtocolModal';
 
 export default function StaffDashboard({ session, onLogout }) {
   // ── MODIFIED: Hydrate tab choice from long-term memory on mount ──
@@ -19,6 +20,7 @@ export default function StaffDashboard({ session, onLogout }) {
   
   // MOBILE STATE TRIGGER
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isEmergencyOpen, setIsEmergencyOpen] = useState(false);
 
   const [inventoryItems, setInventoryItems] = useState([]);
   const [transactionLedger, setTransactionLedger] = useState([]);
@@ -144,11 +146,30 @@ export default function StaffDashboard({ session, onLogout }) {
               <p className="text-[11px] md:text-xs text-slate-500 mt-0.5 hidden sm:block">Campus animal welfare, clinical tracking, and operational management portal.</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-[11px] md:text-xs font-mono bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm self-end md:self-auto">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="text-slate-600">Clearance: STAFF</span>
+          <div className="flex items-center gap-2 self-end md:self-auto">
+            <button
+              onClick={() => setIsEmergencyOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-800 rounded-xl font-mono text-[11px] font-bold transition-all shadow-sm"
+              title="Bite Protocol & Rabies Guidelines (RA 9482)"
+            >
+              <span>🚨 Bite Protocol (RA 9482)</span>
+            </button>
+            <div className="flex items-center gap-2 text-[11px] md:text-xs font-mono bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="text-slate-600">Clearance: STAFF</span>
+            </div>
           </div>
         </div>
+
+        {/* EMERGENCY FIRST-AID & BITE PROTOCOL MODAL */}
+        <EmergencyProtocolModal 
+          isOpen={isEmergencyOpen} 
+          onClose={() => setIsEmergencyOpen(false)} 
+          onNavigateToReport={() => {
+            setActiveMenu('Sighting Reports');
+            setIsMobileOpen(false);
+          }}
+        />
 
         <div className={`flex-1 ${activeMenu === 'Community Newsfeed' ? 'overflow-hidden px-4 md:px-8 pb-4 pt-6' : 'overflow-y-auto p-4 md:p-8'}`}>
           {activeMenu === 'Community Newsfeed' && <NewsfeedView session={session} />}

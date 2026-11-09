@@ -85,18 +85,36 @@ export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
         ) : pet && (
           <div className="p-6 space-y-5">
             
-            {/* Active Quarantine Caution Alert (If under observation) */}
-            {pet.is_quarantined && (
-              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-300 text-rose-900 space-y-1.5 animate-pulse">
-                <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wider font-mono">
-                  <svg className="w-4 h-4 text-rose-700 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                  </svg>
-                  Campus Health Observation Notice (RA 9482)
+            {/* Active Quarantine Caution Alert (If under observation) (TC-MED-002) */}
+            {(pet.is_quarantined || pet.status?.includes('Quarantine')) && (
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-300 text-rose-900 space-y-2 animate-pulse">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wider font-mono">
+                    <svg className="w-4 h-4 text-rose-700 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                    </svg>
+                    Campus Health Observation Notice (RA 9482)
+                  </div>
+                  {pet.quarantine_expiry_date && (
+                    <span className="px-2 py-0.5 bg-rose-200 text-rose-900 rounded-full font-mono text-[10px] font-bold">
+                      {(() => {
+                        const diff = new Date(pet.quarantine_expiry_date).getTime() - Date.now();
+                        if (diff <= 0) return 'Observation Completed';
+                        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                        return `${days} days, ${hours} hours remaining`;
+                      })()}
+                    </span>
+                  )}
                 </div>
                 <p className="text-[11px] leading-relaxed text-rose-800 font-medium">
                   This companion is currently under a routine 14-day observation protocol following a campus incident report. Please <strong>do not feed, touch, or handle</strong>. Report any irregular behavior to Campus Security or MDC.
                 </p>
+                {pet.quarantine_expiry_date && (
+                  <div className="text-[10px] font-mono text-rose-700 bg-rose-100/60 px-2.5 py-1 rounded-lg">
+                    Quarantine Release Date: <strong>{new Date(pet.quarantine_expiry_date).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true })}</strong>
+                  </div>
+                )}
               </div>
             )}
 
@@ -134,7 +152,9 @@ export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
                   </span>
 
                   <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    {pet.vaccination_status || 'Vaccination Tracked'}
+                    {pet.vaccination_status?.toLowerCase().includes('fully') || !pet.vaccination_status
+                      ? 'Fully Vaccinated - Rabies Valid'
+                      : pet.vaccination_status}
                   </span>
 
                   {pet.spayed_neutered && (

@@ -25,6 +25,8 @@ urlpatterns = [
     path('pets/<str:pet_id>/', PetDetailAPIView.as_view(), name='pet-detail'), 
     
     # Clinical Journals & Medical Timelines
+    path('medical/log/', MedicalRecordsAPIView.as_view(), name='medical-log-endpoint-slash'),
+    path('medical/log', MedicalRecordsAPIView.as_view(), name='medical-log-endpoint'),
     path('medical/<str:pet_id>/', MedicalRecordsAPIView.as_view(), name='medical-logs'),
     path('vaccinations/<str:pet_id>/', VaccinationLogsAPIView.as_view(), name='vaccination-logs'),
     

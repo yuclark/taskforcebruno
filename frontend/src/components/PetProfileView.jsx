@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import EmergencyProtocolModal from './EmergencyProtocolModal';
 
 export default function PetProfileView({ petId, onBackToScanner }) {
   const [petData, setPetData] = useState(null);
+  const [vaccinations, setVaccinations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
   useEffect(() => {
     if (!petId) return;
     setLoading(true);
     setError('');
 
+    // Fetch animal metadata
     fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(petId)}/`)
       .then((res) => {
         if (!res.ok) throw new Error(`Animal record for ID "${petId}" was not found.`);
@@ -24,6 +28,12 @@ export default function PetProfileView({ petId, onBackToScanner }) {
         setError(err.message || 'Unable to connect to campus registry.');
         setLoading(false);
       });
+
+    // Fetch vaccination ledger for booster tracking
+    fetch(`https://taskforcebruno.onrender.com/api/vaccinations/${encodeURIComponent(petId)}/`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setVaccinations(Array.isArray(data) ? data : []))
+      .catch(() => setVaccinations([]));
   }, [petId]);
 
   const isCampus = (pet) => {
@@ -75,6 +85,20 @@ export default function PetProfileView({ petId, onBackToScanner }) {
 
   const isAdopted = petData.adoption_status === 'Adopted';
   const isCampusResident = isCampus(petData);
+
+  // Rabies booster expiration analysis
+  const rabiesList = vaccinations.filter((v) => (v.vaccine_name || '').toLowerCase().includes('rabies'));
+  rabiesList.sort((a, b) => new Date(b.administered_date || 0) - new Date(a.administered_date || 0));
+  const latestRabies = rabiesList[0] || null;
+
+  let rabiesDays = null;
+  if (latestRabies && latestRabies.next_due_date) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(latestRabies.next_due_date);
+    due.setHours(0, 0, 0, 0);
+    rabiesDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+  }
 
   return (
     <div className="w-full max-w-4xl mx-auto py-2 px-2 sm:px-4 animate-fade-in text-slate-800 space-y-5 text-left">
@@ -191,18 +215,36 @@ export default function PetProfileView({ petId, onBackToScanner }) {
                 </div>
               </div>
 
-              {/* Public Health Quarantine Alert */}
-              {petData.is_quarantined ? (
-                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 space-y-1">
-                  <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-rose-800">
-                    <svg className="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                    </svg>
-                    Campus Health Observation Notice (RA 9482)
+              {/* Public Health Quarantine Alert (TC-MED-002) */}
+              {(petData.is_quarantined || petData.status?.includes('Quarantine')) ? (
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 space-y-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-rose-800">
+                      <svg className="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                      </svg>
+                      Quarantine / Rabies Observation (RA 9482)
+                    </div>
+                    {petData.quarantine_expiry_date && (
+                      <span className="px-2 py-0.5 bg-rose-200 text-rose-900 rounded-full font-mono text-[10px] font-bold">
+                        {(() => {
+                          const diff = new Date(petData.quarantine_expiry_date).getTime() - Date.now();
+                          if (diff <= 0) return 'Observation Completed';
+                          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                          const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                          return `${days} days, ${hours} hours remaining`;
+                        })()}
+                      </span>
+                    )}
                   </div>
                   <p className="text-[11px] leading-relaxed text-rose-700">
-                    This animal is currently under temporary observation. Please avoid direct handling. Report any concerns to MDC / Security.
+                    This animal is currently under temporary 14-day observation. Please avoid direct handling. Report any concerns to MDC / Security.
                   </p>
+                  {petData.quarantine_expiry_date && (
+                    <div className="text-[10px] font-mono text-rose-700 bg-rose-100/60 px-2.5 py-1 rounded-lg">
+                      Quarantine Release Date: <strong>{new Date(petData.quarantine_expiry_date).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true })}</strong>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl text-emerald-900 flex items-center gap-2.5">
@@ -275,6 +317,38 @@ export default function PetProfileView({ petId, onBackToScanner }) {
                     {petData.vaccination_status || 'Pending'}
                   </span>
                 </div>
+                {/* Anti-Rabies Protection Status (RA 9482) */}
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-200">
+                  <div>
+                    <span className="text-slate-500 font-medium block">Rabies Booster Status</span>
+                    {latestRabies && (
+                      <span className="text-[10px] text-slate-400 font-mono block">
+                        Administered: {latestRabies.administered_date}
+                      </span>
+                    )}
+                  </div>
+                  {latestRabies ? (
+                    <div className="text-right">
+                      <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold font-mono border ${
+                        rabiesDays !== null && rabiesDays < 0
+                          ? 'bg-rose-100 text-rose-800 border-rose-200'
+                          : rabiesDays !== null && rabiesDays <= 30
+                          ? 'bg-amber-100 text-amber-800 border-amber-200'
+                          : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                      }`}>
+                        {rabiesDays !== null && rabiesDays < 0
+                          ? `OVERDUE (${Math.abs(rabiesDays)}d ago)`
+                          : rabiesDays !== null && rabiesDays <= 30
+                          ? `DUE SOON (${rabiesDays}d)`
+                          : `CURRENT (Due: ${latestRabies.next_due_date})`}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 font-mono">
+                      No Rabies Log
+                    </span>
+                  )}
+                </div>
                 <div className="flex justify-between items-center py-1.5 border-b border-slate-200">
                   <span className="text-slate-500 font-medium">Sterilized (TNR Certified)</span>
                   <span className={`px-2 py-0.5 rounded-lg text-[11px] font-bold ${
@@ -300,6 +374,35 @@ export default function PetProfileView({ petId, onBackToScanner }) {
               </div>
             </div>
 
+          </div>
+
+          {/* Emergency Bite & Injury Safety Action Banner (RA 9482) */}
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-900 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-rose-600/10 text-rose-700 flex items-center justify-center shrink-0 font-bold text-lg">
+                🩹
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-xs uppercase tracking-tight text-rose-900">
+                    Bite or Scratch Incident With This Animal?
+                  </span>
+                  <span className="text-[9px] font-mono px-2 py-0.2 bg-rose-200 text-rose-900 rounded font-bold">
+                    RA 9482
+                  </span>
+                </div>
+                <p className="text-[11px] text-rose-700 mt-0.5 leading-relaxed">
+                  Immediately wash wound with soap and running water for 15 minutes. View clinical protocol & campus hotlines.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowEmergencyModal(true)}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 flex items-center justify-center gap-1.5 shadow-sm"
+            >
+              <span>🚨</span> Open First-Aid Protocol
+            </button>
           </div>
 
           {/* Section C: Biography & Visual Identification Features */}
@@ -340,6 +443,12 @@ export default function PetProfileView({ petId, onBackToScanner }) {
         </div>
 
       </div>
+
+      {/* Emergency Protocol Modal */}
+      <EmergencyProtocolModal
+        isOpen={showEmergencyModal}
+        onClose={() => setShowEmergencyModal(false)}
+      />
 
     </div>
   );

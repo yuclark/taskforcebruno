@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import EmergencyProtocolModal from './EmergencyProtocolModal';
 
 export default function ReportSightingView({ session }) {
   const [animalType, setAnimalType] = useState('Cat');
@@ -8,6 +9,7 @@ export default function ReportSightingView({ session }) {
   const [isEmergency, setIsEmergency] = useState(false);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [showProtocolModal, setShowProtocolModal] = useState(false);
   
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState({ text: '', isError: false });
@@ -86,8 +88,14 @@ export default function ReportSightingView({ session }) {
   return (
     <div className="w-full max-w-6xl xl:max-w-7xl bg-white border border-slate-200 shadow-sm rounded-3xl overflow-hidden mx-auto animate-fade-in text-xs text-slate-700 font-sans my-2">
       
+      {/* EMERGENCY FIRST-AID & BITE PROTOCOL MODAL */}
+      <EmergencyProtocolModal
+        isOpen={showProtocolModal}
+        onClose={() => setShowProtocolModal(false)}
+      />
+
       {/* Header Banner */}
-      <div className={`px-6 py-4 border-b flex items-center justify-between text-left select-none transition-colors ${
+      <div className={`px-6 py-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left select-none transition-colors ${
         isEmergency ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'
       }`}>
         <div>
@@ -105,11 +113,21 @@ export default function ReportSightingView({ session }) {
           </p>
         </div>
 
-        <span className={`hidden sm:inline-flex items-center gap-1.5 rounded-xl font-mono text-[10px] font-bold uppercase tracking-wider px-3.5 py-1.5 shrink-0 border ${
-          isEmergency ? 'bg-rose-600 text-white border-rose-700 shadow-sm animate-pulse' : 'bg-[#5C0612]/10 text-[#5C0612] border-[#5C0612]/20'
-        }`}>
-          {isEmergency ? '🚨 Priority Alert' : 'Community Report'}
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowProtocolModal(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 rounded-xl font-mono text-[10px] font-bold transition-all shadow-sm"
+          >
+            <span>🩹 Bite & First-Aid Protocol (RA 9482)</span>
+          </button>
+
+          <span className={`hidden sm:inline-flex items-center gap-1.5 rounded-xl font-mono text-[10px] font-bold uppercase tracking-wider px-3.5 py-1.5 shrink-0 border ${
+            isEmergency ? 'bg-rose-600 text-white border-rose-700 shadow-sm animate-pulse' : 'bg-[#5C0612]/10 text-[#5C0612] border-[#5C0612]/20'
+          }`}>
+            {isEmergency ? '🚨 Priority Alert' : 'Community Report'}
+          </span>
+        </div>
       </div>
 
       {/* Main Body Form */}
@@ -160,6 +178,21 @@ export default function ReportSightingView({ session }) {
                   onClick={(e) => e.stopPropagation()}
                 />
               </div>
+
+              {isEmergency && (
+                <div className="mt-3 pt-3 border-t border-rose-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-rose-800">
+                  <span>
+                    <strong>Crucial First-Aid:</strong> If someone was bitten or scratched, flush the wound with soap & running water for <strong>15 minutes immediately</strong>.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowProtocolModal(true); }}
+                    className="underline font-bold text-rose-900 hover:text-rose-950 shrink-0 text-left"
+                  >
+                    View 4-Step Protocol →
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* ANIMAL TYPE SELECTOR */}

@@ -4,9 +4,10 @@ import Register from './components/Register';
 import DashboardContainer from './components/DashboardContainer';
 import StaffDashboard from './components/StaffDashboard';
 import PublicPetPassport from './components/PublicPetPassport';
+import MDCAuthGate from './components/MDCAuthGate';
 
 export default function App() {
-  // Public Pet Passport trigger from physical QR scan (e.g. ?pet=BRUNO-01 or /pet/BRUNO-01)
+  // TC-QR-001: Public Pet Passport trigger from physical QR scan (e.g. /passport/PET-001 or ?pet=PET-001)
   const [publicPetId, setPublicPetId] = useState(() => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
@@ -14,7 +15,7 @@ export default function App() {
       if (petQuery) return petQuery.trim();
 
       const pathSegments = window.location.pathname.split('/').filter(Boolean);
-      if (pathSegments.length >= 2 && pathSegments[0].toLowerCase() === 'pet') {
+      if (pathSegments.length >= 2 && (pathSegments[0].toLowerCase() === 'pet' || pathSegments[0].toLowerCase() === 'passport')) {
         return decodeURIComponent(pathSegments[1]).trim();
       }
     } catch {
@@ -22,6 +23,28 @@ export default function App() {
     }
     return null;
   });
+
+  const [toastMessage, setToastMessage] = useState(null);
+
+  useEffect(() => {
+    const checkPassportRoute = () => {
+      try {
+        const pathSegments = window.location.pathname.split('/').filter(Boolean);
+        if (pathSegments.length >= 2 && (pathSegments[0].toLowerCase() === 'pet' || pathSegments[0].toLowerCase() === 'passport')) {
+          setPublicPetId(decodeURIComponent(pathSegments[1]).trim());
+          return;
+        }
+        const urlParams = new URLSearchParams(window.location.search);
+        const petQuery = urlParams.get('pet') || urlParams.get('id');
+        if (petQuery) {
+          setPublicPetId(petQuery.trim());
+          return;
+        }
+      } catch {}
+    };
+    window.addEventListener('popstate', checkPassportRoute);
+    return () => window.removeEventListener('popstate', checkPassportRoute);
+  }, []);
 
   const [session, setSession] = useState(() => {
     const saved = localStorage.getItem('tfb_session');
@@ -124,15 +147,52 @@ export default function App() {
     };
   }, [session]);
 
+  // TC-MED-003: Guard restricted /mdc/dashboard route from unauthorized students
+  useEffect(() => {
+    const currentPath = window.location.pathname.toLowerCase();
+    if (currentPath.includes('/mdc/dashboard') || currentPath.startsWith('/mdc')) {
+      const role = (session?.role || '').toLowerCase();
+      const email = (session?.email || '').toLowerCase();
+      const isStaffOrMDC = role === 'staff' || role === 'mdc' || role === 'admin' || email.includes('mdc') || email.includes('staff');
+
+      if (!isStaffOrMDC) {
+        window.history.replaceState(null, '', '/dashboard');
+        setToastMessage('Access Denied: MDC Personnel Only');
+        const timer = setTimeout(() => setToastMessage(null), 4000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [session]);
+
   return (
     <>
+      {/* ACCESS DENIED SECURITY TOAST NOTIFICATION (TC-MED-003) */}
+      {toastMessage && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] animate-bounce">
+          <div className="bg-rose-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-rose-500/50 flex items-center gap-3 text-xs font-bold tracking-wide">
+            <svg className="w-5 h-5 text-rose-300 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 7.5h.008v.008H12v-.008Z" />
+            </svg>
+            <span>{toastMessage}</span>
+          </div>
+        </div>
+      )}
+
       {/* PUBLIC PET PASSPORT MODAL (Emergency Collar QR Scan view) */}
       {publicPetId && (
         <PublicPetPassport
           petId={publicPetId}
-          onClose={() => setPublicPetId(null)}
+          onClose={() => {
+            setPublicPetId(null);
+            if (window.location.pathname.toLowerCase().includes('/passport') || window.location.pathname.toLowerCase().includes('/pet')) {
+              window.history.pushState(null, '', '/');
+            }
+          }}
           onGoLogin={() => {
             setPublicPetId(null);
+            if (window.location.pathname.toLowerCase().includes('/passport') || window.location.pathname.toLowerCase().includes('/pet')) {
+              window.history.pushState(null, '', '/');
+            }
             setIsLogin(true);
           }}
         />
@@ -142,7 +202,11 @@ export default function App() {
       {!session ? (
         <div className="min-h-screen bg-slate-100 font-sans antialiased">
           {isLogin ? (
-            <Login onLoginSuccess={handleLoginSuccess} togglePage={() => setIsLogin(false)} />
+            <Login 
+              onLoginSuccess={handleLoginSuccess} 
+              togglePage={() => setIsLogin(false)} 
+              onScanCollar={(id) => setPublicPetId(id)}
+            />
           ) : (
             <Register togglePage={() => setIsLogin(true)} />
           )}

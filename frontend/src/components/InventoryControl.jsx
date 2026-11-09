@@ -60,6 +60,20 @@ export default function InventoryControl({
     submitting: false
   });
 
+  // TC-SUP-003: Insufficient stock warning modal & floating error toast
+  const [inventoryToast, setInventoryToast] = useState(null);
+  const [insufficientStockModal, setInsufficientStockModal] = useState({
+    isOpen: false,
+    item: null,
+    requestedQty: 0,
+    currentStock: 0
+  });
+
+  const triggerErrorToast = (msg) => {
+    setInventoryToast({ type: 'error', text: msg });
+    setTimeout(() => setInventoryToast(null), 5000);
+  };
+
   // --- SUMMARY METRICS ---
   const totalItemsCount = inventoryItems.length;
   const lowStockItems = inventoryItems.filter(item => (item.quantity || 0) <= (item.min_threshold || 10));
@@ -115,8 +129,8 @@ export default function InventoryControl({
         onRefresh();
         setInventorySubTab('stock-list');
       } else {
-        const errData = await res.json();
-        setFormMessage({ type: 'error', text: errData.error || 'Failed to catalog item.' });
+        const errData = await res.json().catch(() => ({}));
+        setFormMessage({ type: 'error', text: errData.unit?.[0] || errData.error || 'Failed to catalog item.' });
       }
     } catch (err) {
       setFormMessage({ type: 'error', text: 'Network connection failure with inventory database.' });
@@ -132,8 +146,21 @@ export default function InventoryControl({
       return;
     }
 
-    // If removing stocks (OUT), trigger confirmation modal
+    // If removing stocks (OUT), validate boundary condition (TC-SUP-003) & trigger confirmation modal
     if (actionForm.transaction_type === 'OUT') {
+      const currentStock = targetItem.quantity || 0;
+      if (qtyDelta > currentStock) {
+        const errorMsg = `Disbursement quantity exceeds available balance (${currentStock} on-hand)`;
+        triggerErrorToast(errorMsg);
+        setInsufficientStockModal({
+          isOpen: true,
+          item: targetItem,
+          requestedQty: qtyDelta,
+          currentStock: currentStock
+        });
+        return;
+      }
+
       setDeductionModal({
         isOpen: true,
         item: targetItem,
@@ -168,16 +195,32 @@ export default function InventoryControl({
         setDeductionModal({ isOpen: false, item: null, qtyDelta: 0, reason: '', supplier_donor: '', submitting: false });
         onRefresh();
       } else {
-        alert('Server rejected transaction logging request.');
+        const errorJson = await res.json().catch(() => ({}));
+        const errText = errorJson.error || (errorJson.unit ? errorJson.unit[0] : null) || 'Server rejected transaction logging request.';
+        triggerErrorToast(errText);
       }
     } catch (err) {
       console.error(err);
-      alert('Network failure connecting to inventory ledger.');
+      triggerErrorToast('Network failure connecting to inventory ledger.');
     }
   };
 
   const handleConfirmDeduction = async () => {
     if (!deductionModal.item) return;
+    const currentStock = deductionModal.item.quantity || 0;
+    if (deductionModal.qtyDelta > currentStock) {
+      const errorMsg = `Disbursement quantity exceeds available balance (${currentStock} on-hand)`;
+      triggerErrorToast(errorMsg);
+      setInsufficientStockModal({
+        isOpen: true,
+        item: deductionModal.item,
+        requestedQty: deductionModal.qtyDelta,
+        currentStock: currentStock
+      });
+      setDeductionModal({ isOpen: false, item: null, qtyDelta: 0, reason: '', supplier_donor: '', submitting: false });
+      return;
+    }
+
     setDeductionModal(prev => ({ ...prev, submitting: true }));
     await executeTransactionApi(
       deductionModal.item.item_id,
@@ -386,6 +429,16 @@ export default function InventoryControl({
                           <td className="p-4">
                             <div className="flex gap-2 justify-center items-center">
                               <button 
+                                type="button"
+                                onClick={() => {
+                                  setSelectedActionItemId(item.item_id);
+                                  setActionForm(prev => ({ ...prev, transaction_type: 'OUT' }));
+                                }} 
+                                className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-xl text-[10px] shadow-sm whitespace-nowrap transition-colors"
+                              >
+                                Log Disbursement (OUTFLOW)
+                              </button>
+                              <button 
                                 onClick={() => setSelectedActionItemId(selectedActionItemId === item.item_id ? null : item.item_id)} 
                                 className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 font-bold rounded-xl text-[11px] text-slate-700 shadow-sm whitespace-nowrap transition-colors"
                               >
@@ -424,7 +477,7 @@ export default function InventoryControl({
                                       className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
                                     >
                                       <option value="IN">Stock In (+ Inflow)</option>
-                                      <option value="OUT">Stock Out (- Deduction)</option>
+                                      <option value="OUT">Log Disbursement (OUTFLOW)</option>
                                     </select>
                                   </div>
                                   <div>
@@ -469,7 +522,7 @@ export default function InventoryControl({
                                           : 'bg-[#5C0612] hover:bg-[#42040B] border-[#D4AF37]'
                                       }`}
                                     >
-                                      {actionForm.transaction_type === 'OUT' ? 'Deduct Stock...' : 'Record Inflow'}
+                                      {actionForm.transaction_type === 'OUT' ? 'Log Disbursement (OUTFLOW)' : 'Record Inflow'}
                                     </button>
                                   </div>
                                 </div>
@@ -689,7 +742,7 @@ export default function InventoryControl({
               <div className="flex justify-between">
                 <span className="text-slate-400 font-mono">Stock Balance After:</span>
                 <span className="font-bold text-rose-700 font-mono">
-                  {Math.max(0, deductionModal.item.quantity - deductionModal.qtyDelta)} {deductionModal.item.unit}
+                  {deductionModal.item.quantity - deductionModal.qtyDelta} {deductionModal.item.unit}
                 </span>
               </div>
               <div className="flex justify-between border-t border-slate-200/60 pt-1 mt-1">
@@ -754,6 +807,67 @@ export default function InventoryControl({
                 className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs uppercase tracking-wide shadow-md transition-all disabled:opacity-50"
               >
                 {purgeModal.submitting ? 'Removing...' : 'Delete Item'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TC-SUP-003: FLOATING ERROR TOAST */}
+      {inventoryToast && (
+        <div className="fixed top-6 right-6 z-[120] animate-bounce">
+          <div className="bg-rose-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-rose-500/50 flex items-center gap-3 text-xs font-bold tracking-wide">
+            <svg className="w-5 h-5 text-rose-300 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 7.5h.008v.008H12v-.008Z" />
+            </svg>
+            <span>{inventoryToast.text}</span>
+          </div>
+        </div>
+      )}
+
+      {/* TC-SUP-003: INSUFFICIENT STOCK WARNING MODAL */}
+      {insufficientStockModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-rose-200 text-center space-y-4 animate-scale-up">
+            <div className="w-12 h-12 bg-rose-100 rounded-2xl flex items-center justify-center mx-auto border border-rose-300 text-rose-700">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+            </div>
+            
+            <h3 className="text-base font-black text-slate-900">
+              Insufficient Available Stock
+            </h3>
+            
+            <p className="text-xs text-rose-700 font-bold bg-rose-50 p-3 rounded-2xl border border-rose-200 leading-relaxed">
+              Disbursement quantity exceeds available balance ({insufficientStockModal.currentStock} on-hand)
+            </p>
+
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-[11px] text-left space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-mono">Target Item:</span>
+                <span className="font-bold text-slate-900">{insufficientStockModal.item?.item_name || 'Stock Item'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-mono">Current On-Hand Balance:</span>
+                <span className="font-bold text-emerald-700 font-mono">{insufficientStockModal.currentStock} {insufficientStockModal.item?.unit || 'units'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-mono">Requested Disbursement:</span>
+                <span className="font-bold text-rose-700 font-mono">{insufficientStockModal.requestedQty} {insufficientStockModal.item?.unit || 'units'}</span>
+              </div>
+              <p className="text-[10px] text-slate-500 italic pt-1 border-t border-slate-200">
+                Institutional inventory controls strictly forbid negative stock adjustments. The ledger remains unchanged at {insufficientStockModal.currentStock} {insufficientStockModal.item?.unit || 'units'}.
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button 
+                type="button"
+                onClick={() => setInsufficientStockModal({ isOpen: false, item: null, requestedQty: 0, currentStock: 0 })} 
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs uppercase tracking-wide transition-colors"
+              >
+                Dismiss Warning
               </button>
             </div>
           </div>

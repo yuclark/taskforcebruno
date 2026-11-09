@@ -7,6 +7,7 @@ import ReportSightingView from './ReportSightingView';
 import NewsfeedView from './NewsfeedView';
 import SupportAndVolunteers from './SupportAndVolunteers';
 import UserGuideModal from './UserGuideModal';
+import EmergencyProtocolModal from './EmergencyProtocolModal';
 
 export default function DashboardContainer({ session, onLogout }) {
   // Hydrate current tab position from disk parameters on bootup loop
@@ -17,6 +18,7 @@ export default function DashboardContainer({ session, onLogout }) {
   const [activePetId, setActivePetId] = useState(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isEmergencyOpen, setIsEmergencyOpen] = useState(false);
 
   // Save current tab layout configuration dynamically upon mutation
   useEffect(() => {
@@ -28,6 +30,17 @@ export default function DashboardContainer({ session, onLogout }) {
 
       {/* USER INTERACTIVE SYSTEM GUIDE MODAL */}
       <UserGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+
+      {/* EMERGENCY FIRST-AID & BITE PROTOCOL MODAL (RA 9482) */}
+      <EmergencyProtocolModal 
+        isOpen={isEmergencyOpen} 
+        onClose={() => setIsEmergencyOpen(false)} 
+        onNavigateToReport={() => {
+          setCurrentTab('report');
+          setActivePetId(null);
+          setIsMobileOpen(false);
+        }}
+      />
 
       {/* MOBILE OVERLAY */}
       {isMobileOpen && (
@@ -153,7 +166,15 @@ export default function DashboardContainer({ session, onLogout }) {
               Supply Logistics Hub
             </button>
 
-            <div className="pt-2 border-t border-white/10 mt-2">
+            <div className="pt-2 border-t border-white/10 mt-2 space-y-1.5">
+              <button
+                onClick={() => { setIsEmergencyOpen(true); setIsMobileOpen(false); }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-rose-200 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 transition-all text-left shadow-sm"
+              >
+                <span className="text-sm">🚨</span>
+                <span>Bite & Emergency Guide</span>
+              </button>
+
               <button
                 onClick={() => { setIsGuideOpen(true); setIsMobileOpen(false); }}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold text-[#D4AF37] hover:bg-white/10 transition-all text-left"
@@ -220,6 +241,15 @@ export default function DashboardContainer({ session, onLogout }) {
           </div>
 
           <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setIsEmergencyOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl font-mono text-[11px] font-bold transition-all shadow-sm"
+              title="Immediate Bite/Injury Protocol (RA 9482)"
+            >
+              <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse"></span>
+              <span>Emergency Protocol</span>
+            </button>
+
             <button
               onClick={() => setIsGuideOpen(true)}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[#5C0612] rounded-xl font-mono text-[11px] font-bold transition-colors"
