@@ -388,7 +388,19 @@ class MedicalRecordsAPIView(APIView):
                 p["pet_id"] = pet_id
 
             target_pet = p.get("pet_id")
-            record_type = str(p.get("record_type", ""))
+            raw_rtype = str(p.get("record_type", "")).strip()
+
+            # Normalize record_type against PostgreSQL check constraint:
+            # medical_records_record_type_check allows: 'Check-up', 'Clinical Treatment', 'Bite Incident', 'Scratch Incident'
+            if "Bite" in raw_rtype or ("Incident" in raw_rtype and "Scratch" not in raw_rtype):
+                record_type = "Bite Incident"
+            elif "Scratch" in raw_rtype:
+                record_type = "Scratch Incident"
+            elif "Treatment" in raw_rtype or "Clinical" in raw_rtype:
+                record_type = "Clinical Treatment"
+            else:
+                record_type = "Check-up"
+            p["record_type"] = record_type
 
             # TC-MED-002: 14-Day Bite Observation Quarantine Calculation (RA 9482)
             if "Bite" in record_type or "Scratch" in record_type:

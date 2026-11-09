@@ -665,8 +665,8 @@ export default function MedicalLogs({ pets = [] }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleTypeChange('Bite — Human Skin Contact')}
-                  className={`px-2.5 py-1 rounded-lg transition-all ${medType.includes('Bite') ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500 hover:text-rose-600'}`}
+                  onClick={() => handleTypeChange('Bite Incident')}
+                  className={`px-2.5 py-1 rounded-lg transition-all ${medType === 'Bite Incident' || medType.includes('Bite') ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500 hover:text-rose-600'}`}
                 >
                   Log Incident Report
                 </button>
@@ -789,10 +789,10 @@ export default function MedicalLogs({ pets = [] }) {
                       <label className="block text-[9px] font-bold text-rose-700 uppercase mb-1">Incident Type</label>
                       <select
                         value={medType}
-                        onChange={(e) => setMedType(e.target.value)}
+                        onChange={(e) => handleTypeChange(e.target.value)}
                         className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg text-xs font-semibold"
                       >
-                        <option value="Bite — Human Skin Contact">Bite — Human Skin Contact</option>
+                        <option value="Bite Incident">Bite — Human Skin Contact</option>
                         <option value="Scratch Incident">Scratch — Human Skin Contact</option>
                         <option value="Bite Incident">Bite Incident (Other)</option>
                       </select>
