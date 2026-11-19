@@ -221,7 +221,12 @@ def normalize_pet_classification(raw_pet_type, raw_adoption_status=None):
 
     if "stray" in pt or (not pt and ast_l == "stray"):
         canonical_type = "Stray"
-        canonical_status = "Adopted" if ast_l == "adopted" else "Stray"
+        if ast_l == "adopted":
+            canonical_status = "Adopted"
+        elif ast_l == "pending":
+            canonical_status = "Pending"
+        else:
+            canonical_status = "Available"
     elif "adopt" in pt or "rescue" in pt or (not pt and ast_l in ("available", "pending", "adopted")):
         canonical_type = "Pet for Adoption"
         if ast_l == "adopted":

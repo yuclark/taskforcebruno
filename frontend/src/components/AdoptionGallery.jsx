@@ -82,9 +82,14 @@ export default function AdoptionGallery({ session }) {
           const type = (p.pet_type || '').toLowerCase();
           const status = (p.adoption_status || '').toLowerCase();
           const isCampus = type.includes('campus') || type.includes('resident') || status.includes('campus') || status === 'not for adoption';
-          const isStray = type.includes('stray') || status === 'stray' || (p.pet_id || '').toUpperCase().startsWith('STRAY-');
           const isAdopted = status === 'adopted';
-          return !isCampus && !isStray && !isAdopted && (status === 'available' || type.includes('adoption'));
+          return !isCampus && !isAdopted && (
+            status === 'available' ||
+            status === 'stray' ||
+            type.includes('adoption') ||
+            type.includes('stray') ||
+            (p.pet_id || '').toUpperCase().startsWith('STRAY-')
+          );
         });
         setPets(adoptionPlacements);
       } else {
@@ -130,9 +135,14 @@ export default function AdoptionGallery({ session }) {
               const type = (p.pet_type || '').toLowerCase();
               const status = (p.adoption_status || '').toLowerCase();
               const isCampus = type.includes('campus') || type.includes('resident') || status.includes('campus') || status === 'not for adoption';
-              const isStray = type.includes('stray') || status === 'stray' || (p.pet_id || '').toUpperCase().startsWith('STRAY-');
               const isAdopted = status === 'adopted';
-              return !isCampus && !isStray && !isAdopted && (status === 'available' || type.includes('adoption'));
+              return !isCampus && !isAdopted && (
+                status === 'available' ||
+                status === 'stray' ||
+                type.includes('adoption') ||
+                type.includes('stray') ||
+                (p.pet_id || '').toUpperCase().startsWith('STRAY-')
+              );
             });
             setPets(adoptionPlacements);
           }

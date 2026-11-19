@@ -190,11 +190,9 @@ export default function AddNewPet({ onRefresh }) {
     const finalizedSpecies = newPetForm.species;
     const finalizedPetType = newPetForm.pet_type;
     const derivedAdoptionStatus =
-      finalizedPetType === 'Pet for Adoption'
-        ? 'Available'
-        : finalizedPetType === 'Stray'
-        ? 'Stray'
-        : 'Campus Pet';
+      finalizedPetType === 'Campus Pet'
+        ? 'Campus Pet'
+        : 'Available';
 
     multiPartFormPayload.append('name', newPetForm.name.trim());
     multiPartFormPayload.append('species', finalizedSpecies);

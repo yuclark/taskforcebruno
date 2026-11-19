@@ -132,8 +132,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
         ? 'Adopted'
         : canonicalType === 'Campus Pet'
         ? 'Campus Pet'
-        : canonicalType === 'Stray'
-        ? 'Stray'
         : 'Available';
     setEditFormData({ 
       ...pet, 
@@ -157,12 +155,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
         size: calculatedSize
       }));
     } else if (name === 'pet_type') {
-      const nextStatus =
-        updatedValue === 'Campus Pet'
-          ? 'Campus Pet'
-          : updatedValue === 'Stray'
-          ? 'Stray'
-          : 'Available';
+      const nextStatus = updatedValue === 'Campus Pet' ? 'Campus Pet' : 'Available';
       setEditFormData(prev => ({
         ...prev,
         pet_type: updatedValue,
@@ -196,8 +189,6 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
         ? 'Adopted'
         : canonicalType === 'Campus Pet'
         ? 'Campus Pet'
-        : canonicalType === 'Stray'
-        ? 'Stray'
         : 'Available';
 
     const finalizedPayload = {
@@ -529,7 +520,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                                     expandedPetData?.adoption_status === 'Adopted'
                                       ? 'Adopted'
                                       : isStrayPet(expandedPetData)
-                                      ? 'Stray (Under Monitoring)'
+                                      ? 'Available for Adoption (Stray)'
                                       : isCampusPet(expandedPetData?.pet_type) || isCampusPet(expandedPetData?.adoption_status)
                                       ? 'Campus Pet'
                                       : 'Available for Adoption'
@@ -728,7 +719,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
       ) : (
         <>
           {generateRenderedTableBlock("Active Campus & Adoption Companions", sortedActiveCollection)}
-          {generateRenderedTableBlock("Registered Campus Strays (Monitoring Queue)", sortedStrayCollection)}
+          {generateRenderedTableBlock("Stray Animals Available for Adoption", sortedStrayCollection)}
           {generateRenderedTableBlock("Adopted Alumni Companions Registry", sortedAdoptedCollection)}
         </>
       )}
