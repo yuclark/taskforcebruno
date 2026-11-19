@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ShieldCheck, PawPrint, BellRing } from 'lucide-react';
 
 export default function Register({ togglePage }) {
   const [formData, setFormData] = useState({ id: '', first_name: '', last_name: '', email: '', password: '' });
@@ -94,36 +95,75 @@ export default function Register({ togglePage }) {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row-reverse bg-white text-slate-800">
-      {/* Left/Right Mirrored Aspect Layout Branding Column */}
-      <div className="hidden md:flex md:w-1/2 bg-[#5C0612] p-12 flex-col justify-between relative overflow-hidden border-l-8 border-[#D4AF37]">
-        <div className="absolute inset-0 opacity-5 pointer-events-none">
-          <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="50%" cy="50%" r="40%" fill="none" stroke="white" strokeWidth="2" strokeDasharray="10 5" />
-          </svg>
+      {/* Right Mirrored Branding Column */}
+      <div className="hidden md:flex md:w-1/2 bg-gradient-to-bl from-[#6D0A19] via-[#5C0612] to-[#38030A] p-12 lg:p-16 flex-col justify-between relative overflow-hidden border-l-4 border-[#D4AF37]">
+        {/* Subtle Ambient Radial Glow */}
+        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#D4AF37]/10 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 -left-24 w-96 h-96 rounded-full bg-black/30 blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex items-center justify-end gap-3">
+          <span className="text-[#D4AF37] tracking-[0.2em] text-[11px] font-semibold uppercase">
+            Cebu Institute of Technology – University
+          </span>
+          <span className="h-0.5 w-8 bg-[#D4AF37]" />
         </div>
 
-        <div className="relative z-10 text-right">
-          <span className="text-[#D4AF37] tracking-widest text-xs font-semibold uppercase">Community Advocacy Node</span>
-          <div className="h-1 w-12 bg-[#D4AF37] mt-3 ml-auto"></div>
-        </div>
+        <div className="relative z-10 my-auto max-w-md ml-auto space-y-7 text-left">
+          <div className="flex items-center gap-4">
+            <img
+              src="/logo.png"
+              alt="Wildcat Welfare Portal - Task Force Bruno Logo"
+              className="w-24 h-24 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.4)] select-none shrink-0"
+            />
+            <div>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#D4AF37]/90 block mb-1">
+                Wildcat Welfare Portal
+              </span>
+              <h1 className="text-3xl lg:text-4xl font-extrabold text-white tracking-tight leading-[1.08]">
+                Join the <span className="text-[#D4AF37]">Community</span>
+              </h1>
+            </div>
+          </div>
 
-        <div className="relative z-10 my-auto text-right max-w-md ml-auto">
-          <img
-            src="/logo.png"
-            alt="Wildcat Welfare Portal - Task Force Bruno Logo"
-            className="w-28 h-28 object-contain mb-5 ml-auto drop-shadow-2xl select-none"
-          />
-          <h1 className="text-4xl font-bold text-white tracking-tight leading-tight">
-            Register <br />
-            <span className="text-[#D4AF37]">Community Account</span>
-          </h1>
-          <p className="text-stone-200 text-sm mt-4 font-light leading-relaxed">
-            Create a verified profile to connect with campus updates, adoption pipelines, and support teams.
+          <p className="text-stone-200/90 text-sm font-normal leading-relaxed">
+            Create your verified <strong className="text-white">@cit.edu</strong> account to help care for campus pets, report sightings, and apply for adoption.
           </p>
+
+          <div className="space-y-3 pt-2 border-t border-white/10">
+            <div className="flex items-center gap-3 text-xs text-stone-200">
+              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[#D4AF37] shrink-0">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-semibold text-white block">Verified Institutional Access</span>
+                <span className="text-stone-300/80 text-[11px]">Exclusive to CIT-U students, faculty, and staff</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 text-xs text-stone-200">
+              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[#D4AF37] shrink-0">
+                <BellRing className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-semibold text-white block">Real-Time Sighting Alerts</span>
+                <span className="text-stone-300/80 text-[11px]">Notify campus responders about injured or stray animals</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 text-xs text-stone-200">
+              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[#D4AF37] shrink-0">
+                <PawPrint className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-semibold text-white block">Adoption &amp; Volunteer Portal</span>
+                <span className="text-stone-300/80 text-[11px]">Track applications and join campus feeding patrols</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="relative z-10 text-[11px] text-stone-400 font-mono tracking-wider text-right">
-          CIT-U TASK FORCE BRUNO INFRASTRUCTURE NODE
+        <div className="relative z-10 text-[11px] text-stone-300/70 tracking-wide text-right">
+          CIT-U Medical-Dental Clinic &bull; Task Force Bruno
         </div>
       </div>
 
