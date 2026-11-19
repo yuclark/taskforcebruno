@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 const CATEGORY_UNITS = {
   Food: [
@@ -37,6 +37,8 @@ export default function InventoryControl({
   const [actionForm, setActionForm] = useState({ 
     transaction_type: 'IN', quantity_changed: '', reason: 'Bulk Purchase / Donation', supplier_donor: '', expiration_date: '' 
   });
+  const [thresholdDraft, setThresholdDraft] = useState('');
+  const [savingThreshold, setSavingThreshold] = useState(false);
 
   const [newInventoryForm, setNewInventoryForm] = useState({ 
     item_name: '', category: 'Food', food_type: 'Cat Food', quantity: '', unit: 'kg', min_threshold: '10', supplier_donor: '', expiration_date: '' 
@@ -60,8 +62,9 @@ export default function InventoryControl({
     submitting: false
   });
 
-  // TC-SUP-003: Insufficient stock warning modal & floating error toast
+  // TC-SUP-003: Insufficient stock warning modal & floating status toast
   const [inventoryToast, setInventoryToast] = useState(null);
+  const toastTimerRef = useRef(null);
   const [insufficientStockModal, setInsufficientStockModal] = useState({
     isOpen: false,
     item: null,
@@ -69,10 +72,14 @@ export default function InventoryControl({
     currentStock: 0
   });
 
-  const triggerErrorToast = (msg) => {
-    setInventoryToast({ type: 'error', text: msg });
-    setTimeout(() => setInventoryToast(null), 5000);
+  const showToast = (type, msg) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setInventoryToast({ type, text: msg });
+    toastTimerRef.current = setTimeout(() => setInventoryToast(null), 5000);
   };
+
+  const triggerErrorToast = (msg) => showToast('error', msg);
+  const triggerSuccessToast = (msg) => showToast('success', msg);
 
   // --- SUMMARY METRICS ---
   const totalItemsCount = inventoryItems.length;
@@ -237,6 +244,37 @@ export default function InventoryControl({
       deductionModal.reason,
       deductionModal.supplier_donor
     );
+  };
+
+  const handleThresholdUpdate = async (e, targetItem) => {
+    e.preventDefault();
+    const parsedThreshold = parseInt(thresholdDraft, 10);
+    if (Number.isNaN(parsedThreshold) || parsedThreshold < 0) {
+      triggerErrorToast('Please enter a valid non-negative threshold level.');
+      return;
+    }
+
+    setSavingThreshold(true);
+    try {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/inventory/${encodeURIComponent(targetItem.item_id)}/`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ min_threshold: parsedThreshold })
+      });
+      if (res.ok) {
+        triggerSuccessToast(`Alert threshold for "${targetItem.item_name}" set to ≤${parsedThreshold} ${targetItem.unit}.`);
+        onRefresh();
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        const errText = errJson.min_threshold?.[0] || errJson.error || 'Server rejected threshold update.';
+        triggerErrorToast(errText);
+      }
+    } catch (err) {
+      console.error(err);
+      triggerErrorToast('Network failure updating stock threshold.');
+    } finally {
+      setSavingThreshold(false);
+    }
   };
 
   const openPurgeModal = (item) => {
@@ -425,10 +463,13 @@ export default function InventoryControl({
                               <span className="text-[11px] text-slate-400 font-light font-sans">{item.unit}</span>
                               {isLow && (
                                 <span className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-rose-50 text-rose-700 border border-rose-200">
-                                  LOW STOCK (&le;{item.min_threshold})
+                                  LOW STOCK (&le;{item.min_threshold ?? 10})
                                 </span>
                               )}
                             </div>
+                            <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
+                              Threshold: &le;{item.min_threshold ?? 10} {item.unit}
+                            </span>
                           </td>
                           <td className="p-4 text-slate-600 text-xs">
                             {item.supplier_donor || 'Campus General Fund'}
@@ -442,6 +483,7 @@ export default function InventoryControl({
                                 type="button"
                                 onClick={() => {
                                   setSelectedActionItemId(item.item_id);
+                                  setThresholdDraft(String(item.min_threshold ?? 10));
                                   setActionForm({ transaction_type: 'OUT', quantity_changed: '', reason: 'Dispensation / Patrol feeding refill', supplier_donor: '', expiration_date: '' });
                                 }} 
                                 className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-xl text-[10px] shadow-sm whitespace-nowrap transition-colors"
@@ -454,6 +496,7 @@ export default function InventoryControl({
                                     setSelectedActionItemId(null);
                                   } else {
                                     setSelectedActionItemId(item.item_id);
+                                    setThresholdDraft(String(item.min_threshold ?? 10));
                                     setActionForm({ transaction_type: 'IN', quantity_changed: '', reason: 'Bulk Purchase / Donation', supplier_donor: '', expiration_date: '' });
                                   }
                                 }} 
@@ -474,76 +517,118 @@ export default function InventoryControl({
                           </td>
                         </tr>
                         
-                        {/* Inline Stock Adjustment Drawer */}
+                        {/* Inline Stock Adjustment & Threshold Drawer */}
                         {selectedActionItemId === item.item_id && (
                           <tr className="bg-slate-50/80">
                             <td colSpan={6} className="p-5 border-y border-slate-200">
-                              <form onSubmit={(e) => handleTransactionSubmit(e, item)} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-inner space-y-3">
-                                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                  <span className="font-bold text-slate-900 text-xs">
-                                    Log Stock Movement for {item.item_name}
-                                  </span>
-                                  <span className="text-[10px] font-mono text-slate-400">Current Balance: {item.quantity} {item.unit}</span>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-inner space-y-4">
+                                <form onSubmit={(e) => handleTransactionSubmit(e, item)} className="space-y-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                                    <span className="font-bold text-slate-900 text-xs">
+                                      Log Stock Movement for {item.item_name}
+                                    </span>
+                                    <span className="text-[10px] font-mono text-slate-400">
+                                      Current Balance: {item.quantity} {item.unit} &bull; Alert Threshold: &le;{item.min_threshold ?? 10} {item.unit}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                                    <div>
+                                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Direction</label>
+                                      <select 
+                                        value={actionForm.transaction_type} 
+                                        onChange={(e) => setActionForm({ ...actionForm, transaction_type: e.target.value })} 
+                                        className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
+                                      >
+                                        <option value="IN">Stock In (+ Inflow)</option>
+                                        <option value="OUT">Log Disbursement (OUTFLOW)</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Quantity Delta ({item.unit})</label>
+                                      <input 
+                                        type="number" 
+                                        required 
+                                        min="1"
+                                        placeholder="Amount" 
+                                        value={actionForm.quantity_changed} 
+                                        onChange={(e) => setActionForm({ ...actionForm, quantity_changed: e.target.value })} 
+                                        className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-xs font-mono text-slate-800" 
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Audit Reason</label>
+                                      <input 
+                                        type="text" 
+                                        required 
+                                        placeholder="e.g. Daily feeding station replenishment" 
+                                        value={actionForm.reason} 
+                                        onChange={(e) => setActionForm({ ...actionForm, reason: e.target.value })} 
+                                        className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-xs text-slate-800" 
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Source / Recipient</label>
+                                      <input 
+                                        type="text" 
+                                        placeholder="Optional notes" 
+                                        value={actionForm.supplier_donor} 
+                                        onChange={(e) => setActionForm({ ...actionForm, supplier_donor: e.target.value })} 
+                                        className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-xs text-slate-800" 
+                                      />
+                                    </div>
+                                    <div className="flex flex-col justify-end">
+                                      <button 
+                                        type="submit" 
+                                        className={`w-full py-2 text-white font-bold rounded-xl text-xs uppercase tracking-wide border-b-2 shadow-sm transition-all ${
+                                          actionForm.transaction_type === 'OUT'
+                                            ? 'bg-rose-700 hover:bg-rose-800 border-rose-900'
+                                            : 'bg-[#5C0612] hover:bg-[#42040B] border-[#D4AF37]'
+                                        }`}
+                                      >
+                                        {actionForm.transaction_type === 'OUT' ? 'Log Disbursement (OUTFLOW)' : 'Record Inflow'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </form>
+
+                                {/* Low-Stock Threshold Configuration Bar */}
+                                <form
+                                  onSubmit={(e) => handleThresholdUpdate(e, item)}
+                                  className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                                >
                                   <div>
-                                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Direction</label>
-                                    <select 
-                                      value={actionForm.transaction_type} 
-                                      onChange={(e) => setActionForm({ ...actionForm, transaction_type: e.target.value })} 
-                                      className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
+                                    <span className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                                      Low-Stock Alert Threshold Level
+                                    </span>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                      Triggers a low-stock warning whenever balance is at or below this quantity.
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 focus-within:bg-white focus-within:border-slate-400 overflow-hidden">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        required
+                                        aria-label={`Minimum alert threshold for ${item.item_name}`}
+                                        value={thresholdDraft}
+                                        onChange={(e) => setThresholdDraft(e.target.value)}
+                                        className="w-20 p-2 bg-transparent focus:outline-none text-xs font-mono font-bold text-slate-900"
+                                      />
+                                      <span className="px-2.5 py-2 bg-slate-100 border-l border-slate-200 text-[10px] font-mono text-slate-500 select-none">
+                                        {item.unit}
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="submit"
+                                      disabled={savingThreshold}
+                                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-[11px] uppercase tracking-wide shadow-sm transition-all disabled:opacity-50 whitespace-nowrap"
                                     >
-                                      <option value="IN">Stock In (+ Inflow)</option>
-                                      <option value="OUT">Log Disbursement (OUTFLOW)</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Quantity Delta ({item.unit})</label>
-                                    <input 
-                                      type="number" 
-                                      required 
-                                      min="1"
-                                      placeholder="Amount" 
-                                      value={actionForm.quantity_changed} 
-                                      onChange={(e) => setActionForm({ ...actionForm, quantity_changed: e.target.value })} 
-                                      className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-xs font-mono text-slate-800" 
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Audit Reason</label>
-                                    <input 
-                                      type="text" 
-                                      required 
-                                      placeholder="e.g. Daily feeding station replenishment" 
-                                      value={actionForm.reason} 
-                                      onChange={(e) => setActionForm({ ...actionForm, reason: e.target.value })} 
-                                      className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-xs text-slate-800" 
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Source / Recipient</label>
-                                    <input 
-                                      type="text" 
-                                      placeholder="Optional notes" 
-                                      value={actionForm.supplier_donor} 
-                                      onChange={(e) => setActionForm({ ...actionForm, supplier_donor: e.target.value })} 
-                                      className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-xs text-slate-800" 
-                                    />
-                                  </div>
-                                  <div className="flex flex-col justify-end">
-                                    <button 
-                                      type="submit" 
-                                      className={`w-full py-2 text-white font-bold rounded-xl text-xs uppercase tracking-wide border-b-2 shadow-sm transition-all ${
-                                        actionForm.transaction_type === 'OUT'
-                                          ? 'bg-rose-700 hover:bg-rose-800 border-rose-900'
-                                          : 'bg-[#5C0612] hover:bg-[#42040B] border-[#D4AF37]'
-                                      }`}
-                                    >
-                                      {actionForm.transaction_type === 'OUT' ? 'Log Disbursement (OUTFLOW)' : 'Record Inflow'}
+                                      {savingThreshold ? 'Saving...' : 'Update Threshold'}
                                     </button>
                                   </div>
-                                </div>
-                              </form>
+                                </form>
+                              </div>
                             </td>
                           </tr>
                         )}
@@ -647,6 +732,7 @@ export default function InventoryControl({
                 <input 
                   type="number" 
                   required 
+                  min="0"
                   placeholder="10" 
                   value={newInventoryForm.min_threshold} 
                   onChange={(e) => setNewInventoryForm({ ...newInventoryForm, min_threshold: e.target.value })} 
@@ -830,13 +916,23 @@ export default function InventoryControl({
         </div>
       )}
 
-      {/* TC-SUP-003: FLOATING ERROR TOAST */}
+      {/* TC-SUP-003: FLOATING STATUS TOAST */}
       {inventoryToast && (
-        <div className="fixed top-6 right-6 z-[120] animate-bounce">
-          <div className="bg-rose-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-rose-500/50 flex items-center gap-3 text-xs font-bold tracking-wide">
-            <svg className="w-5 h-5 text-rose-300 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 7.5h.008v.008H12v-.008Z" />
-            </svg>
+        <div className="fixed top-6 right-6 z-[120] animate-fade-in">
+          <div className={`text-white px-5 py-3.5 rounded-2xl shadow-2xl border flex items-center gap-3 text-xs font-bold tracking-wide ${
+            inventoryToast.type === 'success'
+              ? 'bg-emerald-900 border-emerald-500/50'
+              : 'bg-rose-900 border-rose-500/50'
+          }`}>
+            {inventoryToast.type === 'success' ? (
+              <svg className="w-5 h-5 text-emerald-300 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 text-rose-300 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 7.5h.008v.008H12v-.008Z" />
+              </svg>
+            )}
             <span>{inventoryToast.text}</span>
           </div>
         </div>

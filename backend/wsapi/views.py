@@ -689,8 +689,8 @@ class VaccinationLogsAPIView(APIView):
 # =====================================================================
 
 APPROVED_INVENTORY_UNITS = {
-    'kg', 'cans', 'bags', 'packs', 'g', 'vials', 'pcs', 'bottles', 'boxes', 'units', 'doses',
-    'KG', 'CAN', 'VIAL', 'PCS', 'UNITS', 'BOXES', 'BAGS', 'PACKS', 'G'
+    'kg', 'cans', 'bags', 'packs', 'pouches', 'g', 'vials', 'pcs', 'bottles', 'boxes', 'units', 'doses',
+    'KG', 'CAN', 'VIAL', 'PCS', 'UNITS', 'BOXES', 'BAGS', 'PACKS', 'POUCHES', 'G'
 }
 
 
@@ -741,6 +741,9 @@ class InventoryAPIView(APIView):
 
 
 class InventoryDetailAPIView(APIView):
+    def patch(self, request, item_id):
+        return self.put(request, item_id)
+
     def put(self, request, item_id):
         try: 
             payload = dict(request.data)
@@ -762,6 +765,20 @@ class InventoryDetailAPIView(APIView):
                     payload["quantity"] = q
                 except (ValueError, TypeError):
                     return Response({"quantity": ["Stock quantity must be a valid number."]}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate low-stock alert threshold updates
+            if "min_threshold" in payload and payload["min_threshold"] is not None:
+                try:
+                    mt = int(float(payload["min_threshold"]))
+                    if mt < 0:
+                        return Response({
+                            "min_threshold": ["Minimum threshold cannot be negative."]
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    payload["min_threshold"] = mt
+                except (ValueError, TypeError):
+                    return Response({
+                        "min_threshold": ["Minimum threshold must be a valid non-negative number."]
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
             if "expiration_date" in payload:
                 payload["expiration_date"] = normalize_date_str(payload.get("expiration_date"))
