@@ -36,6 +36,15 @@ export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
     };
   }, [petId]);
 
+  // Lock background page scroll while passport modal is open on mobile
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
   const expiryMs = pet?.quarantine_expiry_date ? new Date(pet.quarantine_expiry_date).getTime() : NaN;
   const hasValidExpiry = !Number.isNaN(expiryMs);
   const isFullyVaccinated = Boolean(pet?.vaccination_status && pet.vaccination_status.toLowerCase().includes('fully'));
@@ -45,12 +54,18 @@ export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
   );
 
   return (
-    <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-md z-50 animate-fade-in overflow-y-auto overscroll-contain">
-      <div className="min-h-[100dvh] w-full flex justify-center p-3 sm:p-6 pb-8">
-        <div className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden my-auto text-slate-800 text-left animate-scale-up">
+    <div
+      onClick={() => onClose && onClose()}
+      className="fixed inset-0 bg-slate-950/75 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-6 animate-fade-in"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxHeight: 'calc(100dvh - 1.5rem)' }}
+        className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full max-h-[92vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden text-slate-800 text-left animate-scale-up"
+      >
           
-          {/* Institutional Top Header */}
-          <div className="bg-[#5C0612] text-white p-4 sm:p-5 flex items-center justify-between gap-2 border-b-4 border-[#D4AF37]">
+          {/* Pinned Institutional Top Header (Always visible on mobile & desktop) */}
+          <div className="bg-[#5C0612] text-white p-4 sm:p-5 flex items-center justify-between gap-2 border-b-4 border-[#D4AF37] shrink-0">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-white/10 border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37] font-bold shrink-0">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -69,16 +84,21 @@ export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
 
             {onClose && (
               <button 
+                type="button"
                 onClick={onClose}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors shrink-0"
+                aria-label="Close passport"
+                className="p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-colors shrink-0"
                 title="Close passport"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             )}
           </div>
+
+          {/* Independently Scrollable Modal Body */}
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
 
         {loading ? (
           <div className="p-12 text-center text-slate-400 font-mono text-xs animate-pulse">
@@ -259,8 +279,8 @@ export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
 
           </div>
         )}
+          </div>
 
-        </div>
       </div>
     </div>
   );
