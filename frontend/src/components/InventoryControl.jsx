@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { Package, AlertTriangle, Utensils, Stethoscope } from 'lucide-react';
 
 const CATEGORY_UNITS = {
   Food: [
@@ -312,42 +313,48 @@ export default function InventoryControl({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 select-none">
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm text-left">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-400 font-mono uppercase tracking-wider">Total Catalog Items</span>
-            <span className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 font-mono text-xs font-bold">SKU</span>
+            <span className="text-[11px] font-semibold text-slate-500">Total Catalog Items</span>
+            <span className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
+              <Package className="w-4 h-4" />
+            </span>
           </div>
-          <div className="text-2xl font-black text-slate-900 font-mono mt-2">{totalItemsCount} Items</div>
+          <div className="text-2xl font-bold text-slate-900 mt-2 tabular-nums">{totalItemsCount} Items</div>
           <p className="text-[11px] text-slate-400 mt-0.5">Active tracked provisions</p>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm text-left">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-400 font-mono uppercase tracking-wider">Low Stock Warnings</span>
-            <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-mono text-xs font-bold ${
-              lowStockItems.length > 0 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
+            <span className="text-[11px] font-semibold text-slate-500">Low Stock Warnings</span>
+            <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+              lowStockItems.length > 0 ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
             }`}>
-              {lowStockItems.length}
+              <AlertTriangle className="w-4 h-4" />
             </span>
           </div>
-          <div className="text-2xl font-black text-slate-900 font-mono mt-2">{lowStockItems.length} Items</div>
-          <p className="text-[11px] text-slate-400 mt-0.5">Under threshold replenishment</p>
+          <div className="text-2xl font-bold text-slate-900 mt-2 tabular-nums">{lowStockItems.length} Items</div>
+          <p className="text-[11px] text-slate-400 mt-0.5">Below alert threshold</p>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm text-left">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-400 font-mono uppercase tracking-wider">Food & Rations</span>
-            <span className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-mono text-xs font-bold">RCN</span>
+            <span className="text-[11px] font-semibold text-slate-500">Food &amp; Rations</span>
+            <span className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 border border-amber-200/70 flex items-center justify-center">
+              <Utensils className="w-4 h-4" />
+            </span>
           </div>
-          <div className="text-2xl font-black text-slate-900 font-mono mt-2">{totalFoodItems.length} Brands</div>
+          <div className="text-2xl font-bold text-slate-900 mt-2 tabular-nums">{totalFoodItems.length} Brands</div>
           <p className="text-[11px] text-slate-400 mt-0.5">Campus feeding inventory</p>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm text-left">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-400 font-mono uppercase tracking-wider">Medical & Clinical</span>
-            <span className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-mono text-xs font-bold">MED</span>
+            <span className="text-[11px] font-semibold text-slate-500">Medical &amp; Clinical</span>
+            <span className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 border border-blue-200/70 flex items-center justify-center">
+              <Stethoscope className="w-4 h-4" />
+            </span>
           </div>
-          <div className="text-2xl font-black text-slate-900 font-mono mt-2">{totalMedicalItems.length} Supplies</div>
-          <p className="text-[11px] text-slate-400 mt-0.5">Vaccines, cages, & first aid</p>
+          <div className="text-2xl font-bold text-slate-900 mt-2 tabular-nums">{totalMedicalItems.length} Supplies</div>
+          <p className="text-[11px] text-slate-400 mt-0.5">Vaccines, cages, &amp; first aid</p>
         </div>
       </div>
 

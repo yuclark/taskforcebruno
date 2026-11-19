@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Siren, HeartPulse, PhoneCall, ShieldAlert, AlertTriangle } from 'lucide-react';
 import EmergencyProtocolModal from './EmergencyProtocolModal';
 
 export default function ReportSightingView({ session }) {
@@ -73,7 +74,7 @@ export default function ReportSightingView({ session }) {
       if (res.ok) {
         setMsg({ 
           text: isEmergency 
-            ? '🚨 URGENT RESCUE ALERT DISPATCHED! Campus marshals and clinic responders have been notified.' 
+            ? 'URGENT RESCUE ALERT DISPATCHED! Campus marshals and clinic responders have been notified.' 
             : 'Sighting report successfully logged. Awaiting staff review.', 
           isError: false 
         });
@@ -109,12 +110,16 @@ export default function ReportSightingView({ session }) {
       }`}>
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className={`w-2.5 h-2.5 rounded-full ${isEmergency ? 'bg-rose-600 animate-ping' : 'bg-[#5C0612]'}`} />
-            <span className={`text-[11px] font-bold font-mono uppercase tracking-wider ${isEmergency ? 'text-rose-700 font-black' : 'text-[#5C0612]'}`}>
-              {isEmergency ? '🚨 URGENT RESCUE DISPATCH' : 'Community Rescue Dispatch'}
+            {isEmergency ? (
+              <Siren className="w-4 h-4 text-rose-600 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-[#5C0612] shrink-0" />
+            )}
+            <span className={`text-[11px] font-semibold uppercase tracking-wider ${isEmergency ? 'text-rose-700 font-bold' : 'text-[#5C0612]'}`}>
+              {isEmergency ? 'Urgent Rescue Dispatch' : 'Community Rescue Dispatch'}
             </span>
           </div>
-          <h3 className="font-black text-slate-900 text-base md:text-lg tracking-tight">
+          <h3 className="font-bold text-slate-900 text-base md:text-lg tracking-tight">
             Report Campus Animal Sighting
           </h3>
           <p className="text-xs text-slate-500 mt-0.5 font-normal max-w-2xl">
@@ -126,15 +131,17 @@ export default function ReportSightingView({ session }) {
           <button
             type="button"
             onClick={() => setShowProtocolModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 rounded-xl font-mono text-[10px] font-bold transition-all shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-xl text-[11px] font-semibold transition-colors shadow-sm"
           >
-            <span>🩹 Bite & First-Aid Protocol (RA 9482)</span>
+            <HeartPulse className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+            <span>Bite &amp; First-Aid Protocol (RA 9482)</span>
           </button>
 
-          <span className={`hidden sm:inline-flex items-center gap-1.5 rounded-xl font-mono text-[10px] font-bold uppercase tracking-wider px-3.5 py-1.5 shrink-0 border ${
-            isEmergency ? 'bg-rose-600 text-white border-rose-700 shadow-sm animate-pulse' : 'bg-[#5C0612]/10 text-[#5C0612] border-[#5C0612]/20'
+          <span className={`hidden sm:inline-flex items-center gap-1.5 rounded-xl text-[11px] font-semibold px-3 py-1.5 shrink-0 border ${
+            isEmergency ? 'bg-rose-600 text-white border-rose-700 shadow-sm' : 'bg-[#5C0612]/10 text-[#5C0612] border-[#5C0612]/20'
           }`}>
-            {isEmergency ? '🚨 Priority Alert' : 'Community Report'}
+            {isEmergency && <ShieldAlert className="w-3.5 h-3.5 shrink-0" />}
+            <span>{isEmergency ? 'Priority Alert' : 'Community Report'}</span>
           </span>
         </div>
       </div>
@@ -164,10 +171,10 @@ export default function ReportSightingView({ session }) {
             }`} onClick={() => setIsEmergency(!isEmergency)}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm ${
+                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
                     isEmergency ? 'bg-rose-600 text-white' : 'bg-slate-200 text-slate-600'
                   }`}>
-                    🚨
+                    <Siren className="w-4 h-4" />
                   </span>
                   <div>
                     <h4 className={`text-xs font-bold ${isEmergency ? 'text-rose-900' : 'text-slate-800'}`}>
@@ -332,8 +339,9 @@ export default function ReportSightingView({ session }) {
               <p className="text-[11px] leading-relaxed text-slate-600">
                 For severe bites, animal attacks, or critical campus emergencies, contact CIT-U Safety & Security immediately:
               </p>
-              <div className="font-mono font-bold text-slate-900 text-xs pt-0.5">
-                📞 (032) 261-7741 &bull; local 144 / Safety Office
+              <div className="flex items-center gap-1.5 font-mono font-bold text-slate-900 text-xs pt-0.5">
+                <PhoneCall className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                <span>(032) 261-7741 &bull; local 144 / Safety Office</span>
               </div>
             </div>
 
@@ -387,7 +395,10 @@ export default function ReportSightingView({ session }) {
                   <span>Dispatching Sighting Report...</span>
                 </>
               ) : (
-                <span>{isEmergency ? '🚨 Submit Emergency Sighting Alert' : 'Submit Sighting Report'}</span>
+                <>
+                  {isEmergency && <Siren className="w-4 h-4 shrink-0" />}
+                  <span>{isEmergency ? 'Submit Emergency Sighting Alert' : 'Submit Sighting Report'}</span>
+                </>
               )}
             </button>
           </div>

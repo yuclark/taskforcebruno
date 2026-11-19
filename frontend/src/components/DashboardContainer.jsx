@@ -1,4 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
+import {
+  ShieldAlert,
+  BookOpen,
+  UserCheck,
+  Newspaper,
+  QrCode,
+  AlertTriangle,
+  PawPrint,
+  HeartHandshake
+} from 'lucide-react';
 import QRScannerView from './QRScannerView';
 import PetProfileView from './PetProfileView';
 import PetListings from './PetListings';
@@ -210,17 +220,18 @@ export default function DashboardContainer({ session, onLogout }) {
             <div className="pt-2 border-t border-white/10 mt-2 space-y-1.5">
               <button
                 onClick={() => { setIsEmergencyOpen(true); setIsMobileOpen(false); }}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-rose-200 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 transition-all text-left shadow-sm"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-200 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 transition-all text-left shadow-sm"
               >
-                <span className="text-sm">🚨</span>
-                <span>Bite & Emergency Guide</span>
+                <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>Bite &amp; Emergency Guide</span>
               </button>
 
               <button
                 onClick={() => { setIsGuideOpen(true); setIsMobileOpen(false); }}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold text-[#D4AF37] hover:bg-white/10 transition-all text-left"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#D4AF37] hover:bg-white/10 transition-all text-left"
               >
-                System User Guide
+                <BookOpen className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                <span>System User Guide</span>
               </button>
             </div>
           </nav>
@@ -286,25 +297,29 @@ export default function DashboardContainer({ session, onLogout }) {
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setIsEmergencyOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl font-mono text-[11px] font-bold transition-all shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold transition-colors shadow-sm"
               title="Immediate Bite/Injury Protocol (RA 9482)"
             >
-              <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse"></span>
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0" />
               <span>Emergency Protocol</span>
             </button>
 
             <button
+              type="button"
               onClick={() => setIsGuideOpen(true)}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[#5C0612] rounded-xl font-mono text-[11px] font-bold transition-colors"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[#5C0612] rounded-xl text-xs font-semibold transition-colors"
             >
+              <BookOpen className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               <span>System Guide</span>
             </button>
 
-            <div className="text-[11px] md:text-xs font-mono bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600">
-              POV: General Community
+            <div className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700">
+              <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Community Member</span>
             </div>
           </div>
         </header>
@@ -403,13 +418,14 @@ export default function DashboardContainer({ session, onLogout }) {
       {/* MODERN MOBILE BOTTOM NAVIGATION BAR */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-30 flex items-center justify-around h-16 px-1 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
         {[
-          { key: 'newsfeed', label: 'Feed', icon: '📰' },
-          { key: 'scanner', label: 'Scan', icon: '📷' },
-          { key: 'report', label: 'Report', icon: '🚨' },
-          { key: 'adoption', label: 'Adopt', icon: '🐾' },
-          { key: 'support', label: 'Support', icon: '🤝' },
+          { key: 'newsfeed', label: 'Feed', Icon: Newspaper, activeColor: 'text-[#5C0612]' },
+          { key: 'scanner', label: 'Scan', Icon: QrCode, activeColor: 'text-[#5C0612]' },
+          { key: 'report', label: 'Report', Icon: AlertTriangle, activeColor: 'text-rose-600' },
+          { key: 'adoption', label: 'Adopt', Icon: PawPrint, activeColor: 'text-amber-700' },
+          { key: 'support', label: 'Support', Icon: HeartHandshake, activeColor: 'text-emerald-700' },
         ].map((item) => {
           const isActive = currentTab === item.key;
+          const NavIcon = item.Icon;
           return (
             <button
               key={item.key}
@@ -418,13 +434,13 @@ export default function DashboardContainer({ session, onLogout }) {
                 setActivePetId(null);
               }}
               className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all ${
-                isActive ? 'text-[#5C0612] font-black scale-105' : 'text-slate-500 font-medium'
+                isActive ? `${item.activeColor} font-bold` : 'text-slate-500 font-medium'
               }`}
             >
-              <span className="text-lg leading-none">{item.icon}</span>
+              <NavIcon className="w-5 h-5" />
               <span className="text-[10px] mt-1 tracking-tight">{item.label}</span>
               {isActive && (
-                <span className="w-1.5 h-1.5 rounded-full bg-[#5C0612] mt-0.5" />
+                <span className="w-1.5 h-1.5 rounded-full bg-current mt-0.5" />
               )}
             </button>
           );

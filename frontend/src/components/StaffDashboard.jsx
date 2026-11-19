@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { ShieldAlert, ShieldCheck } from 'lucide-react';
 import PendingApplications from './PendingApplications';
 import PetListings from './PetListings';
 import AddNewPet from './AddNewPet';
@@ -200,15 +201,17 @@ export default function StaffDashboard({ session, onLogout }) {
           </div>
           <div className="flex items-center gap-2 self-end md:self-auto">
             <button
+              type="button"
               onClick={() => setIsEmergencyOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-800 rounded-xl font-mono text-[11px] font-bold transition-all shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold transition-colors shadow-sm"
               title="Bite Protocol & Rabies Guidelines (RA 9482)"
             >
-              <span>🚨 Bite Protocol (RA 9482)</span>
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+              <span>Bite Protocol (RA 9482)</span>
             </button>
-            <div className="flex items-center gap-2 text-[11px] md:text-xs font-mono bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-slate-600">Clearance: STAFF</span>
+            <div className="inline-flex items-center gap-1.5 text-xs font-medium bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm text-slate-700">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>MDC Staff</span>
             </div>
           </div>
         </div>

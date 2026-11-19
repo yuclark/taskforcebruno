@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Siren } from 'lucide-react';
 
 const STAFF_ROLES = new Set(['staff', 'mdc', 'admin', 'clinician', 'nurse', 'veterinarian']);
 
@@ -511,14 +512,15 @@ export default function NewsfeedView({ session }) {
                                 Modifying Post
                               </span>
                             )}
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 ${
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 ${
                               item.badge_text?.includes('EMERGENCY')
-                                ? 'bg-rose-600 text-white border-rose-700 animate-pulse font-black'
+                                ? 'bg-rose-600 text-white border-rose-700 font-black'
                                 : isAnnouncement 
                                 ? 'bg-amber-50 text-amber-900 border-amber-300' 
                                 : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                             }`}>
-                              {item.badge_text}
+                              {item.badge_text?.includes('EMERGENCY') && <Siren className="w-3 h-3 shrink-0" />}
+                              <span>{(item.badge_text || '').replace('🚨', '').trim()}</span>
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-normal mt-0.5 flex-wrap min-w-0">

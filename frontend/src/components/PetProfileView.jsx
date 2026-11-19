@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { HeartPulse, ShieldAlert } from 'lucide-react';
 import EmergencyProtocolModal from './EmergencyProtocolModal';
 
 function parseLocalDate(dateStr) {
@@ -407,8 +408,8 @@ export default function PetProfileView({ petId, onBackToScanner }) {
           {/* Emergency Bite & Injury Safety Action Banner (RA 9482) */}
           <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-900 shadow-sm">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-rose-600/10 text-rose-700 flex items-center justify-center shrink-0 font-bold text-lg">
-                🩹
+              <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <HeartPulse className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -420,16 +421,17 @@ export default function PetProfileView({ petId, onBackToScanner }) {
                   </span>
                 </div>
                 <p className="text-[11px] text-rose-700 mt-0.5 leading-relaxed">
-                  Immediately wash wound with soap and running water for 15 minutes. View clinical protocol & campus hotlines.
+                  Immediately wash wound with soap and running water for 15 minutes. View clinical protocol &amp; campus hotlines.
                 </p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setShowEmergencyModal(true)}
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 flex items-center justify-center gap-1.5 shadow-sm"
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold transition-all shrink-0 flex items-center justify-center gap-1.5 shadow-sm"
             >
-              <span>🚨</span> Open First-Aid Protocol
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <span>Open First-Aid Protocol</span>
             </button>
           </div>
 
