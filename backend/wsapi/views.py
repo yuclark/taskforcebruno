@@ -1572,8 +1572,10 @@ class UnifiedNewsfeedAPIView(APIView):
                 fid = c.get("feed_id")
                 if not fid:
                     continue
+                resolved_cid = c.get("comment_id") if c.get("comment_id") is not None else c.get("id")
                 comments_map.setdefault(fid, []).append({
-                    "comment_id": c.get("comment_id"),
+                    "comment_id": resolved_cid,
+                    "id": resolved_cid,
                     "user_email": c.get("user_email"),
                     "comment_text": c.get("comment_text"),
                     "timestamp": c.get("created_at"),
@@ -1705,41 +1707,51 @@ class AddCommentAPIView(APIView):
 
 
 class CommentActionAPIView(APIView):
+    def _parse_comment_id(self, raw_id):
+        if raw_id is None:
+            return None
+        s = str(raw_id).strip()
+        if not s:
+            return None
+        if s.isdigit():
+            return int(s)
+        return s
+
+    def _lookup_comment(self, parsed_id):
+        for pk_col in ("comment_id", "id"):
+            try:
+                res = supabase.table("feed_comments").select("*").eq(pk_col, parsed_id).execute()
+                if res.data:
+                    return pk_col, res.data[0]
+            except Exception:
+                continue
+        return None, None
+
+    def patch(self, request):
+        return self.put(request)
+
     def put(self, request):
         try:
-            print("\n[COMMENT PUT] raw data:", request.data)
-
             d = request.data
-            comment_id = d.get("comment_id")
+            raw_cid = d.get("comment_id") if d.get("comment_id") is not None else d.get("id")
             user_email = (d.get("user_email") or "").strip().lower()
             comment_text = (d.get("comment_text") or "").strip()
 
-            if not comment_id or not user_email or not comment_text:
+            comment_id = self._parse_comment_id(raw_cid)
+            if comment_id is None or not user_email or not comment_text:
                 return Response(
-                    {"error": "Missing parameters payload components."},
+                    {"error": "comment_id, user_email, and non-empty comment_text are required."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            try:
-                comment_id = int(comment_id)
-            except (ValueError, TypeError):
-                return Response(
-                    {"error": "Invalid comment_id datatype format."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            check = supabase.table("feed_comments").select("*").eq("comment_id", comment_id).execute()
-            print("[COMMENT PUT] lookup:", check.data)
-
-            if not check.data:
+            pk_col, row = self._lookup_comment(comment_id)
+            if not row:
                 return Response(
                     {"error": "Comment not found inside active database records."},
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            existing_email = (check.data[0].get("user_email") or "").strip().lower()
-            print("[COMMENT PUT] owner check:", {"existing_email": existing_email, "request_email": user_email})
-
+            existing_email = (row.get("user_email") or "").strip().lower()
             if existing_email != user_email:
                 return Response(
                     {"error": "You can only edit your own comment."},
@@ -1749,13 +1761,21 @@ class CommentActionAPIView(APIView):
             res = supabase.table("feed_comments").update(
                 {"comment_text": comment_text}
             ).eq(
-                "comment_id", comment_id
+                pk_col, comment_id
             ).execute()
 
-            print("[COMMENT PUT] update result:", res.data)
+            if not res.data:
+                # Verify whether update persisted or was silently blocked by Supabase RLS policy
+                verify = supabase.table("feed_comments").select("comment_text").eq(pk_col, comment_id).execute()
+                if not verify.data or verify.data[0].get("comment_text") != comment_text:
+                    return Response(
+                        {"error": "Comment update was blocked by database permissions (missing UPDATE policy on feed_comments)."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
 
             finalized_data = res.data[0] if res.data else {
                 "comment_id": comment_id,
+                "id": comment_id,
                 "comment_text": comment_text
             }
             return Response(finalized_data, status=status.HTTP_200_OK)
@@ -1767,46 +1787,43 @@ class CommentActionAPIView(APIView):
 
     def delete(self, request):
         try:
-            print("\n[COMMENT DELETE] query params:", dict(request.query_params))
-            print("[COMMENT DELETE] body data:", request.data)
-
-            comment_id = request.query_params.get("comment_id") or request.data.get("comment_id")
+            raw_cid = (
+                request.query_params.get("comment_id")
+                or request.query_params.get("id")
+                or request.data.get("comment_id")
+                or request.data.get("id")
+            )
             user_email = (request.query_params.get("user_email") or request.data.get("user_email") or "").strip().lower()
 
-            if not comment_id or not user_email:
+            comment_id = self._parse_comment_id(raw_cid)
+            if comment_id is None or not user_email:
                 return Response(
                     {"error": "Missing parameters identifier keys."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            try:
-                comment_id = int(comment_id)
-            except (ValueError, TypeError):
-                return Response(
-                    {"error": "Invalid comment_id datatype format."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            check = supabase.table("feed_comments").select("*").eq("comment_id", comment_id).execute()
-            print("[COMMENT DELETE] lookup:", check.data)
-
-            if not check.data:
+            pk_col, row = self._lookup_comment(comment_id)
+            if not row:
                 return Response(
                     {"error": "Comment not found inside active database records."},
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            existing_email = (check.data[0].get("user_email") or "").strip().lower()
-            print("[COMMENT DELETE] owner check:", {"existing_email": existing_email, "request_email": user_email})
-
+            existing_email = (row.get("user_email") or "").strip().lower()
             if existing_email != user_email:
                 return Response(
                     {"error": "You can only delete your own comment."},
                     status=status.HTTP_403_FORBIDDEN
                 )
 
-            res = supabase.table("feed_comments").delete().eq("comment_id", comment_id).execute()
-            print("[COMMENT DELETE] delete result:", res.data)
+            res = supabase.table("feed_comments").delete().eq(pk_col, comment_id).execute()
+            if not res.data:
+                verify = supabase.table("feed_comments").select(pk_col).eq(pk_col, comment_id).execute()
+                if verify.data:
+                    return Response(
+                        {"error": "Comment deletion was blocked by database permissions (missing DELETE policy on feed_comments)."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
 
             return Response(
                 {"message": "Comment database entry cleanly scrubbed."},

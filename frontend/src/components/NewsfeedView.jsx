@@ -41,6 +41,7 @@ export default function NewsfeedView({ session }) {
 
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState('');
+  const [savingCommentEdit, setSavingCommentEdit] = useState(false);
   const [commentToDelete, setCommentToDelete] = useState(null);
 
   const currentUserEmail = (session?.email || '').trim().toLowerCase();
@@ -190,6 +191,12 @@ export default function NewsfeedView({ session }) {
       setModerationError('Comment text cannot be empty.');
       return;
     }
+    if (commentId === null || commentId === undefined || commentId === '') {
+      setModerationError('Unable to identify comment record ID.');
+      return;
+    }
+    setModerationError('');
+    setSavingCommentEdit(true);
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/action/', {
         method: 'PUT',
@@ -202,6 +209,12 @@ export default function NewsfeedView({ session }) {
       });
       const data = await safeJson(res);
       if (res.ok) {
+        setFeedItems(prev => prev.map(item => ({
+          ...item,
+          comments: (item.comments || []).map(c =>
+            (c.comment_id ?? c.id) === commentId ? { ...c, comment_text: trimmed } : c
+          )
+        })));
         setEditingCommentId(null);
         setEditCommentText('');
         await fetchStreamData();
@@ -210,6 +223,8 @@ export default function NewsfeedView({ session }) {
       }
     } catch {
       setModerationError('Network error while updating comment.');
+    } finally {
+      setSavingCommentEdit(false);
     }
   };
 
@@ -315,7 +330,13 @@ export default function NewsfeedView({ session }) {
         const status = (p.adoption_status || '').toLowerCase();
         const isCampus = type.includes('campus') || type.includes('resident') || status.includes('campus') || status === 'not for adoption';
         const isAdopted = status === 'adopted';
-        return !isCampus && !isAdopted && (status === 'available' || type.includes('adoption') || p.pet_id?.startsWith('STRAY-'));
+        return !isCampus && !isAdopted && (
+          status === 'available' ||
+          status === 'stray' ||
+          type.includes('adoption') ||
+          type.includes('stray') ||
+          (p.pet_id || '').toUpperCase().startsWith('STRAY-')
+        );
       }).length
     : feedItems.filter(i => {
         if (i.item_type !== 'pet') return false;
@@ -602,20 +623,22 @@ export default function NewsfeedView({ session }) {
                             <p className="text-slate-400 text-xs text-center py-2 italic">No comments yet. Start the conversation below.</p>
                           ) : (
                             item.comments.map((comment, cIdx) => {
+                              const resolvedCommentId = comment.comment_id ?? comment.id;
                               const isMyComment = (comment.user_email || '').trim().toLowerCase() === currentUserEmail;
-                              const isEditingThisComment = editingCommentId === comment.comment_id;
+                              const isEditingThisComment = resolvedCommentId !== undefined && resolvedCommentId !== null && editingCommentId === resolvedCommentId;
                               return (
-                                <div key={comment.comment_id || cIdx} className="bg-white p-3 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                                <div key={resolvedCommentId ?? cIdx} className="bg-white p-3 rounded-xl border border-slate-200 text-xs space-y-1.5">
                                   <div className="flex justify-between items-center text-[10px] text-slate-400 gap-2">
                                     <span className="font-bold text-slate-700 truncate">{comment.user_email}</span>
                                     <div className="flex items-center gap-2 shrink-0">
                                       <span>{formatCommentTime(comment.timestamp || comment.created_at || item.timestamp)}</span>
-                                      {isMyComment && comment.comment_id && !isEditingThisComment && (
+                                      {isMyComment && resolvedCommentId !== undefined && resolvedCommentId !== null && !isEditingThisComment && (
                                         <>
                                           <button
                                             type="button"
                                             onClick={() => {
-                                              setEditingCommentId(comment.comment_id);
+                                              setModerationError('');
+                                              setEditingCommentId(resolvedCommentId);
                                               setEditCommentText(comment.comment_text || '');
                                             }}
                                             className="text-amber-700 hover:underline font-semibold"
@@ -624,7 +647,7 @@ export default function NewsfeedView({ session }) {
                                           </button>
                                           <button
                                             type="button"
-                                            onClick={() => setCommentToDelete(comment.comment_id)}
+                                            onClick={() => setCommentToDelete(resolvedCommentId)}
                                             className="text-rose-600 hover:underline font-semibold"
                                           >
                                             Delete
@@ -634,28 +657,42 @@ export default function NewsfeedView({ session }) {
                                     </div>
                                   </div>
                                   {isEditingThisComment ? (
-                                    <div className="flex gap-1.5 pt-1">
+                                    <form
+                                      onSubmit={(e) => {
+                                        e.preventDefault();
+                                        handleSaveCommentEdit(resolvedCommentId);
+                                      }}
+                                      className="flex gap-1.5 pt-1"
+                                    >
                                       <input
                                         type="text"
+                                        autoFocus
                                         value={editCommentText}
                                         onChange={(e) => setEditCommentText(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Escape') {
+                                            setEditingCommentId(null);
+                                            setEditCommentText('');
+                                          }
+                                        }}
                                         className="flex-1 px-2.5 py-1 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-amber-500"
                                       />
                                       <button
-                                        type="button"
-                                        onClick={() => handleSaveCommentEdit(comment.comment_id)}
-                                        className="px-2.5 py-1 bg-[#5C0612] text-white rounded-lg text-[10px] font-bold"
+                                        type="submit"
+                                        disabled={savingCommentEdit}
+                                        className="px-2.5 py-1 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-50 text-white rounded-lg text-[10px] font-bold"
                                       >
-                                        Save
+                                        {savingCommentEdit ? 'Saving...' : 'Save'}
                                       </button>
                                       <button
                                         type="button"
+                                        disabled={savingCommentEdit}
                                         onClick={() => { setEditingCommentId(null); setEditCommentText(''); }}
-                                        className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-semibold"
+                                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-semibold"
                                       >
                                         Cancel
                                       </button>
-                                    </div>
+                                    </form>
                                   ) : (
                                     <p className="text-slate-800">{comment.comment_text}</p>
                                   )}
