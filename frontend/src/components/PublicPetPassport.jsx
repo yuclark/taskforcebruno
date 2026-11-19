@@ -39,7 +39,10 @@ export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
   const expiryMs = pet?.quarantine_expiry_date ? new Date(pet.quarantine_expiry_date).getTime() : NaN;
   const hasValidExpiry = !Number.isNaN(expiryMs);
   const isFullyVaccinated = Boolean(pet?.vaccination_status && pet.vaccination_status.toLowerCase().includes('fully'));
-  const isPartiallyVaccinated = Boolean(pet?.vaccination_status && pet.vaccination_status.toLowerCase().includes('partial'));
+  const isCoreOnly = Boolean(
+    pet?.vaccination_status &&
+    (pet.vaccination_status.toLowerCase().includes('core') || pet.vaccination_status.toLowerCase().includes('partial'))
+  );
 
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
@@ -162,21 +165,27 @@ export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
                   <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${
                     pet.pet_type === 'Campus Pet' 
                       ? 'bg-amber-50 text-amber-800 border-amber-200' 
+                      : (pet.pet_type || '').toLowerCase().includes('stray')
+                      ? 'bg-orange-50 text-orange-800 border-orange-200'
                       : 'bg-indigo-50 text-indigo-800 border-indigo-200'
                   }`}>
-                    {pet.pet_type === 'Campus Pet' ? 'Permanent Campus Resident' : 'Rescue Animal'}
+                    {pet.pet_type === 'Campus Pet'
+                      ? 'Permanent Campus Resident'
+                      : (pet.pet_type || '').toLowerCase().includes('stray')
+                      ? 'Registered Campus Stray'
+                      : 'Rescue Animal (For Adoption)'}
                   </span>
 
                   <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${
                     isFullyVaccinated
                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : isPartiallyVaccinated
+                      : isCoreOnly
                       ? 'bg-amber-50 text-amber-800 border-amber-200'
                       : 'bg-rose-50 text-rose-700 border-rose-200'
                   }`}>
                     {isFullyVaccinated
                       ? 'Fully Vaccinated - Rabies Valid'
-                      : pet.vaccination_status || 'Vaccination Unverified'}
+                      : pet.vaccination_status || 'Not Vaccinated'}
                   </span>
 
                   {pet.spayed_neutered && (

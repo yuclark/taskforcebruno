@@ -82,8 +82,9 @@ export default function AdoptionGallery({ session }) {
           const type = (p.pet_type || '').toLowerCase();
           const status = (p.adoption_status || '').toLowerCase();
           const isCampus = type.includes('campus') || type.includes('resident') || status.includes('campus') || status === 'not for adoption';
+          const isStray = type.includes('stray') || status === 'stray' || (p.pet_id || '').toUpperCase().startsWith('STRAY-');
           const isAdopted = status === 'adopted';
-          return !isCampus && !isAdopted && (status === 'available' || type.includes('adoption') || p.pet_id?.startsWith('STRAY-'));
+          return !isCampus && !isStray && !isAdopted && (status === 'available' || type.includes('adoption'));
         });
         setPets(adoptionPlacements);
       } else {
@@ -129,8 +130,9 @@ export default function AdoptionGallery({ session }) {
               const type = (p.pet_type || '').toLowerCase();
               const status = (p.adoption_status || '').toLowerCase();
               const isCampus = type.includes('campus') || type.includes('resident') || status.includes('campus') || status === 'not for adoption';
+              const isStray = type.includes('stray') || status === 'stray' || (p.pet_id || '').toUpperCase().startsWith('STRAY-');
               const isAdopted = status === 'adopted';
-              return !isCampus && !isAdopted && (status === 'available' || type.includes('adoption') || p.pet_id?.startsWith('STRAY-'));
+              return !isCampus && !isStray && !isAdopted && (status === 'available' || type.includes('adoption'));
             });
             setPets(adoptionPlacements);
           }
@@ -477,9 +479,11 @@ export default function AdoptionGallery({ session }) {
                     <span className={`px-2.5 py-1 rounded-lg border font-semibold ${
                       currentPet.vaccination_status?.toLowerCase().includes('fully')
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                        : (currentPet.vaccination_status?.toLowerCase().includes('core') || currentPet.vaccination_status?.toLowerCase().includes('partial'))
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                        : 'bg-rose-50 text-rose-700 border-rose-200'
                     }`}>
-                      {currentPet.vaccination_status}
+                      {currentPet.vaccination_status || 'Not Vaccinated'}
                     </span>
                   </div>
 

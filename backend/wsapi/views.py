@@ -126,6 +126,187 @@ def compute_active_quarantine(pet, med_logs):
     return False, None, None
 
 
+NON_VACCINE_KEYWORDS = (
+    "deworm", "anthelmintic", "pyrantel", "praziquantel",
+    "flea", "tick", "heartworm", "vitamin", "supplement", "probiotic"
+)
+
+SPAY_NEUTER_KEYWORDS = (
+    "spay", "neuter", "steriliz", "castrat", "ovariohysterectomy", "tnr"
+)
+
+EMPTY_CONDITION_VALUES = {
+    "", "none", "none.", "n/a", "na", "healthy", "normal", "no", "nil", "-",
+    "no conditions", "none / healthy", "no medical conditions"
+}
+
+
+def is_deworming_or_non_vaccine(vaccine_name):
+    name_l = str(vaccine_name or "").strip().lower()
+    if not name_l:
+        return True
+    return any(kw in name_l for kw in NON_VACCINE_KEYWORDS)
+
+
+def _is_vaccine_log_active(vac_log, today):
+    due_raw = vac_log.get("next_due_date") or vac_log.get("expiration_date")
+    due_dt = parse_datetime_safe(due_raw)
+    if due_dt:
+        return due_dt.date() >= today
+    admin_dt = parse_datetime_safe(vac_log.get("administered_date"))
+    if admin_dt:
+        return (admin_dt.date() + timedelta(days=365)) >= today
+    return False
+
+
+def compute_vaccination_status(vac_logs):
+    """
+    Option A (Rabies-First Single Source of Truth):
+    - 'Fully Vaccinated': At least one non-expired Anti-Rabies vaccine log.
+    - 'Core Only (No Anti-Rabies)': At least one non-expired non-rabies core
+      vaccine (e.g. 4-in-1, 5-in-1, DHPP, FVRCP), excluding deworming/antiparasitics.
+    - 'Booster Overdue': Has prior vaccine log(s), but all are expired.
+    - 'Not Vaccinated': No real vaccine logs on record.
+    """
+    today = date.today()
+    real_vacs = [
+        v for v in (vac_logs or [])
+        if not is_deworming_or_non_vaccine(v.get("vaccine_name"))
+    ]
+    if not real_vacs:
+        return "Not Vaccinated"
+
+    rabies_logs = [v for v in real_vacs if "rabies" in str(v.get("vaccine_name") or "").lower()]
+    core_logs = [v for v in real_vacs if "rabies" not in str(v.get("vaccine_name") or "").lower()]
+
+    if any(_is_vaccine_log_active(v, today) for v in rabies_logs):
+        return "Fully Vaccinated"
+    if any(_is_vaccine_log_active(v, today) for v in core_logs):
+        return "Core Only (No Anti-Rabies)"
+    return "Booster Overdue"
+
+
+def compute_spayed_neutered(med_logs):
+    """
+    Single Source of Truth for TNR sterilization: true only when backed by
+    a spay/neuter clinical record in medical_records.
+    """
+    for m in (med_logs or []):
+        rtype = str(m.get("record_type") or "").lower()
+        notes = str(m.get("notes") or "").lower()
+        if any(kw in rtype for kw in SPAY_NEUTER_KEYWORDS):
+            return True
+        if "[spay / neuter" in notes or "[tnr sterilization" in notes:
+            return True
+        if any(kw in notes for kw in ("ovariohysterectomy", "castration", "spayed", "neutered")):
+            return True
+    return False
+
+
+def is_meaningful_condition(cond_str):
+    cleaned = str(cond_str or "").strip().lower()
+    return cleaned not in EMPTY_CONDITION_VALUES
+
+
+def normalize_pet_classification(raw_pet_type, raw_adoption_status=None):
+    """
+    Normalize into one of the three canonical classifications:
+    - 'Campus Pet'       -> adoption_status = 'Campus Pet'
+    - 'Pet for Adoption' -> adoption_status = 'Available' (unless 'Adopted' / 'Pending')
+    - 'Stray'            -> adoption_status = 'Stray' (unless 'Adopted')
+    """
+    pt = str(raw_pet_type or "").strip().lower()
+    ast = str(raw_adoption_status or "").strip()
+    ast_l = ast.lower()
+
+    if "stray" in pt or (not pt and ast_l == "stray"):
+        canonical_type = "Stray"
+        canonical_status = "Adopted" if ast_l == "adopted" else "Stray"
+    elif "adopt" in pt or "rescue" in pt or (not pt and ast_l in ("available", "pending", "adopted")):
+        canonical_type = "Pet for Adoption"
+        if ast_l == "adopted":
+            canonical_status = "Adopted"
+        elif ast_l == "pending":
+            canonical_status = "Pending"
+        else:
+            canonical_status = "Available"
+    else:
+        canonical_type = "Campus Pet"
+        canonical_status = "Adopted" if ast_l == "adopted" else "Campus Pet"
+
+    return canonical_type, canonical_status
+
+
+def generate_next_pet_id(canonical_pet_type, existing_pet_ids=None):
+    """
+    Auto-generate sequential ALL-CAPS Pet IDs by classification:
+    - Campus Pet       -> PET-001, PET-002, ...
+    - Pet for Adoption -> ADOPT-001, ADOPT-002, ...
+    - Stray            -> STRAY-001, STRAY-002, ...
+    """
+    pt_l = str(canonical_pet_type or "").strip().lower()
+    if "stray" in pt_l:
+        prefix = "STRAY"
+    elif "adopt" in pt_l:
+        prefix = "ADOPT"
+    else:
+        prefix = "PET"
+
+    if existing_pet_ids is None:
+        try:
+            rows = supabase.table("pets").select("pet_id").execute().data or []
+            existing_pet_ids = [r.get("pet_id") for r in rows if r.get("pet_id")]
+        except Exception:
+            existing_pet_ids = []
+
+    pattern = re.compile(rf"^{prefix}-(\d+)$", re.IGNORECASE)
+    max_num = 0
+    for pid in existing_pet_ids:
+        m = pattern.match(str(pid).strip())
+        if m:
+            num = int(m.group(1))
+            if num > max_num:
+                max_num = num
+
+    next_num = max_num + 1
+    return f"{prefix}-{next_num:03d}", next_num
+
+
+def safe_sync_pet_vaccination_status(pet_id, computed_status):
+    candidates = [computed_status]
+    if computed_status == "Core Only (No Anti-Rabies)":
+        candidates.extend(["Partially Vaccinated", "Not Vaccinated"])
+    elif computed_status == "Booster Overdue":
+        candidates.extend(["Not Vaccinated"])
+    for cand in candidates:
+        try:
+            supabase.table("pets").update({"vaccination_status": cand}).eq("pet_id", pet_id).execute()
+            return
+        except Exception as err:
+            if "23514" not in str(err) and "check constraint" not in str(err).lower():
+                print(f"[Warning] Failed to sync pet vaccination_status: {err}")
+                return
+
+
+def create_condition_medical_log(pet_id, condition_text, log_date_str=None, weight_str=None, tag="INTAKE MEDICAL CONDITION"):
+    if not is_meaningful_condition(condition_text):
+        return
+    try:
+        log_dt = normalize_date_str(log_date_str) or date.today().strftime("%Y-%m-%d")
+        payload = {
+            "pet_id": pet_id,
+            "record_type": "Check-up",
+            "log_date": log_dt,
+            "notes": f"[{tag}] {str(condition_text).strip()}",
+            "medication_prescribed": "Initial Assessment / Pending Clinician Review",
+            "weight_at_log": str(weight_str).strip() if weight_str else "N/A",
+            "veterinarian": "MDC Intake Triage",
+        }
+        supabase.table("medical_records").insert(payload).execute()
+    except Exception as err:
+        print(f"[Warning] Failed to auto-log medical condition for {pet_id}: {err}")
+
+
 # =====================================================================
 # 1. CORE AUTHENTICATION VIEWS
 # =====================================================================
@@ -253,18 +434,35 @@ class PetListAPIView(APIView):
         try: 
             res_data = supabase.table("pets").select("*").execute().data or []
             
-            # Augment pets with active rabies quarantine observation status (RA 9482)
+            # Augment pets dynamically from medical_records & vaccination_logs (Single Source of Truth)
             try:
-                med_logs = supabase.table("medical_records").select("pet_id, record_type, log_date, next_followup_date").execute().data or []
+                med_logs = supabase.table("medical_records").select("pet_id, record_type, log_date, next_followup_date, notes").execute().data or []
                 logs_by_pet = {}
                 for m in med_logs:
                     pid = m.get("pet_id")
                     if pid:
                         logs_by_pet.setdefault(pid, []).append(m)
 
+                vac_logs = supabase.table("vaccination_logs").select("pet_id, vaccine_name, administered_date, next_due_date, expiration_date").execute().data or []
+                vacs_by_pet = {}
+                for v in vac_logs:
+                    pid = v.get("pet_id")
+                    if pid:
+                        vacs_by_pet.setdefault(pid, []).append(v)
+
                 for pet in res_data:
                     p_id = pet.get("pet_id")
-                    is_q, q_until, q_iso = compute_active_quarantine(pet, logs_by_pet.get(p_id, []))
+                    pet_med_logs = logs_by_pet.get(p_id, [])
+                    pet_vac_logs = vacs_by_pet.get(p_id, [])
+
+                    # 1. Dynamic Vaccination Status (Option A: Rabies-First)
+                    pet["vaccination_status"] = compute_vaccination_status(pet_vac_logs)
+
+                    # 2. Dynamic TNR Sterilization Status (must be backed by medical_records)
+                    pet["spayed_neutered"] = compute_spayed_neutered(pet_med_logs)
+
+                    # 3. Active RA 9482 14-Day Quarantine Status
+                    is_q, q_until, q_iso = compute_active_quarantine(pet, pet_med_logs)
                     if is_q:
                         pet["is_quarantined"] = True
                         pet["status"] = "Quarantine / Rabies Observation"
@@ -276,8 +474,8 @@ class PetListAPIView(APIView):
                         pet["is_quarantined"] = False
                         if pet.get("status") == "Quarantine / Rabies Observation":
                             pet["status"] = "Active / Campus Resident"
-            except Exception:
-                pass
+            except Exception as aug_err:
+                print(f"[Warning] Pet clinical enrichment skipped: {aug_err}")
 
             res_data.sort(key=lambda x: str(x.get('created_at') or x.get('rescue_date') or ''), reverse=True)
             return Response(res_data, status=status.HTTP_200_OK)
@@ -287,10 +485,20 @@ class PetListAPIView(APIView):
     def post(self, request):
         try:
             d = request.data
-            pet_id_clean = (d.get("pet_id") or "").strip().upper()
+            canonical_type, canonical_adoption_status = normalize_pet_classification(
+                d.get("pet_type"), d.get("adoption_status")
+            )
+            species_clean = (d.get("species") or "Cat").strip() or "Cat"
+
+            # Always auto-generate sequential ALL-CAPS Pet ID on the server (PET-### / ADOPT-### / STRAY-###)
+            generated_pet_id, seq_num = generate_next_pet_id(canonical_type)
+
             name_clean = (d.get("name") or "").strip()
-            if not pet_id_clean or not name_clean:
-                return Response({"error": "Both pet_id and name are required."}, status=status.HTTP_400_BAD_REQUEST)
+            if not name_clean:
+                if canonical_type == "Stray":
+                    name_clean = f"Stray {species_clean} #{seq_num}"
+                else:
+                    return Response({"error": "Animal name is required."}, status=status.HTTP_400_BAD_REQUEST)
 
             image_file = request.FILES.get('image', None)
             image_url = (d.get("primary_image") or "").strip() or "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba"
@@ -307,24 +515,27 @@ class PetListAPIView(APIView):
                 )
                 image_url = supabase.storage.from_("petpictures").get_public_url(storage_filename)
 
-            is_sterilized = str(d.get("spayed_neutered")).lower() == 'true'
+            raw_conditions = (d.get("current_conditions") or "").strip() or "None"
+            normalized_rescue_date = normalize_date_str(d.get("rescue_date"))
 
+            # Single Source of Truth: new pets always start Not Vaccinated & Not Sterilized
+            # until verified entries are logged in vaccination_logs / medical_records.
             insert_payload = {
-                "pet_id": pet_id_clean,
+                "pet_id": generated_pet_id,
                 "name": name_clean,
-                "species": d.get("species"),
-                "pet_type": d.get("pet_type"),
+                "species": species_clean,
+                "pet_type": canonical_type,
                 "breed": d.get("breed"),
                 "gender": d.get("gender"),
                 "age": d.get("age"),
                 "weight": d.get("weight"),
                 "size": d.get("size"),
-                "vaccination_status": d.get("vaccination_status"),
-                "spayed_neutered": is_sterilized,
-                "adoption_status": d.get("adoption_status"),
+                "vaccination_status": "Not Vaccinated",
+                "spayed_neutered": False,
+                "adoption_status": canonical_adoption_status,
                 "found_near": d.get("found_near"),
-                "rescue_date": normalize_date_str(d.get("rescue_date")),
-                "current_conditions": d.get("current_conditions"),
+                "rescue_date": normalized_rescue_date,
+                "current_conditions": raw_conditions,
                 "behavior_notes": d.get("behavior_notes"),
                 "about_text": d.get("about_text"),
                 "description": d.get("description"),
@@ -336,7 +547,19 @@ class PetListAPIView(APIView):
             res = supabase.table("pets").insert(insert_payload).execute()
             if not res.data:
                 return Response({"error": "Failed to insert pet record."}, status=status.HTTP_400_BAD_REQUEST)
-            return Response(res.data[0], status=status.HTTP_201_CREATED)
+
+            created_pet = res.data[0]
+            # Auto-log intake medical conditions into medical_records so nothing goes unrecorded
+            if is_meaningful_condition(raw_conditions):
+                create_condition_medical_log(
+                    pet_id=generated_pet_id,
+                    condition_text=raw_conditions,
+                    log_date_str=normalized_rescue_date,
+                    weight_str=d.get("weight"),
+                    tag="INTAKE MEDICAL CONDITION"
+                )
+
+            return Response(created_pet, status=status.HTTP_201_CREATED)
         except Exception as e: 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -404,9 +627,18 @@ class PetDetailAPIView(APIView):
             except Exception:
                 pass
 
-            # Check active rabies quarantine observation logs (under RA 9482)
+            # Check active rabies quarantine, vaccination status, and TNR sterilization from clinical logs
+            is_db_pet = bool(pet_query.data or (pet_data.get("created_at") is not None))
             try:
-                med_logs = supabase.table("medical_records").select("*").eq("pet_id", pet_data.get("pet_id", pet_id)).execute().data or []
+                resolved_pet_id = pet_data.get("pet_id", pet_id)
+                med_logs = supabase.table("medical_records").select("*").eq("pet_id", resolved_pet_id).execute().data or []
+                vac_logs = supabase.table("vaccination_logs").select("*").eq("pet_id", resolved_pet_id).execute().data or []
+
+                if is_db_pet or vac_logs:
+                    pet_data["vaccination_status"] = compute_vaccination_status(vac_logs)
+                if is_db_pet or med_logs:
+                    pet_data["spayed_neutered"] = compute_spayed_neutered(med_logs)
+
                 is_q, q_until, q_iso = compute_active_quarantine(pet_data, med_logs)
                 if is_q:
                     pet_data["is_quarantined"] = True
@@ -429,12 +661,21 @@ class PetDetailAPIView(APIView):
     def put(self, request, pet_id):
         try:
             raw = dict(request.data)
-            # Strip computed / read-only fields that do not exist as columns in Supabase pets table
+            # Strip computed / clinical-log-derived / read-only fields
+            # vaccination_status and spayed_neutered are derived strictly from vaccination_logs & medical_records
             VIRTUAL_AND_READONLY = {
                 "is_quarantined", "quarantine_until", "quarantine_expiry_date",
-                "pet_id", "created_at", "search_affinity_score"
+                "pet_id", "created_at", "search_affinity_score",
+                "vaccination_status", "spayed_neutered"
             }
             update_payload = {k: v for k, v in raw.items() if k not in VIRTUAL_AND_READONLY}
+
+            # Fetch existing record to compare current_conditions changes
+            existing_res = supabase.table("pets").select("*").eq("pet_id", pet_id).execute()
+            if not existing_res.data:
+                return Response({"error": f"Pet '{pet_id}' not found."}, status=status.HTTP_404_NOT_FOUND)
+            existing_pet = existing_res.data[0]
+            prev_conditions = str(existing_pet.get("current_conditions") or "").strip()
 
             # Allow updating primary_image only if a non-empty URL was explicitly supplied
             if "primary_image" in update_payload and not str(update_payload["primary_image"] or "").strip():
@@ -443,8 +684,13 @@ class PetDetailAPIView(APIView):
             if "rescue_date" in update_payload:
                 update_payload["rescue_date"] = normalize_date_str(update_payload["rescue_date"])
 
-            if "spayed_neutered" in update_payload and not isinstance(update_payload["spayed_neutered"], bool):
-                update_payload["spayed_neutered"] = str(update_payload["spayed_neutered"]).lower() == "true"
+            if "pet_type" in update_payload or "adoption_status" in update_payload:
+                c_type, c_status = normalize_pet_classification(
+                    update_payload.get("pet_type", existing_pet.get("pet_type")),
+                    update_payload.get("adoption_status", existing_pet.get("adoption_status"))
+                )
+                update_payload["pet_type"] = c_type
+                update_payload["adoption_status"] = c_status
 
             if not update_payload:
                 return Response({"error": "No valid fields provided for update."}, status=status.HTTP_400_BAD_REQUEST)
@@ -452,7 +698,34 @@ class PetDetailAPIView(APIView):
             q = supabase.table("pets").update(update_payload).eq("pet_id", pet_id).execute()
             if not q.data:
                 return Response({"error": f"Pet '{pet_id}' not found."}, status=status.HTTP_404_NOT_FOUND)
-            return Response(q.data[0], status=status.HTTP_200_OK)
+
+            updated_pet = q.data[0]
+
+            # Auto-log updated medical conditions into medical_records if newly added/changed
+            new_conditions = str(update_payload.get("current_conditions") or "").strip()
+            if (
+                "current_conditions" in update_payload
+                and is_meaningful_condition(new_conditions)
+                and new_conditions.lower() != prev_conditions.lower()
+            ):
+                create_condition_medical_log(
+                    pet_id=pet_id,
+                    condition_text=new_conditions,
+                    log_date_str=date.today().strftime("%Y-%m-%d"),
+                    weight_str=updated_pet.get("weight"),
+                    tag="CONDITION UPDATE"
+                )
+
+            # Re-attach authoritative clinical statuses
+            try:
+                med_logs = supabase.table("medical_records").select("*").eq("pet_id", pet_id).execute().data or []
+                vac_logs = supabase.table("vaccination_logs").select("*").eq("pet_id", pet_id).execute().data or []
+                updated_pet["vaccination_status"] = compute_vaccination_status(vac_logs)
+                updated_pet["spayed_neutered"] = compute_spayed_neutered(med_logs)
+            except Exception:
+                pass
+
+            return Response(updated_pet, status=status.HTTP_200_OK)
         except Exception as e: 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -577,17 +850,30 @@ class MedicalRecordsAPIView(APIView):
             p["pet_id"] = target_pet
 
             raw_rtype = str(p.get("record_type", "")).strip()
+            raw_rtype_l = raw_rtype.lower()
+            is_spay_neuter = any(kw in raw_rtype_l for kw in SPAY_NEUTER_KEYWORDS)
 
             # Normalize record_type against PostgreSQL check constraint:
-            # medical_records_record_type_check allows: 'Check-up', 'Clinical Treatment', 'Bite Incident', 'Scratch Incident'
-            if "Bite" in raw_rtype or ("Incident" in raw_rtype and "Scratch" not in raw_rtype):
+            # medical_records_record_type_check typically allows:
+            # 'Check-up', 'Clinical Treatment', 'Bite Incident', 'Scratch Incident' (and optionally 'Spay / Neuter')
+            if is_spay_neuter:
+                record_type_candidates = ["Spay / Neuter", "Clinical Treatment"]
+                existing_notes = str(p.get("notes") or "").strip()
+                if "[spay / neuter" not in existing_notes.lower():
+                    p["notes"] = f"[SPAY / NEUTER — TNR STERILIZATION]\n{existing_notes}" if existing_notes else "[SPAY / NEUTER — TNR STERILIZATION]"
+                record_type = "Spay / Neuter"
+            elif "Bite" in raw_rtype or ("Incident" in raw_rtype and "Scratch" not in raw_rtype):
                 record_type = "Bite Incident"
+                record_type_candidates = [record_type]
             elif "Scratch" in raw_rtype:
                 record_type = "Scratch Incident"
+                record_type_candidates = [record_type]
             elif "Treatment" in raw_rtype or "Clinical" in raw_rtype:
                 record_type = "Clinical Treatment"
+                record_type_candidates = [record_type]
             else:
                 record_type = "Check-up"
+                record_type_candidates = [record_type]
             p["record_type"] = record_type
 
             # Normalize log_date and next_followup_date cleanly for PostgreSQL date columns
@@ -620,14 +906,36 @@ class MedicalRecordsAPIView(APIView):
                 "medication_prescribed", "next_followup_date",
                 "weight_at_log", "veterinarian"
             }
-            insert_payload = {
-                k: v for k, v in p.items()
-                if k in ALLOWED_MED_FIELDS and v is not None and str(v).strip() != ""
-            }
 
-            res = supabase.table("medical_records").insert(insert_payload).execute()
-            if not res.data:
+            res = None
+            last_err = None
+            for cand_rtype in record_type_candidates:
+                p["record_type"] = cand_rtype
+                insert_payload = {
+                    k: v for k, v in p.items()
+                    if k in ALLOWED_MED_FIELDS and v is not None and str(v).strip() != ""
+                }
+                try:
+                    res = supabase.table("medical_records").insert(insert_payload).execute()
+                    last_err = None
+                    break
+                except Exception as ins_err:
+                    last_err = ins_err
+                    if "23514" not in str(ins_err) and "check constraint" not in str(ins_err).lower():
+                        raise
+
+            if last_err is not None:
+                raise last_err
+            if not res or not res.data:
                 return Response({"error": "Failed to save medical record."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Sync pets.spayed_neutered = True when a Spay / Neuter record is committed
+            if is_spay_neuter:
+                try:
+                    supabase.table("pets").update({"spayed_neutered": True}).eq("pet_id", target_pet).execute()
+                except Exception as spay_err:
+                    print(f"[Warning] Failed to sync pet spayed_neutered flag: {spay_err}")
+
             return Response(res.data[0], status=status.HTTP_201_CREATED)
         except Exception as e: 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -679,6 +987,15 @@ class VaccinationLogsAPIView(APIView):
             res = supabase.table("vaccination_logs").insert(insert_payload).execute()
             if not res.data:
                 return Response({"error": "Failed to save vaccination log."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Recompute and sync pet vaccination_status from vaccination_logs (Single Source of Truth)
+            try:
+                all_pet_vacs = supabase.table("vaccination_logs").select("vaccine_name, administered_date, next_due_date, expiration_date").eq("pet_id", target_pet).execute().data or []
+                computed_vac_status = compute_vaccination_status(all_pet_vacs)
+                safe_sync_pet_vaccination_status(target_pet, computed_vac_status)
+            except Exception as sync_err:
+                print(f"[Warning] Post-vaccine status sync warning: {sync_err}")
+
             return Response(res.data[0], status=status.HTTP_201_CREATED)
         except Exception as e: 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

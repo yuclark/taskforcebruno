@@ -61,18 +61,18 @@ export default function QRScannerView({ onProfileIdentified }) {
   const extractPetIdFromQr = (rawText) => {
     if (!rawText) return '';
     const trimmed = rawText.trim();
-    
+
     // 1. If full URL (e.g. https://taskforcebruno.vercel.app/?pet=ADOPT-01 or /passport/TF-BRUNO-01)
     if (/^https?:\/\//i.test(trimmed)) {
       try {
         const url = new URL(trimmed);
-        
+
         for (const [key, val] of url.searchParams.entries()) {
           if (['pet', 'id', 'pet_id', 'petid', 'animal_id', 'animalid', 'passport'].includes(key.toLowerCase()) && val) {
             return decodeURIComponent(val).trim().toUpperCase();
           }
         }
-        
+
         const segments = url.pathname.split('/').filter(Boolean);
         if (segments.length > 0) {
           const lastSegment = decodeURIComponent(segments[segments.length - 1]).trim();
@@ -90,11 +90,11 @@ export default function QRScannerView({ onProfileIdentified }) {
     if (queryMatch) {
       return decodeURIComponent(queryMatch[1]).trim().toUpperCase();
     }
-    
+
     // 3. Look for standard identifier patterns
     const match = trimmed.match(/(?:PET|STRAY|TF|CIT|ADOPT)[-_A-Z0-9]+/i);
     if (match) return match[0].toUpperCase();
-    
+
     // 4. Clean fallback
     return trimmed.replace(/^[#/]+/, '').trim().toUpperCase();
   };
@@ -119,7 +119,7 @@ export default function QRScannerView({ onProfileIdentified }) {
         const allPets = await listRes.json();
         if (Array.isArray(allPets)) {
           const cleanTarget = targetId.toLowerCase();
-          const matched = allPets.find(p => 
+          const matched = allPets.find(p =>
             (p.pet_id && p.pet_id.toLowerCase() === cleanTarget) ||
             (p.name && p.name.toLowerCase() === cleanTarget)
           );
@@ -351,7 +351,7 @@ export default function QRScannerView({ onProfileIdentified }) {
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none" />
-          
+
           <div className="absolute top-3 right-3">
             <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider bg-black/60 text-[#D4AF37] border border-[#D4AF37]/40 shadow-sm backdrop-blur-sm">
               #{petData.pet_id}
@@ -359,22 +359,22 @@ export default function QRScannerView({ onProfileIdentified }) {
           </div>
 
           <div className="absolute bottom-3 left-3 flex items-center gap-2">
-            <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide border uppercase shadow-sm ${
-              petData.adoption_status === 'Adopted'
+            <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide border uppercase shadow-sm ${petData.adoption_status === 'Adopted'
                 ? 'bg-slate-800/90 text-slate-200 border-slate-600'
                 : (petData.pet_type || '').toLowerCase().includes('adoption') || petData.adoption_status === 'Available'
-                ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold'
-                : 'bg-[#5C0612]/95 text-[#D4AF37] border-[#D4AF37]/40'
-            }`}>
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold'
+                  : 'bg-[#5C0612]/95 text-[#D4AF37] border-[#D4AF37]/40'
+              }`}>
               {petData.adoption_status === 'Adopted' ? 'Adopted Alumni' : (petData.pet_type || 'Campus Pet')}
             </span>
 
-            <span className={`px-2 py-0.5 rounded-md text-[10px] font-medium border ${
-              petData.vaccination_status?.toLowerCase().includes('fully')
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-medium border ${petData.vaccination_status?.toLowerCase().includes('fully')
                 ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/50'
-                : 'bg-amber-950/80 text-amber-300 border-amber-600/50'
-            }`}>
-              {petData.vaccination_status || 'Vaccination Pending'}
+                : (petData.vaccination_status?.toLowerCase().includes('core') || petData.vaccination_status?.toLowerCase().includes('partial'))
+                ? 'bg-amber-950/80 text-amber-300 border-amber-600/50'
+                : 'bg-rose-950/80 text-rose-300 border-rose-600/50'
+              }`}>
+              {petData.vaccination_status || 'Not Vaccinated'}
             </span>
           </div>
         </div>

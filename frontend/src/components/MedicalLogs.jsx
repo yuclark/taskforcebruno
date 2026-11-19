@@ -63,6 +63,10 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
   const [medPrescription, setMedPrescription] = useState('');
   const [medFollowup, setMedFollowup] = useState('');
 
+  // Spay / Neuter (TNR Sterilization) specific
+  const [spayProcedure, setSpayProcedure] = useState('Spay (Ovariohysterectomy)');
+  const [earTipApplied, setEarTipApplied] = useState(true);
+
   // Rabies Bite/Scratch Protocol specific (Philippine RA 9482 / Campus Public Safety)
   const [exposureCategory, setExposureCategory] = useState('Category II - Minor scratch/abrasion without bleeding');
   const [victimType, setVictimType] = useState('CIT-U Student');
@@ -103,7 +107,11 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
     setMedType(newType);
     setClinicalNotes('');
     setMedPrescription('');
-    if (newType === 'Bite Incident' || newType === 'Scratch Incident') {
+    if (newType === 'Spay / Neuter') {
+      const genderLower = (activePet?.gender || '').toLowerCase();
+      setSpayProcedure(genderLower === 'male' ? 'Neuter (Castration)' : 'Spay (Ovariohysterectomy)');
+      setMedFollowup('');
+    } else if (newType === 'Bite Incident' || newType === 'Scratch Incident') {
       setMedFollowup(computeQuarantineReleaseDate(medDate));
     } else {
       setMedFollowup('');
@@ -255,6 +263,7 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
     if (submittingMed || !clinicalNotes.trim() || !effectivePetId) return;
 
     const isBiteOrScratch = medType === 'Bite Incident' || medType === 'Scratch Incident' || medType.includes('Bite') || medType.includes('Scratch');
+    const isSpayNeuter = medType === 'Spay / Neuter';
     const computedExpiryDateStr = isBiteOrScratch ? computeQuarantineReleaseDate(medDate) : null;
 
     // Build realistic veterinary notes string combining clinical parameters
@@ -262,6 +271,9 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
     if (medType === 'Check-up') {
       const vitalsSummary = `[VITALS] Temp: ${temperature || 'Normal'} | BCS: ${bodyCondition}`;
       compiledNotes = `${vitalsSummary}\n${clinicalNotes.trim()}`;
+    } else if (isSpayNeuter) {
+      const tnrSummary = `[SPAY / NEUTER — TNR STERILIZATION] Procedure: ${spayProcedure} | Ear-Tip Notch: ${earTipApplied ? 'Applied (TNR Marked)' : 'Not Applied'}`;
+      compiledNotes = `${tnrSummary}\n${clinicalNotes.trim()}`;
     } else if (isBiteOrScratch) {
       const protocolSummary = `[INCIDENT TRIAGE] ${exposureCategory} | Victim: ${victimType} | Zone: ${incidentLocation} | Protocol: ${quarantineStatus} (14-Day Mandatory Quarantine)`;
       compiledNotes = `${protocolSummary}\n${clinicalNotes.trim()}`;
@@ -294,9 +306,15 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
         setClinicalNotes('');
         setMedPrescription('');
         setTemperature('');
-        setFormMessage({ target: 'med', type: 'success', text: 'Clinical examination record committed to patient medical history.' });
+        setFormMessage({
+          target: 'med',
+          type: 'success',
+          text: isSpayNeuter
+            ? 'Spay / Neuter (TNR) surgical record saved — animal is now certified TNR Sterilized!'
+            : 'Clinical examination record committed to patient medical history.'
+        });
         fetchMedicalLogsForTarget(effectivePetId);
-        if (isBiteOrScratch && onRefresh) {
+        if ((isBiteOrScratch || isSpayNeuter) && onRefresh) {
           onRefresh();
         }
       } else if (res.status === 403) {
@@ -412,11 +430,15 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    const isDewormOrNonVac = (name) => {
+      const n = (name || '').toLowerCase();
+      return n.includes('deworm') || n.includes('anthelmintic') || n.includes('pyrantel') || n.includes('praziquantel');
+    };
     const rabiesList = list.filter(v => (v.vaccine_name || '').toLowerCase().includes('rabies'));
     rabiesList.sort((a, b) => new Date(b.administered_date || 0) - new Date(a.administered_date || 0));
     const latestRabies = rabiesList[0] || null;
 
-    const coreList = list.filter(v => !(v.vaccine_name || '').toLowerCase().includes('rabies'));
+    const coreList = list.filter(v => !(v.vaccine_name || '').toLowerCase().includes('rabies') && !isDewormOrNonVac(v.vaccine_name));
     coreList.sort((a, b) => new Date(b.administered_date || 0) - new Date(a.administered_date || 0));
     const latestCore = coreList[0] || null;
 
@@ -639,11 +661,11 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
                     <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${
                       activePet?.vaccination_status === 'Fully Vaccinated' 
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                        : activePet?.vaccination_status === 'Partially Vaccinated'
-                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : (activePet?.vaccination_status?.toLowerCase().includes('core') || activePet?.vaccination_status === 'Partially Vaccinated')
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
                         : 'bg-rose-50 text-rose-700 border-rose-200'
                     }`}>
-                      {activePet?.vaccination_status || 'Unvaccinated'}
+                      {activePet?.vaccination_status || 'Not Vaccinated'}
                     </span>
                     <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
                       {activePet?.spayed_neutered ? 'TNR Sterilized' : 'Intact'}
@@ -748,6 +770,13 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
                   className={`px-2.5 py-1 rounded-lg transition-all ${medType === 'Clinical Treatment' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
                 >
                   Treatment
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTypeChange('Spay / Neuter')}
+                  className={`px-2.5 py-1 rounded-lg transition-all ${medType === 'Spay / Neuter' ? 'bg-purple-700 text-white shadow-sm' : 'text-slate-500 hover:text-purple-700'}`}
+                >
+                  Spay / Neuter
                 </button>
                 <button
                   type="button"
@@ -858,6 +887,46 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
                 </div>
               )}
 
+              {/* SPECIFIC WORKFLOW FIELDS: SPAY / NEUTER (TNR STERILIZATION) */}
+              {medType === 'Spay / Neuter' && (
+                <div className="p-3.5 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-3 text-purple-900">
+                  <div className="flex items-center justify-between border-b border-purple-200/60 pb-2">
+                    <span className="text-[10px] font-black text-purple-800 font-mono uppercase tracking-wider">
+                      TNR Sterilization Surgical Log
+                    </span>
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-purple-200 text-purple-900 font-mono">
+                      AUTO-CERTIFIES TNR STATUS
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                    <div>
+                      <label className="block text-[9px] font-bold text-purple-700 uppercase mb-1">Surgical Procedure *</label>
+                      <select
+                        value={spayProcedure}
+                        onChange={(e) => setSpayProcedure(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-white border border-purple-200 rounded-lg text-xs font-semibold text-slate-800"
+                      >
+                        <option value="Spay (Ovariohysterectomy)">Spay (Ovariohysterectomy — Female)</option>
+                        <option value="Neuter (Castration)">Neuter (Castration — Male)</option>
+                      </select>
+                    </div>
+                    <div className="pt-3 sm:pt-4">
+                      <label className="flex items-center gap-2 cursor-pointer select-none bg-white px-3 py-2 rounded-lg border border-purple-200">
+                        <input
+                          type="checkbox"
+                          checked={earTipApplied}
+                          onChange={(e) => setEarTipApplied(e.target.checked)}
+                          className="w-4 h-4 accent-purple-700 rounded"
+                        />
+                        <span className="text-[11px] font-semibold text-purple-900">
+                          TNR Ear-Tip Notch Applied
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* SPECIFIC WORKFLOW FIELDS: BITE OR SCRATCH INCIDENT PROTOCOL */}
               {(medType === 'Bite Incident' || medType === 'Scratch Incident' || medType.includes('Bite') || medType.includes('Scratch')) && (
                 <div className="p-3.5 bg-rose-50/70 border border-rose-200 rounded-2xl space-y-3 text-rose-900">
@@ -942,6 +1011,7 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   {medType === 'Check-up' ? 'Clinical Findings & Physical Observations *' :
                    medType === 'Clinical Treatment' ? 'Diagnostic Assessment & Procedures Performed *' :
+                   medType === 'Spay / Neuter' ? 'Surgical Procedure & Post-Op Recovery Notes *' :
                    'Incident Assessment & Immediate Wound Management *'}
                 </label>
                 <textarea
@@ -952,6 +1022,7 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
                   placeholder={
                     medType === 'Check-up' ? "Describe physical condition (coat, eyes, ears, dentition, hydration status, behavior)..." :
                     medType === 'Clinical Treatment' ? "Specify primary diagnosis, symptoms presented, clinical procedures performed..." :
+                    medType === 'Spay / Neuter' ? "Document anesthesia protocol, incision closure, suture type, recovery status, and post-op care..." :
                     "Document wound severity, immediate sterilization/flushing protocol, victim referral to animal bite center..."
                   }
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800 leading-relaxed resize-none"
@@ -1045,6 +1116,11 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
               <div className="space-y-3">
                 {filteredMedicalLogs.map((log) => {
                   const isIncident = log.record_type === 'Bite Incident' || log.record_type === 'Scratch Incident';
+                  const isSpayLog =
+                    (log.record_type || '').toLowerCase().includes('spay') ||
+                    (log.record_type || '').toLowerCase().includes('neuter') ||
+                    (log.notes || '').toLowerCase().includes('[spay / neuter');
+                  const isIntakeCondLog = (log.notes || '').toLowerCase().includes('[intake medical condition]') || (log.notes || '').toLowerCase().includes('[condition update]');
                   return (
                     <div
                       key={log.record_id}
@@ -1053,6 +1129,8 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
                           ? 'bg-rose-50/40 border-rose-200 border-l-4 border-l-rose-600'
                           : log.record_type === 'Scratch Incident'
                           ? 'bg-amber-50/40 border-amber-200 border-l-4 border-l-amber-500'
+                          : isSpayLog
+                          ? 'bg-purple-50/40 border-purple-200 border-l-4 border-l-purple-600'
                           : 'bg-white border-slate-200 border-l-4 border-l-slate-700'
                       }`}
                     >
@@ -1063,11 +1141,15 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
                               ? 'bg-rose-100 text-rose-800'
                               : log.record_type === 'Scratch Incident'
                               ? 'bg-amber-100 text-amber-800'
+                              : isSpayLog
+                              ? 'bg-purple-100 text-purple-800'
+                              : isIntakeCondLog
+                              ? 'bg-indigo-100 text-indigo-800'
                               : log.record_type === 'Clinical Treatment'
                               ? 'bg-blue-100 text-blue-800'
                               : 'bg-slate-100 text-slate-800'
                           }`}>
-                            {log.record_type}
+                            {isSpayLog ? 'Spay / Neuter (TNR)' : isIntakeCondLog ? 'Intake / Condition Log' : log.record_type}
                           </span>
                           <span className="font-mono text-[10px] text-slate-400">
                             Recorded on {log.log_date}

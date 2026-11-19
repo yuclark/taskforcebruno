@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 const ALLOWED_LOCATIONS = [
   "Wildcat Innovation Labs",
@@ -40,23 +40,41 @@ function consumeStrayHandoff() {
   return null;
 }
 
+function getPrefixForClassification(petType) {
+  const s = (petType || '').toLowerCase();
+  if (s.includes('stray')) return 'STRAY';
+  if (s.includes('adopt')) return 'ADOPT';
+  return 'PET';
+}
+
+function computeNextPetIdPreview(petType, existingIds) {
+  const prefix = getPrefixForClassification(petType);
+  const pattern = new RegExp(`^${prefix}-(\\d+)$`, 'i');
+  let maxNum = 0;
+  for (const pid of existingIds) {
+    const match = pattern.exec(String(pid || '').trim());
+    if (match) {
+      const n = parseInt(match[1], 10);
+      if (n > maxNum) maxNum = n;
+    }
+  }
+  return `${prefix}-${String(maxNum + 1).padStart(3, '0')}`;
+}
+
 export default function AddNewPet({ onRefresh }) {
   const [initialHandoff] = useState(() => consumeStrayHandoff());
-  const [isStrayMode, setIsStrayMode] = useState(() => Boolean(initialHandoff));
   const [handedOffImageUrl, setHandedOffImageUrl] = useState(() => initialHandoff?.image_url || '');
+  const [existingPetIds, setExistingPetIds] = useState([]);
+
   const [newPetForm, setNewPetForm] = useState(() => ({
-    pet_id: '',
     name: '',
     species: initialHandoff?.species || 'Cat',
-    pet_type: initialHandoff ? 'Pet for Adoption' : 'Campus Pet',
+    pet_type: initialHandoff ? 'Stray' : 'Campus Pet',
     breed: '',
     gender: 'Male',
     age: '',
     weight: '',
     size: 'Small',
-    vaccination_status: initialHandoff ? 'Not Vaccinated' : 'Fully Vaccinated',
-    spayed_neutered: !initialHandoff,
-    adoption_status: initialHandoff ? 'Available' : 'Campus Pet',
     found_near: initialHandoff ? matchAllowedLocation(initialHandoff.found_near) : 'Wildcat Innovation Labs',
     rescue_date: new Date().toISOString().split('T')[0],
     current_conditions: 'None',
@@ -70,6 +88,41 @@ export default function AddNewPet({ onRefresh }) {
   const [formMessage, setFormMessage] = useState({ type: '', text: '' });
   const [submitting, setSubmitting] = useState(false);
 
+  const fetchExistingIds = useCallback(async () => {
+    try {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/pets/');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setExistingPetIds(data.map((p) => p.pet_id).filter(Boolean));
+        }
+      }
+    } catch {
+      // Preview falls back to -001 if offline; server remains authoritative
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadIds = async () => {
+      try {
+        const res = await fetch('https://taskforcebruno.onrender.com/api/pets/');
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setExistingPetIds(data.map((p) => p.pet_id).filter(Boolean));
+          }
+        }
+      } catch {
+        // Ignore preview fetch errors
+      }
+    };
+    loadIds();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Revoke locally created blob URLs on change or unmount to avoid memory leaks
   useEffect(() => {
     return () => {
@@ -78,6 +131,9 @@ export default function AddNewPet({ onRefresh }) {
       }
     };
   }, [imagePreviewUrl]);
+
+  const isStrayClassification = newPetForm.pet_type === 'Stray';
+  const nextAutoPetId = computeNextPetIdPreview(newPetForm.pet_type, existingPetIds);
 
   const calculateSizeCategory = (weightVal) => {
     const num = parseFloat(weightVal);
@@ -88,31 +144,16 @@ export default function AddNewPet({ onRefresh }) {
   };
 
   const handleCreateChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    const updatedValue = type === 'checkbox' ? checked : value;
+    const { name, value } = e.target;
     if (name === 'weight') {
-      const calculatedSize = calculateSizeCategory(updatedValue);
+      const calculatedSize = calculateSizeCategory(value);
       setNewPetForm(prev => ({
         ...prev,
-        weight: updatedValue,
+        weight: value,
         size: calculatedSize
       }));
-    } else if (name === 'pet_type') {
-      const isCampus = updatedValue === 'Campus Pet';
-      setNewPetForm(prev => ({
-        ...prev,
-        pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption',
-        adoption_status: isCampus ? 'Campus Pet' : (prev.adoption_status === 'Campus Pet' ? 'Available' : prev.adoption_status || 'Available')
-      }));
-    } else if (name === 'adoption_status') {
-      const isCampus = updatedValue === 'Campus Pet';
-      setNewPetForm(prev => ({
-        ...prev,
-        adoption_status: updatedValue,
-        pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption'
-      }));
     } else {
-      setNewPetForm(prev => ({ ...prev, [name]: updatedValue }));
+      setNewPetForm(prev => ({ ...prev, [name]: value }));
     }
   };
 
@@ -135,60 +176,42 @@ export default function AddNewPet({ onRefresh }) {
       return;
     }
 
+    if (!isStrayClassification && !newPetForm.name.trim()) {
+      setFormMessage({ type: 'error', text: 'Please provide the animal name.' });
+      return;
+    }
+
     setSubmitting(true);
 
     const multiPartFormPayload = new FormData();
-
     const massValueString = newPetForm.weight.toString().trim();
     const formattedWeightPayload = massValueString ? `${massValueString} kg` : 'Unknown';
 
-    let finalizedPetId = newPetForm.pet_id.trim().toUpperCase();
     const finalizedSpecies = newPetForm.species;
-    let finalizedPetType = newPetForm.pet_type;
-    let finalizedName = newPetForm.name.trim();
+    const finalizedPetType = newPetForm.pet_type;
+    const derivedAdoptionStatus =
+      finalizedPetType === 'Pet for Adoption'
+        ? 'Available'
+        : finalizedPetType === 'Stray'
+        ? 'Stray'
+        : 'Campus Pet';
 
-    if (isStrayMode) {
-      finalizedPetId = `STRAY-${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`;
-      finalizedPetType = 'Pet for Adoption';
-
-      let strayCount = 1;
-      try {
-        const checkRes = await fetch('https://taskforcebruno.onrender.com/api/pets/');
-        if (checkRes.ok) {
-          const allIndexedPets = await checkRes.json();
-          if (Array.isArray(allIndexedPets)) {
-            const matchingStrays = allIndexedPets.filter(p =>
-              p.pet_id?.startsWith('STRAY-') &&
-              p.species?.toLowerCase() === finalizedSpecies.toLowerCase()
-            );
-            strayCount = matchingStrays.length + 1;
-          }
-        }
-      } catch (err) {
-        console.error('Error calculating incremental profile counts:', err);
-      }
-
-      if (!finalizedName) {
-        finalizedName = `Stray ${finalizedSpecies} #${strayCount}`;
-      }
-    }
-
-    multiPartFormPayload.append('pet_id', finalizedPetId);
-    multiPartFormPayload.append('name', finalizedName);
+    multiPartFormPayload.append('name', newPetForm.name.trim());
     multiPartFormPayload.append('species', finalizedSpecies);
     multiPartFormPayload.append('pet_type', finalizedPetType);
-    multiPartFormPayload.append('breed', isStrayMode ? (newPetForm.breed.trim() || `Stray ${finalizedSpecies}`) : (newPetForm.breed.trim() || 'Domestic Mix'));
+    multiPartFormPayload.append(
+      'breed',
+      newPetForm.breed.trim() || (isStrayClassification ? `Stray ${finalizedSpecies}` : 'Domestic Mix')
+    );
     multiPartFormPayload.append('gender', newPetForm.gender);
     multiPartFormPayload.append('age', newPetForm.age.trim() || 'Unknown');
     multiPartFormPayload.append('weight', formattedWeightPayload);
     multiPartFormPayload.append('size', newPetForm.size);
-    multiPartFormPayload.append('vaccination_status', newPetForm.vaccination_status);
-    multiPartFormPayload.append('spayed_neutered', newPetForm.spayed_neutered);
-    multiPartFormPayload.append('adoption_status', isStrayMode && newPetForm.adoption_status === 'Campus Pet' ? 'Available' : newPetForm.adoption_status);
+    multiPartFormPayload.append('adoption_status', derivedAdoptionStatus);
     multiPartFormPayload.append('found_near', newPetForm.found_near.trim());
     multiPartFormPayload.append('rescue_date', newPetForm.rescue_date);
     multiPartFormPayload.append('current_conditions', newPetForm.current_conditions.trim() || 'None');
-    multiPartFormPayload.append('behavior_notes', newPetForm.behavior_notes.trim() || 'Healthy baseline behavior.');
+    multiPartFormPayload.append('behavior_notes', newPetForm.behavior_notes.trim() || 'Friendly');
     multiPartFormPayload.append('about_text', newPetForm.about_text.trim());
     multiPartFormPayload.append('description', newPetForm.description.trim());
 
@@ -205,20 +228,37 @@ export default function AddNewPet({ onRefresh }) {
       });
 
       if (res.ok) {
-        setFormMessage({ type: 'success', text: `Animal profile registered successfully for ${finalizedName} (${finalizedPetId})!` });
+        const createdPet = await res.json().catch(() => ({}));
+        const assignedId = createdPet.pet_id || nextAutoPetId;
+        const assignedName = createdPet.name || newPetForm.name.trim() || 'Animal';
+        const condClean = (newPetForm.current_conditions || '').trim().toLowerCase();
+        const conditionWasLogged = condClean && !['none', 'n/a', 'healthy', 'normal', '-'].includes(condClean);
+
+        setFormMessage({
+          type: 'success',
+          text: `Animal profile registered for ${assignedName} (${assignedId})!${conditionWasLogged ? ' Intake medical condition was automatically logged to Medical Logs.' : ''}`
+        });
         setNewPetForm({
-          pet_id: '', name: '', species: 'Cat',
-          pet_type: isStrayMode ? 'Pet for Adoption' : 'Campus Pet',
-          breed: '', gender: 'Male', age: '', weight: '', size: 'Small',
-          vaccination_status: 'Fully Vaccinated', spayed_neutered: true,
-          adoption_status: isStrayMode ? 'Available' : 'Campus Pet',
-          found_near: 'Wildcat Innovation Labs', rescue_date: new Date().toISOString().split('T')[0], current_conditions: 'None',
-          behavior_notes: 'Friendly', about_text: '', description: ''
+          name: '',
+          species: 'Cat',
+          pet_type: 'Campus Pet',
+          breed: '',
+          gender: 'Male',
+          age: '',
+          weight: '',
+          size: 'Small',
+          found_near: 'Wildcat Innovation Labs',
+          rescue_date: new Date().toISOString().split('T')[0],
+          current_conditions: 'None',
+          behavior_notes: 'Friendly',
+          about_text: '',
+          description: ''
         });
         setImageFile(null);
         setHandedOffImageUrl('');
         setImagePreviewUrl(null);
         if (e.target) e.target.reset();
+        fetchExistingIds();
         if (onRefresh) onRefresh();
       } else {
         const errorData = await res.json().catch(() => ({}));
@@ -234,42 +274,20 @@ export default function AddNewPet({ onRefresh }) {
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 text-xs text-slate-700 animate-fade-in pb-12">
       
-      {/* Top Header Banner with Mode Toggle */}
+      {/* Top Header Banner */}
       <div className="bg-white border border-slate-200 shadow-sm rounded-3xl p-5 md:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-left">
         <div>
           <h2 className="text-base md:text-lg font-black text-slate-900 tracking-tight">
             Animal Registry Intake Portal
           </h2>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            Register resident campus pets or intake unidentified stray animals with biometric and colony records.
+            Register campus pets, adoption rescues, or unidentified strays with auto-assigned sequential IDs and clinical audit integrity.
           </p>
         </div>
 
-        <div className="flex bg-slate-100 p-1 rounded-xl font-mono text-[10px] font-bold uppercase select-none shrink-0 self-stretch sm:self-auto">
-          <button
-            type="button"
-            onClick={() => {
-              setIsStrayMode(false);
-              setNewPetForm(prev => ({ ...prev, pet_type: 'Campus Pet', adoption_status: 'Campus Pet' }));
-            }}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-lg transition-all ${
-              !isStrayMode ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            Campus Pet
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsStrayMode(true);
-              setNewPetForm(prev => ({ ...prev, pet_type: 'Pet for Adoption', adoption_status: 'Available' }));
-            }}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-lg transition-all ${
-              isStrayMode ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            Pet for Adoption
-          </button>
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl font-mono text-[10px] shrink-0">
+          <span className="text-slate-400 uppercase font-bold">Auto-Assigned ID:</span>
+          <span className="font-black text-[#5C0612] tracking-wider">{nextAutoPetId}</span>
         </div>
       </div>
 
@@ -297,35 +315,32 @@ export default function AddNewPet({ onRefresh }) {
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {!isStrayMode && (
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                      Pet ID (Collar Tag) *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      name="pet_id"
-                      value={newPetForm.pet_id}
-                      onChange={handleCreateChange}
-                      placeholder="e.g. TF-BRUNO-01"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-mono text-xs text-slate-800"
-                    />
-                  </div>
-                )}
-
-                <div className={isStrayMode ? 'sm:col-span-2' : ''}>
+                <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Animal Name {isStrayMode && '(Optional - Auto Assigned)'} *
+                    Classification Status *
+                  </label>
+                  <select
+                    name="pet_type"
+                    value={newPetForm.pet_type}
+                    onChange={handleCreateChange}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800 font-semibold"
+                  >
+                    <option value="Campus Pet">Campus Pet (PET-###)</option>
+                    <option value="Pet for Adoption">Pet for Adoption (ADOPT-###)</option>
+                    <option value="Stray">Stray (STRAY-###)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Auto-Assigned Pet ID
                   </label>
                   <input
                     type="text"
-                    required={!isStrayMode}
-                    name="name"
-                    value={newPetForm.name}
-                    onChange={handleCreateChange}
-                    placeholder={isStrayMode ? "Auto-generates Stray # if blank" : "e.g. Bruno"}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800 font-semibold"
+                    readOnly
+                    disabled
+                    value={nextAutoPetId}
+                    className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl font-mono font-bold text-xs text-[#5C0612] cursor-not-allowed select-none"
                   />
                 </div>
 
@@ -348,18 +363,17 @@ export default function AddNewPet({ onRefresh }) {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Classification Status
+                    Animal Name {isStrayClassification ? '(Optional)' : '*'}
                   </label>
-                  <select
-                    name="pet_type"
-                    value={isStrayMode ? 'Pet for Adoption' : newPetForm.pet_type}
+                  <input
+                    type="text"
+                    required={!isStrayClassification}
+                    name="name"
+                    value={newPetForm.name}
                     onChange={handleCreateChange}
-                    disabled={isStrayMode}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800 disabled:opacity-60"
-                  >
-                    <option value="Campus Pet">Campus Pet</option>
-                    <option value="Pet for Adoption">Pet for Adoption</option>
-                  </select>
+                    placeholder={isStrayClassification ? 'Auto-generates Stray # if blank' : 'e.g. Bruno'}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800 font-semibold"
+                  />
                 </div>
 
                 <div>
@@ -393,13 +407,13 @@ export default function AddNewPet({ onRefresh }) {
               </div>
             </div>
 
-            {/* 2. Biometrics, Sizing & Health */}
+            {/* 2. Biometrics & Sizing */}
             <div className="space-y-3 border-b border-slate-100 pb-5">
               <span className="text-[10px] font-bold text-slate-400 font-mono uppercase tracking-wider block">
-                2. Sizing, Health & Sterilization
+                2. Biometrics & Sizing
               </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     Approximate Age
@@ -433,7 +447,7 @@ export default function AddNewPet({ onRefresh }) {
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Size Category
+                    Size Category (Auto)
                   </label>
                   <select
                     name="size"
@@ -446,37 +460,15 @@ export default function AddNewPet({ onRefresh }) {
                     <option value="Large">Large (&gt; 25 kg)</option>
                   </select>
                 </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Vaccination Status
-                  </label>
-                  <select
-                    name="vaccination_status"
-                    value={newPetForm.vaccination_status}
-                    onChange={handleCreateChange}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800"
-                  >
-                    <option value="Fully Vaccinated">Fully Vaccinated</option>
-                    <option value="Partially Vaccinated">Partially Vaccinated</option>
-                    <option value="Not Vaccinated">Not Vaccinated</option>
-                  </select>
-                </div>
               </div>
 
-              <div className="flex items-center gap-3 pt-1">
-                <label className="flex items-center gap-2 cursor-pointer select-none bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200">
-                  <input
-                    type="checkbox"
-                    name="spayed_neutered"
-                    checked={newPetForm.spayed_neutered}
-                    onChange={handleCreateChange}
-                    className="w-4 h-4 accent-[#5C0612] rounded"
-                  />
-                  <span className="text-xs font-semibold text-slate-700">
-                    Spayed / Neutered (TNR Program Certified)
-                  </span>
-                </label>
+              <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-[11px] text-slate-600 flex items-start gap-2.5">
+                <svg className="w-4 h-4 text-[#5C0612] shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+                </svg>
+                <span>
+                  <strong>Clinical Record Integrity:</strong> Newly registered animals start as <strong>Not Vaccinated</strong> and <strong>Not Sterilized</strong>. Log their active <strong>Anti-Rabies Vaccine</strong> or <strong>Spay / Neuter (TNR)</strong> record in <em>Medical Logs</em> to automatically update their verified badges.
+                </span>
               </div>
             </div>
 
@@ -486,7 +478,7 @@ export default function AddNewPet({ onRefresh }) {
                 3. Campus Colony Location & Rescue Record
               </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     Campus Colony Zone *
@@ -515,28 +507,6 @@ export default function AddNewPet({ onRefresh }) {
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-mono text-xs text-slate-800"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    {newPetForm.pet_type === 'Campus Pet' && !isStrayMode ? 'Campus Residency Status' : 'Adoption Pipeline Stage'}
-                  </label>
-                  <select
-                    name="adoption_status"
-                    value={newPetForm.adoption_status}
-                    onChange={handleCreateChange}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800 font-semibold"
-                  >
-                    {newPetForm.pet_type === 'Campus Pet' && !isStrayMode ? (
-                      <option value="Campus Pet">Campus Pet (Not for Adoption)</option>
-                    ) : (
-                      <>
-                        <option value="Available">Available for Adoption</option>
-                        <option value="Adopted">Adopted</option>
-                        <option value="Pending">Pending Application</option>
-                      </>
-                    )}
-                  </select>
-                </div>
               </div>
             </div>
 
@@ -556,9 +526,12 @@ export default function AddNewPet({ onRefresh }) {
                     name="current_conditions"
                     value={newPetForm.current_conditions}
                     onChange={handleCreateChange}
-                    placeholder="e.g. None, Minor coat dermatitis, Under observation"
+                    placeholder="e.g. None, Minor coat dermatitis, Limping left paw"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800"
                   />
+                  <span className="text-[10px] text-slate-400 block mt-1">
+                    Any condition entered (other than None) is automatically logged in Medical Logs.
+                  </span>
                 </div>
 
                 <div>
@@ -664,11 +637,11 @@ export default function AddNewPet({ onRefresh }) {
               )}
 
               <div className="absolute top-3 left-3 bg-[#5C0612] text-white font-mono text-[9px] font-bold px-2.5 py-1 rounded-lg border border-[#D4AF37]/40 shadow-sm">
-                {newPetForm.pet_id || (isStrayMode ? 'STRAY-AUTO' : 'PET-ID')}
+                {nextAutoPetId}
               </div>
 
               <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm text-slate-800 font-mono text-[9px] font-bold px-2.5 py-1 rounded-lg shadow-sm">
-                {newPetForm.adoption_status}
+                {newPetForm.pet_type}
               </div>
             </div>
 
@@ -677,14 +650,14 @@ export default function AddNewPet({ onRefresh }) {
               <div>
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-black text-slate-900">
-                    {newPetForm.name || (isStrayMode ? 'Stray Animal' : 'Animal Name')}
+                    {newPetForm.name || (isStrayClassification ? `Stray ${newPetForm.species}` : 'Animal Name')}
                   </h3>
                   <span className="text-[10px] font-mono text-slate-400 font-semibold">
                     {newPetForm.gender} &bull; {newPetForm.age || 'Age Unknown'}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 font-medium">
-                  {newPetForm.species} &bull; {newPetForm.breed || 'Domestic Mix'}
+                  {newPetForm.species} &bull; {newPetForm.breed || (isStrayClassification ? `Stray ${newPetForm.species}` : 'Domestic Mix')}
                 </p>
               </div>
 
@@ -692,14 +665,9 @@ export default function AddNewPet({ onRefresh }) {
                 <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700">
                   {newPetForm.found_near}
                 </span>
-                <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  {newPetForm.vaccination_status}
+                <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                  Not Vaccinated
                 </span>
-                {newPetForm.spayed_neutered && (
-                  <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                    TNR Sterilized
-                  </span>
-                )}
               </div>
 
               {newPetForm.about_text && (

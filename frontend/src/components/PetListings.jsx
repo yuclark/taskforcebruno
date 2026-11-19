@@ -66,9 +66,9 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   };
 
   const getVaccinationBadgeStyles = (statusStr) => {
-    const s = statusStr || '';
-    if (s === 'Fully Vaccinated') return 'bg-green-50 text-green-800 border-green-200';
-    if (s === 'Partially Vaccinated') return 'bg-yellow-50 text-yellow-800 border-yellow-200';
+    const s = (statusStr || '').toLowerCase();
+    if (s.includes('fully')) return 'bg-green-50 text-green-800 border-green-200';
+    if (s.includes('core') || s.includes('partial')) return 'bg-amber-50 text-amber-800 border-amber-200';
     return 'bg-red-50 text-red-800 border-red-200';
   };
 
@@ -106,15 +106,39 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     return str.includes('campus') || str.includes('resident') || str === 'not for adoption';
   };
 
+  const isStrayPet = (petOrType) => {
+    if (!petOrType) return false;
+    if (typeof petOrType === 'string') return petOrType.toLowerCase().includes('stray');
+    return (
+      (petOrType.pet_type || '').toLowerCase().includes('stray') ||
+      (petOrType.adoption_status || '').toLowerCase() === 'stray' ||
+      (petOrType.pet_id || '').toUpperCase().startsWith('STRAY-')
+    );
+  };
+
+  const getCanonicalClassification = (pet) => {
+    if (isStrayPet(pet)) return 'Stray';
+    if (isCampusPet(pet?.pet_type) || isCampusPet(pet?.adoption_status)) return 'Campus Pet';
+    return 'Pet for Adoption';
+  };
+
   const startEditing = (pet) => {
     setIsEditingId(pet.pet_id);
     const numericWeight = pet.weight ? pet.weight.toString().replace(/[^0-9.]/g, '') : '';
     const initialSize = pet.size || calculateSizeCategory(numericWeight);
-    const isCampus = isCampusPet(pet.pet_type) || isCampusPet(pet.adoption_status);
+    const canonicalType = getCanonicalClassification(pet);
+    const derivedStatus =
+      pet.adoption_status === 'Adopted'
+        ? 'Adopted'
+        : canonicalType === 'Campus Pet'
+        ? 'Campus Pet'
+        : canonicalType === 'Stray'
+        ? 'Stray'
+        : 'Available';
     setEditFormData({ 
       ...pet, 
-      pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption',
-      adoption_status: isCampus ? 'Campus Pet' : (pet.adoption_status || 'Available'),
+      pet_type: canonicalType,
+      adoption_status: derivedStatus,
       weight: numericWeight,
       size: initialSize,
       behavior_notes: pet.behavior_notes || 'Friendly'
@@ -133,18 +157,16 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
         size: calculatedSize
       }));
     } else if (name === 'pet_type') {
-      const isCampus = isCampusPet(updatedValue);
+      const nextStatus =
+        updatedValue === 'Campus Pet'
+          ? 'Campus Pet'
+          : updatedValue === 'Stray'
+          ? 'Stray'
+          : 'Available';
       setEditFormData(prev => ({
         ...prev,
-        pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption',
-        adoption_status: isCampus ? 'Campus Pet' : (prev.adoption_status === 'Campus Pet' ? 'Available' : prev.adoption_status || 'Available')
-      }));
-    } else if (name === 'adoption_status') {
-      const isCampus = isCampusPet(updatedValue);
-      setEditFormData(prev => ({
-        ...prev,
-        adoption_status: isCampus ? 'Campus Pet' : updatedValue,
-        pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption'
+        pet_type: updatedValue,
+        adoption_status: prev.adoption_status === 'Adopted' ? 'Adopted' : nextStatus
       }));
     } else {
       setEditFormData(prev => ({ ...prev, [name]: updatedValue }));
@@ -155,22 +177,33 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     e.preventDefault();
     setErrorMessage('');
 
-    const isCampus = isCampusPet(editFormData.pet_type) || isCampusPet(editFormData.adoption_status);
-    // Strip virtual computed fields that do not exist as database columns
+    // Strip virtual / clinical-log-derived / read-only fields
     const {
       is_quarantined: _q,
       quarantine_until: _qu,
       quarantine_expiry_date: _qe,
       created_at: _ca,
       pet_id: _pid,
+      vaccination_status: _vs,
+      spayed_neutered: _sn,
       ...cleanFormFields
     } = editFormData;
-    void _q; void _qu; void _qe; void _ca; void _pid;
+    void _q; void _qu; void _qe; void _ca; void _pid; void _vs; void _sn;
+
+    const canonicalType = editFormData.pet_type || 'Campus Pet';
+    const derivedStatus =
+      editFormData.adoption_status === 'Adopted'
+        ? 'Adopted'
+        : canonicalType === 'Campus Pet'
+        ? 'Campus Pet'
+        : canonicalType === 'Stray'
+        ? 'Stray'
+        : 'Available';
 
     const finalizedPayload = {
       ...cleanFormFields,
-      pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption',
-      adoption_status: isCampus ? 'Campus Pet' : (editFormData.adoption_status === 'Campus Pet' ? 'Available' : (editFormData.adoption_status || 'Available')),
+      pet_type: canonicalType,
+      adoption_status: derivedStatus,
       weight: editFormData.weight ? `${editFormData.weight.toString().trim()} kg` : 'N/A'
     };
 
@@ -253,8 +286,8 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   };
 
   const adoptedAlumniPets = pets.filter(p => p.adoption_status === 'Adopted');
-  const strayPetsCollection = pets.filter(p => p.adoption_status !== 'Adopted' && p.pet_id?.startsWith('STRAY-'));
-  const activeUnadoptedPets = pets.filter(p => p.adoption_status !== 'Adopted' && !p.pet_id?.startsWith('STRAY-'));
+  const strayPetsCollection = pets.filter(p => p.adoption_status !== 'Adopted' && isStrayPet(p));
+  const activeUnadoptedPets = pets.filter(p => p.adoption_status !== 'Adopted' && !isStrayPet(p));
 
   const sortedActiveCollection = applySortingMatrix(activeUnadoptedPets);
   const sortedAdoptedCollection = applySortingMatrix(adoptedAlumniPets);
@@ -266,17 +299,23 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   const totalDogsCount = activePets.filter(p => p.species?.toLowerCase() === 'dog').length;
   const totalNeuteredCount = activePets.filter(p => p.spayed_neutered === true || String(p.spayed_neutered).toLowerCase() === 'true').length;
   
-  const totalFullyVaccinatedCount = activePets.filter(p => p.vaccination_status === 'Fully Vaccinated').length;
-  const totalPartiallyVaccinatedCount = activePets.filter(p => p.vaccination_status === 'Partially Vaccinated').length;
-  const totalNotVaccinatedCount = activePets.filter(p => p.vaccination_status === 'Not Vaccinated').length;
+  const totalFullyVaccinatedCount = activePets.filter(p => (p.vaccination_status || '').toLowerCase().includes('fully')).length;
+  const totalCoreOnlyCount = activePets.filter(p => {
+    const s = (p.vaccination_status || '').toLowerCase();
+    return s.includes('core') || s.includes('partial');
+  }).length;
+  const totalUnprotectedCount = activePets.filter(p => {
+    const s = (p.vaccination_status || '').toLowerCase();
+    return !s.includes('fully') && !s.includes('core') && !s.includes('partial');
+  }).length;
 
   const catPercentage = totalPetsCount > 0 ? (totalCatsCount / totalPetsCount) * 100 : 0;
   const dogPercentage = totalPetsCount > 0 ? (totalDogsCount / totalPetsCount) * 100 : 0;
   const neuteredPercentage = totalPetsCount > 0 ? (totalNeuteredCount / totalPetsCount) * 100 : 0;
   
   const fullyVaccinatedPercentage = totalPetsCount > 0 ? (totalFullyVaccinatedCount / totalPetsCount) * 100 : 0;
-  const partiallyVaccinatedPercentage = totalPetsCount > 0 ? (totalPartiallyVaccinatedCount / totalPetsCount) * 100 : 0;
-  const notVaccinatedPercentage = totalPetsCount > 0 ? (totalNotVaccinatedCount / totalPetsCount) * 100 : 0;
+  const coreOnlyPercentage = totalPetsCount > 0 ? (totalCoreOnlyCount / totalPetsCount) * 100 : 0;
+  const unprotectedPercentage = totalPetsCount > 0 ? (totalUnprotectedCount / totalPetsCount) * 100 : 0;
 
   const locationCounts = ALLOWED_LOCATIONS.reduce((acc, loc) => {
     acc[loc] = 0;
@@ -337,15 +376,15 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                       <span className={`px-2 py-0.5 rounded font-bold text-[9px] border ${
                         pet.adoption_status === 'Adopted'
                           ? 'bg-slate-100 text-slate-700 border-slate-300 shadow-sm'
+                          : isStrayPet(pet)
+                          ? 'bg-orange-50 text-orange-800 border-orange-200'
                           : isCampusPet(pet.pet_type) || isCampusPet(pet.adoption_status)
                           ? 'bg-purple-50 text-purple-800 border-purple-200'
                           : 'bg-amber-50 text-amber-800 border-amber-200'
                       }`}>
                         {pet.adoption_status === 'Adopted' 
                           ? 'Adopted' 
-                          : isCampusPet(pet.pet_type) || isCampusPet(pet.adoption_status)
-                          ? 'Campus Pet' 
-                          : 'Pet for Adoption'}
+                          : getCanonicalClassification(pet)}
                       </span>
                     </td>
                     <td className="p-4 text-slate-600">{pet.species} &bull; {pet.breed || 'Mix'}</td>
@@ -374,15 +413,16 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Name</label><input type="text" name="name" value={editFormData.name || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none" /></div>
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Species</label><select name="species" value={editFormData.species || 'Cat'} onChange={handleEditChange} className="w-full p-2 border rounded-lg"><option value="Cat">Cat</option><option value="Dog">Dog</option></select></div>
                               <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Classification</label>
+                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Classification Status</label>
                                 <select 
                                   name="pet_type" 
-                                  value={isCampusPet(editFormData.pet_type) ? 'Campus Pet' : 'Pet for Adoption'} 
+                                  value={editFormData.pet_type || 'Campus Pet'} 
                                   onChange={handleEditChange} 
                                   className="w-full p-2 border rounded-lg font-medium"
                                 >
                                   <option value="Campus Pet">Campus Pet</option>
                                   <option value="Pet for Adoption">Pet for Adoption</option>
+                                  <option value="Stray">Stray</option>
                                 </select>
                               </div>
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Breed</label><input type="text" name="breed" value={editFormData.breed || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none" /></div>
@@ -410,30 +450,19 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                              <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Immunization Profile</label><select name="vaccination_status" value={editFormData.vaccination_status || 'Fully Vaccinated'} onChange={handleEditChange} className="w-full p-2 border rounded-lg"><option value="Fully Vaccinated">Fully Vaccinated</option><option value="Partially Vaccinated">Partially Vaccinated</option><option value="Not Vaccinated">Not Vaccinated</option></select></div>
-                              <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">
-                                  Current Program &amp; Status *
-                                </label>
-                                <select 
-                                  name="adoption_status" 
-                                  value={isCampusPet(editFormData.pet_type) || isCampusPet(editFormData.adoption_status) ? 'Campus Pet' : (editFormData.adoption_status || 'Available')} 
-                                  onChange={handleEditChange} 
-                                  className="w-full p-2 border rounded-lg font-medium text-xs text-slate-800"
-                                >
-                                  <option value="Campus Pet">Campus Pet (Not for Adoption)</option>
-                                  <option value="Available">Available for Adoption</option>
-                                  <option value="Adopted">Adopted</option>
-                                  <option value="Pending">Pending Application</option>
-                                </select>
+                            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono text-[10px] font-bold uppercase text-slate-400">Clinical Status (Auto-Derived):</span>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getVaccinationBadgeStyles(editFormData.vaccination_status)}`}>
+                                  {editFormData.vaccination_status || 'Not Vaccinated'}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                  {editFormData.spayed_neutered ? 'TNR Sterilized' : 'Intact (No Spay/Neuter Log)'}
+                                </span>
                               </div>
-                              <div className="flex items-center h-full pt-4 pl-2">
-                                <label className="flex items-center gap-2 cursor-pointer select-none">
-                                  <input type="checkbox" name="spayed_neutered" checked={editFormData.spayed_neutered || false} onChange={handleEditChange} className="w-4 h-4 accent-[#5C0612]" />
-                                  <span className="text-[10px] font-bold uppercase text-slate-500">Sterilized (Neutered)</span>
-                                </label>
-                              </div>
+                              <span className="text-[10px] text-slate-400 italic">
+                                Updated automatically via Medical &amp; Vaccination Logs
+                              </span>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -489,15 +518,21 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                                 <div>Age Metric: <strong className="text-slate-900 font-medium">{expandedPetData?.age || 'N/A'}</strong></div>
                                 <div>Weight Mass: <strong className="text-slate-900 font-mono font-medium">{expandedPetData?.weight || 'N/A'}</strong></div>
                                 <div>Size Tier: <strong className="text-slate-900 font-medium">{expandedPetData?.size || 'Medium'}</strong></div>
-                                <div>Sterilized: <strong className="text-slate-900 font-medium">{expandedPetData?.spayed_neutered ? 'Yes (Neutered)' : 'No'}</strong></div>
-                                <div>Classification: <strong className="text-slate-900 font-medium">{isCampusPet(expandedPetData?.pet_type) ? 'Campus Pet' : 'Pet for Adoption'}</strong></div>
+                                <div>Sterilized: <strong className="text-slate-900 font-medium">{expandedPetData?.spayed_neutered ? 'Yes (TNR Certified)' : 'No'}</strong></div>
+                                <div>Classification: <strong className="text-slate-900 font-medium">{getCanonicalClassification(expandedPetData)}</strong></div>
                                 <div>Status: <strong className="text-slate-900 font-medium">
                                   {(expandedPetData?.is_quarantined || expandedPetData?.status?.includes('Quarantine') || expandedPetData?.current_conditions?.includes('Observation')) ? (
                                     <span className="text-rose-700 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
                                       Quarantine / Rabies Observation
                                     </span>
                                   ) : (
-                                    expandedPetData?.adoption_status === 'Adopted' ? 'Adopted' : isCampusPet(expandedPetData?.pet_type) || isCampusPet(expandedPetData?.adoption_status) ? 'Campus Pet' : 'Available for Adoption'
+                                    expandedPetData?.adoption_status === 'Adopted'
+                                      ? 'Adopted'
+                                      : isStrayPet(expandedPetData)
+                                      ? 'Stray (Under Monitoring)'
+                                      : isCampusPet(expandedPetData?.pet_type) || isCampusPet(expandedPetData?.adoption_status)
+                                      ? 'Campus Pet'
+                                      : 'Available for Adoption'
                                   )}
                                 </strong></div>
                                 <div className="col-span-2">Rescue Colony: <strong className="text-slate-900 font-medium">{getNormalizedLocation(expandedPetData?.found_near, expandedPetData?.pet_id)}</strong></div>
@@ -661,21 +696,21 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
 
               <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
-                  <span>Partially Vaccinated</span>
-                  <span className="text-yellow-700">{totalPartiallyVaccinatedCount}/{totalPetsCount} ({Math.round(partiallyVaccinatedPercentage)}%)</span>
+                  <span>Core Only (No Anti-Rabies)</span>
+                  <span className="text-amber-700">{totalCoreOnlyCount}/{totalPetsCount} ({Math.round(coreOnlyPercentage)}%)</span>
                 </div>
                 <div className="w-full h-2.5 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
-                  <div style={{ width: `${partiallyVaccinatedPercentage}%` }} className="h-full bg-yellow-500 transition-all duration-500 ease-out" />
+                  <div style={{ width: `${coreOnlyPercentage}%` }} className="h-full bg-amber-500 transition-all duration-500 ease-out" />
                 </div>
               </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
-                  <span>Not Vaccinated</span>
-                  <span className="text-red-700">{totalNotVaccinatedCount}/{totalPetsCount} ({Math.round(notVaccinatedPercentage)}%)</span>
+                  <span>Not Vaccinated / Overdue</span>
+                  <span className="text-red-700">{totalUnprotectedCount}/{totalPetsCount} ({Math.round(unprotectedPercentage)}%)</span>
                 </div>
                 <div className="w-full h-2.5 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
-                  <div style={{ width: `${notVaccinatedPercentage}%` }} className="h-full bg-red-600 transition-all duration-500 ease-out" />
+                  <div style={{ width: `${unprotectedPercentage}%` }} className="h-full bg-red-600 transition-all duration-500 ease-out" />
                 </div>
               </div>
             </div>
@@ -692,8 +727,8 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
         <div className="p-12 text-center text-slate-400 font-mono animate-pulse">COMPILING DATA GRIDS...</div>
       ) : (
         <>
-          {generateRenderedTableBlock("Active & Available Campus Companions", sortedActiveCollection)}
-          {generateRenderedTableBlock("Stray Animals Available for Adoption", sortedStrayCollection)}
+          {generateRenderedTableBlock("Active Campus & Adoption Companions", sortedActiveCollection)}
+          {generateRenderedTableBlock("Registered Campus Strays (Monitoring Queue)", sortedStrayCollection)}
           {generateRenderedTableBlock("Adopted Alumni Companions Registry", sortedAdoptedCollection)}
         </>
       )}

@@ -336,13 +336,13 @@ export default function PetProfileView({ petId, onBackToScanner }) {
                 <div className="flex justify-between items-center py-1.5 border-b border-slate-200">
                   <span className="text-slate-500 font-medium">Vaccination Status</span>
                   <span className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border ${
-                    petData.vaccination_status === 'Fully Vaccinated'
+                    petData.vaccination_status?.toLowerCase().includes('fully')
                       ? 'bg-green-100 text-green-800 border-green-200'
-                      : petData.vaccination_status === 'Partially Vaccinated'
-                      ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                      : (petData.vaccination_status?.toLowerCase().includes('core') || petData.vaccination_status?.toLowerCase().includes('partial'))
+                      ? 'bg-amber-100 text-amber-800 border-amber-200'
                       : 'bg-red-100 text-red-800 border-red-200'
                   }`}>
-                    {petData.vaccination_status || 'Pending'}
+                    {petData.vaccination_status || 'Not Vaccinated'}
                   </span>
                 </div>
                 {/* Anti-Rabies Protection Status (RA 9482) */}
