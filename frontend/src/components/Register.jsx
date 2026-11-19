@@ -108,6 +108,11 @@ export default function Register({ togglePage }) {
         </div>
 
         <div className="relative z-10 my-auto text-right max-w-md ml-auto">
+          <img
+            src="/logo.png"
+            alt="Wildcat Welfare Portal - Task Force Bruno Logo"
+            className="w-28 h-28 object-contain mb-5 ml-auto drop-shadow-2xl select-none"
+          />
           <h1 className="text-4xl font-bold text-white tracking-tight leading-tight">
             Register <br />
             <span className="text-[#D4AF37]">Community Account</span>
@@ -126,10 +131,16 @@ export default function Register({ togglePage }) {
       <div className="flex-1 flex items-center justify-center p-8 md:p-12 bg-slate-50">
         <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl shadow-slate-100 border border-slate-100">
           <div className="mb-6">
-            <div className="inline-flex bg-amber-50 border border-[#D4AF37]/30 text-[#5C0612] rounded-xl p-3 mb-4">
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-6 1c-2.76 0-5 2.24-5 5v2h10v-2c0-2.76-2.24-5-5-5z"/>
-              </svg>
+            <div className="flex items-center gap-3 mb-4">
+              <img
+                src="/logo.png"
+                alt="Wildcat Welfare Portal Logo"
+                className="w-12 h-12 object-contain drop-shadow-md select-none shrink-0"
+              />
+              <div className="md:hidden">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#D4AF37] block">CIT-U Task Force Bruno</span>
+                <span className="text-sm font-black text-[#5C0612] tracking-tight">Wildcat Welfare Portal</span>
+              </div>
             </div>
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Identity Initialization</h2>
             <p className="text-xs text-slate-500 mt-1">Provide records to verify institutional placement.</p>

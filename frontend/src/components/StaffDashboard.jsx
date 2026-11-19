@@ -132,9 +132,11 @@ export default function StaffDashboard({ session, onLogout }) {
         <div>
           <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4">
             <div className="flex items-center gap-3">
-              <div className="bg-white/10 p-2 rounded-xl border border-[#D4AF37]/30 text-[#D4AF37] shrink-0">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"/></svg>
-              </div>
+              <img
+                src="/logo.png"
+                alt="Wildcat Welfare Portal Logo"
+                className="w-11 h-11 object-contain drop-shadow-md shrink-0 select-none"
+              />
               <div>
                 <h2 className="text-sm font-bold tracking-tight">Task Force Bruno</h2>
                 <span className="text-[10px] text-[#D4AF37] font-semibold tracking-wider uppercase block mt-0.5">MDC Staff Portal</span>
@@ -186,6 +188,11 @@ export default function StaffDashboard({ session, onLogout }) {
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
             </button>
 
+            <img
+              src="/logo.png"
+              alt="Task Force Bruno"
+              className="w-8 h-8 object-contain md:hidden shrink-0 select-none"
+            />
             <div>
               <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">{activeMenu}</h1>
               <p className="text-[11px] md:text-xs text-slate-500 mt-0.5 hidden sm:block">Campus animal welfare, clinical tracking, and operational management portal.</p>

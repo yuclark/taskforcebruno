@@ -67,11 +67,11 @@ export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
           {/* Pinned Institutional Top Header (Always visible on mobile & desktop) */}
           <div className="bg-[#5C0612] text-white p-4 sm:p-5 flex items-center justify-between gap-2 border-b-4 border-[#D4AF37] shrink-0">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-white/10 border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37] font-bold shrink-0">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
-                </svg>
-              </div>
+              <img
+                src="/logo.png"
+                alt="Wildcat Welfare Portal Logo"
+                className="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-md shrink-0 select-none"
+              />
               <div className="min-w-0">
                 <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-widest text-[#D4AF37] block font-semibold truncate">
                   Task Force Bruno &bull; CIT-U

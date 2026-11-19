@@ -736,9 +736,16 @@ export default function PetListings({ pets = [], loadingPets = false, onRefresh,
             {/* Tag Badge Frame */}
             <div className="border-4 border-[#5C0612] rounded-2xl p-4 bg-gradient-to-b from-slate-50 to-white shadow-inner relative space-y-3">
               <div className="flex items-center justify-between border-b border-[#5C0612]/20 pb-2">
-                <span className="text-[10px] font-bold font-mono tracking-wider text-[#5C0612] uppercase">
-                  CIT-U Task Force Bruno
-                </span>
+                <div className="flex items-center gap-2">
+                  <img
+                    src="/logo.png"
+                    alt="Wildcat Welfare Portal"
+                    className="w-7 h-7 object-contain shrink-0"
+                  />
+                  <span className="text-[10px] font-bold font-mono tracking-wider text-[#5C0612] uppercase">
+                    CIT-U Task Force Bruno
+                  </span>
+                </div>
                 <span className="text-[9px] font-mono font-black px-2 py-0.5 rounded bg-[#D4AF37]/20 text-[#5C0612] border border-[#D4AF37]">
                   {qrTagModal.pet.pet_type === 'Campus Pet' ? 'RESIDENT' : 'TAG'}
                 </span>

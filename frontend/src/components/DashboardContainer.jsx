@@ -103,28 +103,18 @@ export default function DashboardContainer({ session, onLogout }) {
         <div>
           <div className="p-6 border-b border-white/10 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-[#D4AF37] to-amber-500 text-[#5C0612] p-2 rounded-xl shadow-md shrink-0">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"
-                  />
-                </svg>
-              </div>
+              <img
+                src="/logo.png"
+                alt="Wildcat Welfare Portal Logo"
+                className="w-11 h-11 object-contain drop-shadow-md shrink-0 select-none"
+              />
 
               <div>
                 <h2 className="text-sm font-bold tracking-tight text-white leading-none">
                   Task Force Bruno
                 </h2>
                 <span className="text-[10px] text-[#D4AF37] tracking-widest uppercase font-semibold block mt-1">
-                  Portal Node
+                  Wildcat Welfare Portal
                 </span>
               </div>
             </div>
@@ -286,6 +276,11 @@ export default function DashboardContainer({ session, onLogout }) {
               </svg>
             </button>
 
+            <img
+              src="/logo.png"
+              alt="Task Force Bruno"
+              className="w-7 h-7 object-contain md:hidden shrink-0 select-none"
+            />
             <span className="text-xs font-bold font-mono text-[#5C0612] uppercase tracking-wider">
               {currentTab === 'support' ? 'Support & Action' : `${currentTab.replace('-', ' ')} Module`}
             </span>

@@ -65,6 +65,11 @@ export default function Login({ onLoginSuccess, togglePage, onScanCollar }) {
         </div>
 
         <div className="relative z-10 my-auto max-w-md">
+          <img
+            src="/logo.png"
+            alt="Wildcat Welfare Portal - Task Force Bruno Logo"
+            className="w-28 h-28 object-contain mb-5 drop-shadow-2xl select-none"
+          />
           <h1 className="text-4xl font-bold text-white tracking-tight leading-tight">
             TASK FORCE <br />
             <span className="text-[#D4AF37]">BRUNO</span>
@@ -87,10 +92,16 @@ export default function Login({ onLoginSuccess, togglePage, onScanCollar }) {
       <div className="flex-1 flex items-center justify-center p-8 md:p-16 bg-slate-50">
         <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl shadow-slate-100 border border-slate-100">
           <div className="mb-8 text-center md:text-left">
-            <div className="inline-flex bg-amber-50 border border-[#D4AF37]/30 text-[#5C0612] rounded-xl p-3 mb-4">
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-              </svg>
+            <div className="flex items-center justify-center md:justify-start gap-3 mb-4">
+              <img
+                src="/logo.png"
+                alt="Wildcat Welfare Portal Logo"
+                className="w-14 h-14 object-contain drop-shadow-md select-none shrink-0"
+              />
+              <div className="text-left md:hidden">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#D4AF37] block">CIT-U Task Force Bruno</span>
+                <span className="text-sm font-black text-[#5C0612] tracking-tight">Wildcat Welfare Portal</span>
+              </div>
             </div>
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Portal Authentication</h2>
             <p className="text-xs text-slate-500 mt-1">Sign in using your CIT-U institutional credentials (@cit.edu).</p>
