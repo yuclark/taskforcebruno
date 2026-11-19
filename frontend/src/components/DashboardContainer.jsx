@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import QRScannerView from './QRScannerView';
 import PetProfileView from './PetProfileView';
+import PetListings from './PetListings';
 import SupplyLogistics from './SupplyLogistics';
 import AdoptionGallery from './AdoptionGallery';
 import ReportSightingView from './ReportSightingView';
@@ -19,10 +20,51 @@ export default function DashboardContainer({ session, onLogout }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isEmergencyOpen, setIsEmergencyOpen] = useState(false);
+  const [pets, setPets] = useState([]);
+  const [loadingPets, setLoadingPets] = useState(false);
+
+  const fetchAllPets = useCallback(async () => {
+    setLoadingPets(true);
+    try {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/pets/');
+      if (res.ok) {
+        const data = await res.json();
+        setPets(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Pet listings fetch error:', err);
+    } finally {
+      setLoadingPets(false);
+    }
+  }, []);
 
   // Save current tab layout configuration dynamically upon mutation
   useEffect(() => {
     localStorage.setItem('tfb_user_tab', currentTab);
+  }, [currentTab]);
+
+  // Fetch pets whenever the Pet Listings tab is active
+  useEffect(() => {
+    if (currentTab !== 'pet-listings') return;
+    let cancelled = false;
+    const loadPets = async () => {
+      setLoadingPets(true);
+      try {
+        const res = await fetch('https://taskforcebruno.onrender.com/api/pets/');
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setPets(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error('Pet listings fetch error:', err);
+      } finally {
+        if (!cancelled) setLoadingPets(false);
+      }
+    };
+    loadPets();
+    return () => {
+      cancelled = true;
+    };
   }, [currentTab]);
 
   return (
@@ -119,6 +161,15 @@ export default function DashboardContainer({ session, onLogout }) {
               }`}
             >
               Community Newsfeed
+            </button>
+
+            <button
+              onClick={() => { setCurrentTab('pet-listings'); setActivePetId(null); setIsMobileOpen(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                currentTab === 'pet-listings' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
+              }`}
+            >
+              Pet Listings
             </button>
 
             <button
@@ -290,6 +341,20 @@ export default function DashboardContainer({ session, onLogout }) {
           {currentTab === 'newsfeed' && (
             <div className="relative z-10 w-full h-full min-h-0 p-4 md:p-8 overflow-hidden">
               <NewsfeedView session={session} />
+            </div>
+          )}
+
+          {/* PET LISTINGS (VIEW-ONLY FOR COMMUNITY USERS) */}
+          {currentTab === 'pet-listings' && (
+            <div className="relative z-10 w-full h-full overflow-y-auto p-4 md:p-8">
+              <div className="max-w-7xl mx-auto pb-8">
+                <PetListings
+                  pets={pets}
+                  loadingPets={loadingPets}
+                  onRefresh={fetchAllPets}
+                  readOnly
+                />
+              </div>
             </div>
           )}
 

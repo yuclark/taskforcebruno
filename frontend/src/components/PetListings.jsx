@@ -13,7 +13,7 @@ const ALLOWED_LOCATIONS = [
   "Elementary Building"
 ];
 
-export default function PetListings({ pets, loadingPets, onRefresh }) {
+export default function PetListings({ pets = [], loadingPets = false, onRefresh, readOnly = false }) {
   const [expandedPetId, setExpandedPetId] = useState(null);
   const [expandedPetData, setExpandedPetData] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -123,6 +123,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   };
 
   const startEditing = (pet) => {
+    if (readOnly) return;
     setIsEditingId(pet.pet_id);
     const numericWeight = pet.weight ? pet.weight.toString().replace(/[^0-9.]/g, '') : '';
     const initialSize = pet.size || calculateSizeCategory(numericWeight);
@@ -168,6 +169,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
 
   const submitUpdatePatch = async (e) => {
     e.preventDefault();
+    if (readOnly) return;
     setErrorMessage('');
 
     // Strip virtual / clinical-log-derived / read-only fields
@@ -222,7 +224,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
   };
 
   const handleExecutePurgeSequence = async () => {
-    if (!petIdToPurge) return;
+    if (readOnly || !petIdToPurge) return;
     setErrorMessage('');
     
     try {
@@ -398,7 +400,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                   {expandedPetId === pet.pet_id && (
                     <tr className="bg-slate-50/50 animate-fade-in">
                       <td colSpan={7} className="p-6 border-b border-slate-200 bg-white/40">
-                        {isEditingId === pet.pet_id ? (
+                        {!readOnly && isEditingId === pet.pet_id ? (
                           <form onSubmit={submitUpdatePatch} className="space-y-4 w-full bg-white p-5 border border-slate-200 rounded-xl shadow-inner text-left">
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                               <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Name</label><input type="text" name="name" value={editFormData.name || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none" /></div>
@@ -555,20 +557,22 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                                 </div>
                               </div>
                               
-                              <div className="flex flex-wrap gap-2 justify-end mt-2 text-[10px] font-mono font-bold uppercase">
-                                <button 
-                                  onClick={() => handleGenerateQrTag(pet)} 
-                                  className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
-                                >
-                                  <svg className="w-3.5 h-3.5 text-[#5C0612]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h3.75v3.75H13.5v-3.75Z" />
-                                  </svg>
-                                  Generate Collar Tag QR
-                                </button>
-                                <button onClick={() => startEditing(pet)} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-semibold shadow-sm transition-all">Modify Record</button>
-                                <button onClick={() => setPetIdToPurge(pet.pet_id)} className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold">Wipe Record</button>
-                              </div>
+                              {!readOnly && (
+                                <div className="flex flex-wrap gap-2 justify-end mt-2 text-[10px] font-mono font-bold uppercase">
+                                  <button 
+                                    onClick={() => handleGenerateQrTag(pet)} 
+                                    className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
+                                  >
+                                    <svg className="w-3.5 h-3.5 text-[#5C0612]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h3.75v3.75H13.5v-3.75Z" />
+                                    </svg>
+                                    Generate Collar Tag QR
+                                  </button>
+                                  <button onClick={() => startEditing(pet)} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-semibold shadow-sm transition-all">Modify Record</button>
+                                  <button onClick={() => setPetIdToPurge(pet.pet_id)} className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold">Wipe Record</button>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
