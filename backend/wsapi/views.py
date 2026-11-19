@@ -935,6 +935,19 @@ class AdoptionApplicationDetailAPIView(APIView):
             except ValueError:
                 target_id = application_id
 
+            # Normalize status against Supabase check constraint (adoption_applications_application_status_check)
+            raw_lower = status_val.lower()
+            if raw_lower in ("rejected", "reject", "denied", "deny", "declined", "decline"):
+                status_candidates = ["Denied", "Declined", "Rejected"]
+            elif raw_lower in ("cancelled", "canceled", "withdrawn"):
+                status_candidates = ["Cancelled", "Canceled", "Denied", "Declined"]
+            elif raw_lower == "approved":
+                status_candidates = ["Approved"]
+            elif raw_lower == "pending":
+                status_candidates = ["Pending"]
+            else:
+                status_candidates = [status_val]
+
             # 1. Fetch existing application FIRST before mutating any state
             existing = supabase.table("adoption_applications").select("*").eq("application_id", target_id).execute()
             if not existing.data:
@@ -944,14 +957,14 @@ class AdoptionApplicationDetailAPIView(APIView):
             pet_id = d.get("pet_id") or existing_app.get("pet_id")
 
             # Prevent withdrawing an already-approved placement
-            if status_val == "Cancelled" and existing_app.get("application_status") == "Approved":
+            if raw_lower in ("cancelled", "canceled", "withdrawn") and existing_app.get("application_status") == "Approved":
                 return Response(
                     {"error": "Approved adoption placements cannot be withdrawn directly. Please contact MDC staff."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
             # 2. Pre-mutation Guard: Check double placement BEFORE approving this application
-            if status_val == "Approved" and pet_id:
+            if status_candidates[0] == "Approved" and pet_id:
                 current_pet = supabase.table("pets").select("adoption_status, name, primary_image").eq("pet_id", pet_id).execute()
                 if current_pet.data and current_pet.data[0].get("adoption_status") == "Adopted":
                     return Response(
@@ -959,9 +972,28 @@ class AdoptionApplicationDetailAPIView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-            # 3. Safely update the status of the adoption application row
-            res = supabase.table("adoption_applications").update({"application_status": status_val}).eq("application_id", target_id).execute()
-            if not res.data:
+            # 3. Safely update the status of the adoption application row (with check-constraint fallback)
+            res = None
+            last_err = None
+            for candidate_status in status_candidates:
+                try:
+                    res = (
+                        supabase.table("adoption_applications")
+                        .update({"application_status": candidate_status})
+                        .eq("application_id", target_id)
+                        .execute()
+                    )
+                    status_val = candidate_status
+                    last_err = None
+                    break
+                except Exception as upd_err:
+                    last_err = upd_err
+                    if "23514" not in str(upd_err) and "check constraint" not in str(upd_err).lower():
+                        raise
+
+            if last_err is not None:
+                raise last_err
+            if not res or not res.data:
                 return Response({"error": "Application tracking file not found."}, status=status.HTTP_404_NOT_FOUND)
             
             # 4. Cascading mutations ONLY run for 'Approved' cases
@@ -970,9 +1002,16 @@ class AdoptionApplicationDetailAPIView(APIView):
                 supabase.table("pets").update({"adoption_status": "Adopted"}).eq("pet_id", pet_id).execute()
                 
                 # Automatically close all other pending applications for this same pet to prevent zombie state
-                supabase.table("adoption_applications").update({
-                    "application_status": "Closed - Pet Placed"
-                }).eq("pet_id", pet_id).eq("application_status", "Pending").neq("application_id", target_id).execute()
+                for close_status in ("Closed - Pet Placed", "Denied", "Declined", "Rejected", "Cancelled"):
+                    try:
+                        supabase.table("adoption_applications").update({
+                            "application_status": close_status
+                        }).eq("pet_id", pet_id).eq("application_status", "Pending").neq("application_id", target_id).execute()
+                        break
+                    except Exception as close_err:
+                        if "23514" not in str(close_err) and "check constraint" not in str(close_err).lower():
+                            print(f"Sibling application close warning: {close_err}")
+                            break
 
                 try:
                     pet_query = supabase.table("pets").select("name, primary_image").eq("pet_id", pet_id).execute()

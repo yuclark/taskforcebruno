@@ -383,7 +383,7 @@ export default function PendingApplications({ onRefresh }) {
                   {/* Action Buttons Footer */}
                   <div className="flex flex-wrap gap-2.5 justify-end pt-3 border-t border-slate-100">
                     <button 
-                      onClick={() => openTriageModal(app.application_id, 'Rejected', app.pet_id)} 
+                      onClick={() => openTriageModal(app.application_id, 'Denied', app.pet_id)} 
                       className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl transition-all uppercase tracking-wide text-[10px] flex items-center gap-1.5"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
