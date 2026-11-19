@@ -4,7 +4,7 @@ import jsQR from 'jsqr';
 /**
  * Task Force Bruno — Collar QR Scanner & AI Trait Search View
  * Dual-modality animal identification node:
- *   1. Hardware camera QR viewfinder + file upload + manual tag ID lookup
+ *   1. Hardware camera QR viewfinder + file upltoad + manual tag ID lookup
  *   2. Natural language AI trait keyword matching for untagged animals
  */
 export default function QRScannerView({ onProfileIdentified }) {
@@ -360,17 +360,17 @@ export default function QRScannerView({ onProfileIdentified }) {
 
           <div className="absolute bottom-3 left-3 flex items-center gap-2">
             <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide border uppercase shadow-sm ${petData.adoption_status === 'Adopted'
-                ? 'bg-slate-800/90 text-slate-200 border-slate-600'
-                : (petData.pet_type || '').toLowerCase().includes('adoption') || petData.adoption_status === 'Available'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold'
-                  : 'bg-[#5C0612]/95 text-[#D4AF37] border-[#D4AF37]/40'
+              ? 'bg-slate-800/90 text-slate-200 border-slate-600'
+              : (petData.pet_type || '').toLowerCase().includes('adoption') || petData.adoption_status === 'Available'
+                ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold'
+                : 'bg-[#5C0612]/95 text-[#D4AF37] border-[#D4AF37]/40'
               }`}>
               {petData.adoption_status === 'Adopted' ? 'Adopted Alumni' : (petData.pet_type || 'Campus Pet')}
             </span>
 
             <span className={`px-2 py-0.5 rounded-md text-[10px] font-medium border ${petData.vaccination_status?.toLowerCase().includes('fully')
-                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/50'
-                : (petData.vaccination_status?.toLowerCase().includes('core') || petData.vaccination_status?.toLowerCase().includes('partial'))
+              ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/50'
+              : (petData.vaccination_status?.toLowerCase().includes('core') || petData.vaccination_status?.toLowerCase().includes('partial'))
                 ? 'bg-amber-950/80 text-amber-300 border-amber-600/50'
                 : 'bg-rose-950/80 text-rose-300 border-rose-600/50'
               }`}>

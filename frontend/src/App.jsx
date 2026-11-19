@@ -69,7 +69,7 @@ export default function App() {
     try {
       const currentPath = window.location.pathname.toLowerCase();
       if ((currentPath.includes('/mdc/dashboard') || currentPath.startsWith('/mdc')) && !isStaffOrMDCSession(session)) {
-        window.history.replaceState(null, '', '/dashboard');
+        window.history.replaceState(null, '', session ? '/student/dashboard' : '/login');
         return 'Access Denied: MDC Personnel Only';
       }
     } catch {
@@ -77,6 +77,35 @@ export default function App() {
     }
     return null;
   });
+
+  const [isLogin, setIsLogin] = useState(() => {
+    try {
+      return window.location.pathname.toLowerCase() !== '/register';
+    } catch {
+      return true;
+    }
+  });
+  const lastActivityUpdateRef = useRef(0);
+
+  const isStaff = isStaffOrMDCSession(session);
+
+  // Keep browser URL synchronized with authenticated role & auth screen
+  useEffect(() => {
+    if (publicPetId) return;
+    try {
+      const targetPath = !session
+        ? (isLogin ? '/login' : '/register')
+        : isStaff
+        ? '/mdc/dashboard'
+        : '/student/dashboard';
+
+      if (window.location.pathname !== targetPath || window.location.search) {
+        window.history.replaceState(null, '', targetPath);
+      }
+    } catch {
+      // Ignore history API errors in restricted environments
+    }
+  }, [session, isStaff, isLogin, publicPetId]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -89,7 +118,7 @@ export default function App() {
       try {
         const currentPath = window.location.pathname.toLowerCase();
         if ((currentPath.includes('/mdc/dashboard') || currentPath.startsWith('/mdc')) && !isStaffOrMDCSession(session)) {
-          window.history.replaceState(null, '', '/dashboard');
+          window.history.replaceState(null, '', session ? '/student/dashboard' : '/login');
           setToastMessage('Access Denied: MDC Personnel Only');
           return;
         }
@@ -102,6 +131,11 @@ export default function App() {
         const petQuery = urlParams.get('pet') || urlParams.get('id');
         if (petQuery) {
           setPublicPetId(petQuery.trim());
+          return;
+        }
+        if (!session) {
+          if (currentPath === '/register') setIsLogin(false);
+          else if (currentPath === '/login' || currentPath === '/') setIsLogin(true);
         }
       } catch {
         // Ignore malformed URL parameters
@@ -110,9 +144,6 @@ export default function App() {
     window.addEventListener('popstate', checkRoute);
     return () => window.removeEventListener('popstate', checkRoute);
   }, [session]);
-
-  const [isLogin, setIsLogin] = useState(true);
-  const lastActivityUpdateRef = useRef(0);
 
   const handleLoginSuccess = (sessionData) => {
     const now = Date.now();
@@ -125,6 +156,12 @@ export default function App() {
     };
     localStorage.setItem('tfb_session', JSON.stringify(normalized));
     setSession(normalized);
+    try {
+      const targetPath = isStaffOrMDCSession(normalized) ? '/mdc/dashboard' : '/student/dashboard';
+      window.history.pushState(null, '', targetPath);
+    } catch {
+      // Ignore history API errors
+    }
   };
 
   const handleLogout = useCallback(() => {
@@ -134,6 +171,11 @@ export default function App() {
     sessionStorage.clear();
     setSession(null);
     setIsLogin(true);
+    try {
+      window.history.pushState(null, '', '/login');
+    } catch {
+      // Ignore history API errors
+    }
   }, []);
 
   // ── SLIDING INACTIVITY TIMER: Resets on user actions, only expires after 15m of pure zero activity ──
@@ -184,8 +226,6 @@ export default function App() {
     };
   }, [session, handleLogout]);
 
-  const isStaff = isStaffOrMDCSession(session);
-
   return (
     <>
       {/* ACCESS DENIED SECURITY TOAST NOTIFICATION (TC-MED-003) */}
@@ -206,16 +246,17 @@ export default function App() {
           petId={publicPetId}
           onClose={() => {
             setPublicPetId(null);
-            if (window.location.pathname.toLowerCase().includes('/passport') || window.location.pathname.toLowerCase().includes('/pet') || window.location.search.includes('pet=')) {
-              window.history.pushState(null, '', '/');
-            }
+            const fallbackPath = !session
+              ? (isLogin ? '/login' : '/register')
+              : isStaff
+              ? '/mdc/dashboard'
+              : '/student/dashboard';
+            window.history.pushState(null, '', fallbackPath);
           }}
           onGoLogin={() => {
             setPublicPetId(null);
-            if (window.location.pathname.toLowerCase().includes('/passport') || window.location.pathname.toLowerCase().includes('/pet') || window.location.search.includes('pet=')) {
-              window.history.pushState(null, '', '/');
-            }
             setIsLogin(true);
+            window.history.pushState(null, '', '/login');
           }}
         />
       )}
@@ -226,11 +267,19 @@ export default function App() {
           {isLogin ? (
             <Login 
               onLoginSuccess={handleLoginSuccess} 
-              togglePage={() => setIsLogin(false)} 
+              togglePage={() => {
+                setIsLogin(false);
+                window.history.pushState(null, '', '/register');
+              }} 
               onScanCollar={(id) => setPublicPetId(id)}
             />
           ) : (
-            <Register togglePage={() => setIsLogin(true)} />
+            <Register
+              togglePage={() => {
+                setIsLogin(true);
+                window.history.pushState(null, '', '/login');
+              }}
+            />
           )}
         </div>
       ) : isStaff ? (
