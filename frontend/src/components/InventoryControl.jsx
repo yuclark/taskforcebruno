@@ -76,7 +76,7 @@ export default function InventoryControl({
 
   // --- SUMMARY METRICS ---
   const totalItemsCount = inventoryItems.length;
-  const lowStockItems = inventoryItems.filter(item => (item.quantity || 0) <= (item.min_threshold || 10));
+  const lowStockItems = inventoryItems.filter(item => (item.quantity ?? 0) <= (item.min_threshold ?? 10));
   const totalFoodItems = inventoryItems.filter(item => item.category === 'Food');
   const totalMedicalItems = inventoryItems.filter(item => item.category === 'Medical');
 
@@ -104,15 +104,21 @@ export default function InventoryControl({
 
     let finalizedName = newInventoryForm.item_name.trim();
     if (newInventoryForm.category === 'Food') {
-      finalizedName = `${newInventoryForm.food_type} - ${finalizedName}`;
+      const prefix = `${newInventoryForm.food_type} - `;
+      if (!finalizedName.toLowerCase().startsWith(newInventoryForm.food_type.toLowerCase())) {
+        finalizedName = `${prefix}${finalizedName}`;
+      }
     }
+
+    const parsedQty = parseInt(newInventoryForm.quantity, 10);
+    const parsedMin = parseInt(newInventoryForm.min_threshold, 10);
 
     const sanitizedPayload = {
       item_name: finalizedName,
       category: newInventoryForm.category,
-      quantity: parseInt(newInventoryForm.quantity, 10) || 0,
+      quantity: Number.isNaN(parsedQty) ? 0 : Math.max(0, parsedQty),
       unit: newInventoryForm.unit,
-      min_threshold: parseInt(newInventoryForm.min_threshold, 10) || 10,
+      min_threshold: Number.isNaN(parsedMin) ? 10 : Math.max(0, parsedMin),
       supplier_donor: newInventoryForm.supplier_donor.trim() || null,
       expiration_date: newInventoryForm.expiration_date || null
     };
@@ -130,9 +136,9 @@ export default function InventoryControl({
         setInventorySubTab('stock-list');
       } else {
         const errData = await res.json().catch(() => ({}));
-        setFormMessage({ type: 'error', text: errData.unit?.[0] || errData.error || 'Failed to catalog item.' });
+        setFormMessage({ type: 'error', text: errData.unit?.[0] || errData.quantity?.[0] || errData.error || 'Failed to catalog item.' });
       }
-    } catch (err) {
+    } catch {
       setFormMessage({ type: 'error', text: 'Network connection failure with inventory database.' });
     }
   };
@@ -142,13 +148,13 @@ export default function InventoryControl({
     e.preventDefault();
     const qtyDelta = parseInt(actionForm.quantity_changed, 10);
     if (isNaN(qtyDelta) || qtyDelta <= 0) {
-      alert('Please specify a valid positive quantity amount.');
+      triggerErrorToast('Please specify a valid positive quantity amount.');
       return;
     }
 
     // If removing stocks (OUT), validate boundary condition (TC-SUP-003) & trigger confirmation modal
     if (actionForm.transaction_type === 'OUT') {
-      const currentStock = targetItem.quantity || 0;
+      const currentStock = targetItem.quantity ?? 0;
       if (qtyDelta > currentStock) {
         const errorMsg = `Disbursement quantity exceeds available balance (${currentStock} on-hand)`;
         triggerErrorToast(errorMsg);
@@ -197,17 +203,19 @@ export default function InventoryControl({
       } else {
         const errorJson = await res.json().catch(() => ({}));
         const errText = errorJson.error || (errorJson.unit ? errorJson.unit[0] : null) || 'Server rejected transaction logging request.';
+        setDeductionModal(prev => ({ ...prev, submitting: false }));
         triggerErrorToast(errText);
       }
     } catch (err) {
       console.error(err);
+      setDeductionModal(prev => ({ ...prev, submitting: false }));
       triggerErrorToast('Network failure connecting to inventory ledger.');
     }
   };
 
   const handleConfirmDeduction = async () => {
     if (!deductionModal.item) return;
-    const currentStock = deductionModal.item.quantity || 0;
+    const currentStock = deductionModal.item.quantity ?? 0;
     if (deductionModal.qtyDelta > currentStock) {
       const errorMsg = `Disbursement quantity exceeds available balance (${currentStock} on-hand)`;
       triggerErrorToast(errorMsg);
@@ -244,16 +252,18 @@ export default function InventoryControl({
     if (!purgeModal.itemId) return;
     setPurgeModal(prev => ({ ...prev, submitting: true }));
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/inventory/${purgeModal.itemId}/`, { method: 'DELETE' });
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/inventory/${encodeURIComponent(purgeModal.itemId)}/`, { method: 'DELETE' });
       if (res.ok) {
         setPurgeModal({ isOpen: false, itemId: null, itemName: '', submitting: false });
         onRefresh();
       } else {
-        alert('Server rejected item removal request.');
+        setPurgeModal(prev => ({ ...prev, submitting: false }));
+        triggerErrorToast('Server rejected item removal request.');
       }
     } catch (err) {
       console.error(err);
-      alert('Network error connecting to inventory registers.');
+      setPurgeModal(prev => ({ ...prev, submitting: false }));
+      triggerErrorToast('Network error connecting to inventory registers.');
     }
   };
 
@@ -390,7 +400,7 @@ export default function InventoryControl({
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {filteredItems.map((item) => {
-                    const isLow = (item.quantity || 0) <= (item.min_threshold || 10);
+                    const isLow = (item.quantity ?? 0) <= (item.min_threshold ?? 10);
                     return (
                       <React.Fragment key={item.item_id}>
                         <tr className="hover:bg-slate-50/50 font-medium text-xs transition-colors">
@@ -432,14 +442,21 @@ export default function InventoryControl({
                                 type="button"
                                 onClick={() => {
                                   setSelectedActionItemId(item.item_id);
-                                  setActionForm(prev => ({ ...prev, transaction_type: 'OUT' }));
+                                  setActionForm({ transaction_type: 'OUT', quantity_changed: '', reason: 'Dispensation / Patrol feeding refill', supplier_donor: '', expiration_date: '' });
                                 }} 
                                 className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-xl text-[10px] shadow-sm whitespace-nowrap transition-colors"
                               >
                                 Log Disbursement (OUTFLOW)
                               </button>
                               <button 
-                                onClick={() => setSelectedActionItemId(selectedActionItemId === item.item_id ? null : item.item_id)} 
+                                onClick={() => {
+                                  if (selectedActionItemId === item.item_id) {
+                                    setSelectedActionItemId(null);
+                                  } else {
+                                    setSelectedActionItemId(item.item_id);
+                                    setActionForm({ transaction_type: 'IN', quantity_changed: '', reason: 'Bulk Purchase / Donation', supplier_donor: '', expiration_date: '' });
+                                  }
+                                }} 
                                 className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 font-bold rounded-xl text-[11px] text-slate-700 shadow-sm whitespace-nowrap transition-colors"
                               >
                                 {selectedActionItemId === item.item_id ? 'Close' : 'Adjust Stock'}
@@ -691,7 +708,7 @@ export default function InventoryControl({
               <tbody className="divide-y divide-slate-100 font-mono text-[11px] text-slate-600">
                 {transactionLedger.map((tx) => (
                   <tr key={tx.transaction_id} className="hover:bg-slate-50/50">
-                    <td className="p-4 text-slate-400 text-[10px] whitespace-nowrap">{new Date(tx.logged_at).toLocaleString()}</td>
+                    <td className="p-4 text-slate-400 text-[10px] whitespace-nowrap">{tx.logged_at && !Number.isNaN(new Date(tx.logged_at).getTime()) ? new Date(tx.logged_at).toLocaleString() : 'N/A'}</td>
                     <td className="p-4 font-sans font-bold text-slate-900 text-xs whitespace-normal break-words">{tx.inventory?.item_name || 'Archived Item'}</td>
                     <td className="p-4 text-center whitespace-nowrap">
                       <span className={`inline-block px-2.5 py-1 text-[9px] font-bold rounded-lg ${

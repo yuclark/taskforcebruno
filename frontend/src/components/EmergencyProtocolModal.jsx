@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 export default function EmergencyProtocolModal({ isOpen, onClose, onNavigateToReport }) {
   const [activeTab, setActiveTab] = useState('first_aid'); // 'first_aid' | 'contacts' | 'quarantine' | 'faqs'

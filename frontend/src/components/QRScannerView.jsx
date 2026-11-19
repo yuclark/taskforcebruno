@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import jsQR from 'jsqr';
 
 /**
@@ -30,40 +30,62 @@ export default function QRScannerView({ onProfileIdentified }) {
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const isMountedRef = useRef(true);
+
+  const stopCameraStream = useCallback(() => {
+    setIsActiveCamera(false);
+    setQrStatusMessage('');
+
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, []);
 
   useEffect(() => {
-    return () => stopCameraStream();
-  }, []);
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      stopCameraStream();
+    };
+  }, [stopCameraStream]);
 
   // ── CARD 1 ACTION HANDLERS ──
   const extractPetIdFromQr = (rawText) => {
     if (!rawText) return '';
     const trimmed = rawText.trim();
     
-    // 1. If full URL (e.g. https://taskforcebruno.vercel.app/?pet=ADOPT-01 or https://taskforcebruno.vercel.app/pet/TF-BRUNO-01)
+    // 1. If full URL (e.g. https://taskforcebruno.vercel.app/?pet=ADOPT-01 or /passport/TF-BRUNO-01)
     if (/^https?:\/\//i.test(trimmed)) {
       try {
         const url = new URL(trimmed);
         
-        // Check query parameters case-insensitively (e.g. pet, PET, id, ID, pet_id, animal_id)
         for (const [key, val] of url.searchParams.entries()) {
-          if (['pet', 'id', 'pet_id', 'petid', 'animal_id', 'animalid'].includes(key.toLowerCase()) && val) {
+          if (['pet', 'id', 'pet_id', 'petid', 'animal_id', 'animalid', 'passport'].includes(key.toLowerCase()) && val) {
             return decodeURIComponent(val).trim().toUpperCase();
           }
         }
         
-        // Check pathname segments (e.g. /pet/ADOPT-01)
         const segments = url.pathname.split('/').filter(Boolean);
         if (segments.length > 0) {
           const lastSegment = decodeURIComponent(segments[segments.length - 1]).trim();
-          if (lastSegment && !['app', 'pet', 'index.html'].includes(lastSegment.toLowerCase())) {
+          if (lastSegment && !['app', 'pet', 'passport', 'index.html'].includes(lastSegment.toLowerCase())) {
             return lastSegment.toUpperCase();
           }
         }
-      } catch {}
+      } catch {
+        // Fallback to regex extraction below
+      }
     }
 
-    // 2. Query param regex match without full scheme (e.g. "?pet=ADOPT-01" or "taskforcebruno.vercel.app/?pet=ADOPT-01")
+    // 2. Query param regex match without full scheme
     const queryMatch = trimmed.match(/[?&](?:pet|id|pet_id|petid|animal_id)=([^&#\s]+)/i);
     if (queryMatch) {
       return decodeURIComponent(queryMatch[1]).trim().toUpperCase();
@@ -74,7 +96,7 @@ export default function QRScannerView({ onProfileIdentified }) {
     if (match) return match[0].toUpperCase();
     
     // 4. Clean fallback
-    return trimmed.replace(/^[#\/]+/, '').trim().toUpperCase();
+    return trimmed.replace(/^[#/]+/, '').trim().toUpperCase();
   };
 
   const resolveCard1Profile = async (rawTarget) => {
@@ -84,7 +106,7 @@ export default function QRScannerView({ onProfileIdentified }) {
     setLoadingCard1Profile(true);
     try {
       // First attempt direct ID query
-      let res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(targetId)}/`);
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(targetId)}/`);
       if (res.ok) {
         const data = await res.json();
         setCard1PetData(data);
@@ -95,14 +117,16 @@ export default function QRScannerView({ onProfileIdentified }) {
       const listRes = await fetch('https://taskforcebruno.onrender.com/api/pets/');
       if (listRes.ok) {
         const allPets = await listRes.json();
-        const cleanTarget = targetId.toLowerCase();
-        const matched = allPets.find(p => 
-          (p.pet_id && p.pet_id.toLowerCase() === cleanTarget) ||
-          (p.name && p.name.toLowerCase() === cleanTarget)
-        );
-        if (matched) {
-          setCard1PetData(matched);
-          return;
+        if (Array.isArray(allPets)) {
+          const cleanTarget = targetId.toLowerCase();
+          const matched = allPets.find(p => 
+            (p.pet_id && p.pet_id.toLowerCase() === cleanTarget) ||
+            (p.name && p.name.toLowerCase() === cleanTarget)
+          );
+          if (matched) {
+            setCard1PetData(matched);
+            return;
+          }
         }
       }
 
@@ -119,6 +143,41 @@ export default function QRScannerView({ onProfileIdentified }) {
     e.preventDefault();
     if (!manualId.trim()) return;
     resolveCard1Profile(manualId.trim());
+  };
+
+  const tickScanLoop = () => {
+    if (!isMountedRef.current) return;
+    const video = videoRef.current;
+    if (!video || video.readyState !== video.HAVE_ENOUGH_DATA || video.videoWidth === 0 || video.videoHeight === 0) {
+      animationFrameRef.current = requestAnimationFrame(tickScanLoop);
+      return;
+    }
+
+    let canvas = canvasRef.current;
+
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvasRef.current = canvas;
+    }
+
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+
+    const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: 'attemptBoth',
+    });
+
+    if (qrCode) {
+      const rawDecodedText = qrCode.data.trim();
+      stopCameraStream();
+      resolveCard1Profile(rawDecodedText);
+    } else {
+      animationFrameRef.current = requestAnimationFrame(tickScanLoop);
+    }
   };
 
   const startCameraStream = async () => {
@@ -138,9 +197,14 @@ export default function QRScannerView({ onProfileIdentified }) {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 640 } }
         });
-      } catch (constraintErr) {
+      } catch {
         // Fallback to basic video stream if ideal dimensions or facingMode fails
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
+      if (!isMountedRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
       }
 
       streamRef.current = stream;
@@ -166,58 +230,10 @@ export default function QRScannerView({ onProfileIdentified }) {
     }
   };
 
-  const stopCameraStream = () => {
-    setIsActiveCamera(false);
-    setQrStatusMessage('');
-
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-  };
-
-  const tickScanLoop = () => {
-    if (!videoRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA) {
-      animationFrameRef.current = requestAnimationFrame(tickScanLoop);
-      return;
-    }
-
-    const video = videoRef.current;
-    let canvas = canvasRef.current;
-
-    if (!canvas) {
-      canvas = document.createElement('canvas');
-      canvasRef.current = canvas;
-    }
-
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-
-    const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
-      inversionAttempts: 'dontInvert',
-    });
-
-    if (qrCode) {
-      const rawDecodedText = qrCode.data.trim();
-      stopCameraStream();
-      resolveCard1Profile(rawDecodedText);
-    } else {
-      animationFrameRef.current = requestAnimationFrame(tickScanLoop);
-    }
-  };
-
   const handleFileUpload = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
+    // Reset input value so uploading the same file again still triggers onChange
+    e.target.value = '';
     if (!file) return;
 
     stopCameraStream();
@@ -231,14 +247,14 @@ export default function QRScannerView({ onProfileIdentified }) {
       image.onload = () => {
         try {
           const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
+          const context = canvas.getContext('2d', { willReadFrequently: true });
           canvas.width = image.width;
           canvas.height = image.height;
           context.drawImage(image, 0, 0, image.width, image.height);
 
           const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
           const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'dontInvert',
+            inversionAttempts: 'attemptBoth',
           });
 
           setIsQrProcessing(false);
@@ -250,7 +266,7 @@ export default function QRScannerView({ onProfileIdentified }) {
           } else {
             setQrErrorMessage('No valid QR code detected. Please ensure the QR code is clear and in focus.');
           }
-        } catch (err) {
+        } catch {
           setIsQrProcessing(false);
           setQrErrorMessage('Error processing image file. Please try another image.');
         }
@@ -270,14 +286,14 @@ export default function QRScannerView({ onProfileIdentified }) {
     setAiErrorMessage('');
     setLoadingCard2Profile(true);
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${targetId}/`);
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(targetId)}/`);
       if (res.ok) {
         const data = await res.json();
         setCard2PetData(data);
       } else {
         setAiErrorMessage('Could not load profile details for the selected candidate.');
       }
-    } catch (err) {
+    } catch {
       setAiErrorMessage('Network timeout loading candidate profile.');
     } finally {
       setLoadingCard2Profile(false);
@@ -312,7 +328,7 @@ export default function QRScannerView({ onProfileIdentified }) {
       } else {
         setAiErrorMessage(data.error || 'AI search service was unable to parse the query.');
       }
-    } catch (err) {
+    } catch {
       setIsAiProcessing(false);
       setAiErrorMessage('Network error connecting to AI search service.');
     }
@@ -346,7 +362,7 @@ export default function QRScannerView({ onProfileIdentified }) {
             <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide border uppercase shadow-sm ${
               petData.adoption_status === 'Adopted'
                 ? 'bg-slate-800/90 text-slate-200 border-slate-600'
-                : petData.pet_type === 'For Adoption'
+                : (petData.pet_type || '').toLowerCase().includes('adoption') || petData.adoption_status === 'Available'
                 ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold'
                 : 'bg-[#5C0612]/95 text-[#D4AF37] border-[#D4AF37]/40'
             }`}>
@@ -364,7 +380,7 @@ export default function QRScannerView({ onProfileIdentified }) {
         </div>
 
         {/* Public Health Quarantine Alert */}
-        {petData.is_quarantined && (
+        {(petData.is_quarantined || petData.status?.includes('Quarantine')) && (
           <div className="p-3 bg-rose-950/80 border border-rose-500/80 rounded-xl text-rose-200 text-xs space-y-1">
             <div className="flex items-center gap-1.5 font-bold text-rose-300 uppercase tracking-wider text-[10px]">
               <svg className="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">

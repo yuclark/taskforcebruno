@@ -1,4 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+
+const STAFF_ROLES = new Set(['staff', 'mdc', 'admin', 'clinician', 'nurse', 'veterinarian']);
+
+function formatFeedDate(rawTs) {
+  if (!rawTs) return 'Recently';
+  const d = new Date(rawTs);
+  if (Number.isNaN(d.getTime())) return 'Recently';
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function formatCommentTime(rawTs) {
+  if (!rawTs) return '';
+  const d = new Date(rawTs);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 
 export default function NewsfeedView({ session }) {
   const [feedItems, setFeedItems] = useState([]);
@@ -18,7 +39,6 @@ export default function NewsfeedView({ session }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedComments, setExpandedComments] = useState({});
 
-  const [activeCommentDropdownId, setActiveCommentDropdownId] = useState(null);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState('');
   const [commentToDelete, setCommentToDelete] = useState(null);
@@ -27,9 +47,8 @@ export default function NewsfeedView({ session }) {
   const currentUserRole = (session?.role || 'user').trim().toLowerCase();
 
   const isStaffClearance =
-    currentUserRole === 'staff' ||
-    currentUserEmail.includes('staff') ||
-    currentUserEmail.includes('test');
+    STAFF_ROLES.has(currentUserRole) ||
+    (currentUserRole !== 'student' && currentUserRole !== 'user' && (currentUserEmail.includes('staff') || currentUserEmail.includes('mdc')));
 
   const safeJson = async (res) => {
     try {
@@ -39,30 +58,9 @@ export default function NewsfeedView({ session }) {
     }
   };
 
-  const clearTransientUi = () => {
-    setActiveDropdownId(null);
-    setModerationError('');
-    setItemToDelete(null);
-    setEditingItemId(null);
-    setEditTitle('');
-    setEditBody('');
-  };
-
   const [petsData, setPetsData] = useState([]);
 
-  const fetchPetsData = async () => {
-    try {
-      const res = await fetch('https://taskforcebruno.onrender.com/api/pets/');
-      if (res.ok) {
-        const data = await res.json();
-        setPetsData(Array.isArray(data) ? data : []);
-      }
-    } catch (err) {
-      console.error('Error fetching pets for newsfeed telemetry:', err);
-    }
-  };
-
-  const fetchStreamData = async () => {
+  const fetchStreamData = useCallback(async () => {
     if (!currentUserEmail) return;
     try {
       const res = await fetch(
@@ -70,7 +68,7 @@ export default function NewsfeedView({ session }) {
       );
       if (res.ok) {
         const data = await res.json();
-        setFeedItems(data);
+        setFeedItems(Array.isArray(data) ? data : []);
       } else {
         setFeedItems([]);
       }
@@ -80,14 +78,43 @@ export default function NewsfeedView({ session }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUserEmail]);
 
   useEffect(() => {
-    setLoading(true);
-    clearTransientUi();
-    setExpandedComments({});
-    fetchStreamData();
-    fetchPetsData();
+    let cancelled = false;
+    const initFeed = async () => {
+      try {
+        const [feedRes, petsRes] = await Promise.all([
+          currentUserEmail
+            ? fetch(`https://taskforcebruno.onrender.com/api/newsfeed/?email=${encodeURIComponent(currentUserEmail)}`)
+            : Promise.resolve(null),
+          fetch('https://taskforcebruno.onrender.com/api/pets/').catch(() => null)
+        ]);
+        if (!cancelled) {
+          if (feedRes && feedRes.ok) {
+            const feedJson = await feedRes.json();
+            setFeedItems(Array.isArray(feedJson) ? feedJson : []);
+          } else {
+            setFeedItems([]);
+          }
+          if (petsRes && petsRes.ok) {
+            const petsJson = await petsRes.json();
+            setPetsData(Array.isArray(petsJson) ? petsJson : []);
+          }
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Error initializing newsfeed:', err);
+        if (!cancelled) {
+          setFeedItems([]);
+          setLoading(false);
+        }
+      }
+    };
+    initFeed();
+    return () => {
+      cancelled = true;
+    };
   }, [currentUserEmail, currentUserRole]);
 
   useEffect(() => {
@@ -99,27 +126,33 @@ export default function NewsfeedView({ session }) {
   }, []);
 
   const handleLikeToggle = async (feedId) => {
-    setFeedItems(prev =>
-      prev.map(item => {
+    const flipLike = (items) =>
+      items.map(item => {
         if (item.feed_id === feedId) {
           return {
             ...item,
             is_liked_by_me: !item.is_liked_by_me,
-            likes_count: item.is_liked_by_me ? item.likes_count - 1 : item.likes_count + 1
+            likes_count: item.is_liked_by_me ? Math.max(0, item.likes_count - 1) : item.likes_count + 1
           };
         }
         return item;
-      })
-    );
+      });
+
+    setFeedItems(prev => flipLike(prev));
 
     try {
-      await fetch('https://taskforcebruno.onrender.com/api/newsfeed/like/', {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/like/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ feed_id: feedId, user_email: currentUserEmail })
       });
+      if (!res.ok) {
+        // Revert optimistic update on server failure
+        setFeedItems(prev => flipLike(prev));
+      }
     } catch (err) {
       console.error('Like tracking sync down:', err);
+      setFeedItems(prev => flipLike(prev));
     }
   };
 
@@ -146,8 +179,56 @@ export default function NewsfeedView({ session }) {
       } else {
         setModerationError(data.error || 'Failed to add comment.');
       }
-    } catch (err) {
+    } catch {
       setModerationError('Network error while adding comment.');
+    }
+  };
+
+  const handleSaveCommentEdit = async (commentId) => {
+    const trimmed = editCommentText.trim();
+    if (!trimmed) {
+      setModerationError('Comment text cannot be empty.');
+      return;
+    }
+    try {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/comment/action/', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          comment_id: commentId,
+          user_email: currentUserEmail,
+          comment_text: trimmed
+        })
+      });
+      const data = await safeJson(res);
+      if (res.ok) {
+        setEditingCommentId(null);
+        setEditCommentText('');
+        await fetchStreamData();
+      } else {
+        setModerationError(data.error || 'Failed to update comment.');
+      }
+    } catch {
+      setModerationError('Network error while updating comment.');
+    }
+  };
+
+  const handleExecuteCommentDelete = async () => {
+    if (!commentToDelete) return;
+    try {
+      const res = await fetch(
+        `https://taskforcebruno.onrender.com/api/newsfeed/comment/action/?comment_id=${encodeURIComponent(commentToDelete)}&user_email=${encodeURIComponent(currentUserEmail)}`,
+        { method: 'DELETE' }
+      );
+      const data = await safeJson(res);
+      if (res.ok) {
+        setCommentToDelete(null);
+        await fetchStreamData();
+      } else {
+        setModerationError(data.error || 'Failed to delete comment.');
+      }
+    } catch {
+      setModerationError('Network error while deleting comment.');
     }
   };
 
@@ -167,12 +248,16 @@ export default function NewsfeedView({ session }) {
       } else {
         setModerationError(data.error || 'Delete failed.');
       }
-    } catch (err) {
+    } catch {
       setModerationError('Network error during delete.');
     }
   };
 
   const handleSaveEditChanges = async (feedId) => {
+    if (!editTitle.trim() || !editBody.trim()) {
+      setModerationError('Both post title and body are required.');
+      return;
+    }
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/newsfeed/action/', {
         method: 'PUT',
@@ -193,7 +278,7 @@ export default function NewsfeedView({ session }) {
       } else {
         setModerationError(data.error || 'Edit failed.');
       }
-    } catch (err) {
+    } catch {
       setModerationError('Network error during edit.');
     }
   };
@@ -253,7 +338,8 @@ export default function NewsfeedView({ session }) {
 
   const ITEMS_PER_PAGE = 5;
   const totalPagesCount = Math.ceil(filteredFeedItems.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const safeCurrentPage = Math.min(currentPage, Math.max(1, totalPagesCount));
+  const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
   const paginatedFeedItems = filteredFeedItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   return (
@@ -324,12 +410,7 @@ export default function NewsfeedView({ session }) {
             ) : (
               paginatedFeedItems.map((item) => {
                 const initials = item.author_tag ? item.author_tag.substring(0, 2).toUpperCase() : 'CU';
-                const HongKongDate = new Date(item.timestamp).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                });
+                const formattedTimestamp = formatFeedDate(item.timestamp);
                 const isAnnouncement = item.item_type === 'announcement';
                 const isSystemAutomatedFeed = item.item_type === 'sighting' || item.item_type === 'pet' || item.author_tag === 'mdc.operations@cit.edu';
                 const isCurrentlyEditingThisItem = editingItemId === item.feed_id;
@@ -371,7 +452,7 @@ export default function NewsfeedView({ session }) {
                           <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-normal mt-0.5 flex-wrap min-w-0">
                             <span className="truncate max-w-[140px] sm:max-w-[200px] font-medium text-slate-600">{item.author_tag}</span>
                             <span>&bull;</span>
-                            <span className="shrink-0">{HongKongDate}</span>
+                            <span className="shrink-0">{formattedTimestamp}</span>
                           </div>
                         </div>
                       </div>
@@ -520,15 +601,67 @@ export default function NewsfeedView({ session }) {
                           {(item.comments || []).length === 0 ? (
                             <p className="text-slate-400 text-xs text-center py-2 italic">No comments yet. Start the conversation below.</p>
                           ) : (
-                            item.comments.map((comment, cIdx) => (
-                              <div key={cIdx} className="bg-white p-3 rounded-xl border border-slate-200 text-xs space-y-1">
-                                <div className="flex justify-between items-center text-[10px] text-slate-400">
-                                  <span className="font-bold text-slate-700">{comment.user_email}</span>
-                                  <span>{new Date(comment.created_at || item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            item.comments.map((comment, cIdx) => {
+                              const isMyComment = (comment.user_email || '').trim().toLowerCase() === currentUserEmail;
+                              const isEditingThisComment = editingCommentId === comment.comment_id;
+                              return (
+                                <div key={comment.comment_id || cIdx} className="bg-white p-3 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                                  <div className="flex justify-between items-center text-[10px] text-slate-400 gap-2">
+                                    <span className="font-bold text-slate-700 truncate">{comment.user_email}</span>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span>{formatCommentTime(comment.timestamp || comment.created_at || item.timestamp)}</span>
+                                      {isMyComment && comment.comment_id && !isEditingThisComment && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingCommentId(comment.comment_id);
+                                              setEditCommentText(comment.comment_text || '');
+                                            }}
+                                            className="text-amber-700 hover:underline font-semibold"
+                                          >
+                                            Edit
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setCommentToDelete(comment.comment_id)}
+                                            className="text-rose-600 hover:underline font-semibold"
+                                          >
+                                            Delete
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {isEditingThisComment ? (
+                                    <div className="flex gap-1.5 pt-1">
+                                      <input
+                                        type="text"
+                                        value={editCommentText}
+                                        onChange={(e) => setEditCommentText(e.target.value)}
+                                        className="flex-1 px-2.5 py-1 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-amber-500"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSaveCommentEdit(comment.comment_id)}
+                                        className="px-2.5 py-1 bg-[#5C0612] text-white rounded-lg text-[10px] font-bold"
+                                      >
+                                        Save
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => { setEditingCommentId(null); setEditCommentText(''); }}
+                                        className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-semibold"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <p className="text-slate-800">{comment.comment_text}</p>
+                                  )}
                                 </div>
-                                <p className="text-slate-800">{comment.comment_text}</p>
-                              </div>
-                            ))
+                              );
+                            })
                           )}
                         </div>
 
@@ -562,8 +695,8 @@ export default function NewsfeedView({ session }) {
             <div className="flex justify-center items-center gap-1.5 pt-3 pb-2 select-none font-mono text-xs shrink-0 w-full border-t border-slate-200 bg-slate-50 mt-auto rounded-xl">
               <button
                 type="button"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={safeCurrentPage === 1}
+                onClick={() => setCurrentPage(Math.max(safeCurrentPage - 1, 1))}
                 className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-30 text-slate-700 font-bold transition-all shadow-sm"
               >
                 &lt;
@@ -575,7 +708,7 @@ export default function NewsfeedView({ session }) {
                   type="button"
                   onClick={() => setCurrentPage(pageNumber)}
                   className={`px-3 py-1.5 border rounded-xl font-bold transition-all shadow-sm ${
-                    currentPage === pageNumber
+                    safeCurrentPage === pageNumber
                       ? 'bg-[#5C0612] border-[#5C0612] text-white'
                       : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
                   }`}
@@ -586,8 +719,8 @@ export default function NewsfeedView({ session }) {
 
               <button
                 type="button"
-                disabled={currentPage === totalPagesCount}
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPagesCount))}
+                disabled={safeCurrentPage === totalPagesCount}
+                onClick={() => setCurrentPage(Math.min(safeCurrentPage + 1, totalPagesCount))}
                 className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-30 text-slate-700 font-bold transition-all shadow-sm"
               >
                 &gt;
@@ -735,6 +868,34 @@ export default function NewsfeedView({ session }) {
                 className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl transition-all shadow-sm"
               >
                 Delete Post
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Comment Confirmation Modal */}
+      {commentToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-6 text-center animate-scale-up space-y-3">
+            <h3 className="font-bold text-slate-900 text-sm tracking-tight">Delete Comment</h3>
+            <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+              Are you sure you want to permanently delete your comment?
+            </p>
+            <div className="flex gap-2 justify-center pt-2">
+              <button
+                type="button"
+                onClick={() => setCommentToDelete(null)}
+                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteCommentDelete}
+                className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl transition-all shadow-sm"
+              >
+                Delete Comment
               </button>
             </div>
           </div>

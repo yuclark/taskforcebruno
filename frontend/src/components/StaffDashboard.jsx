@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import PendingApplications from './PendingApplications';
 import PetListings from './PetListings';
 import AddNewPet from './AddNewPet';
@@ -31,41 +31,86 @@ export default function StaffDashboard({ session, onLogout }) {
     localStorage.setItem('tfb_staff_tab', activeMenu);
   }, [activeMenu]);
 
-  const fetchAllRegisteredPets = async () => {
+  const fetchAllRegisteredPets = useCallback(async () => {
     setLoadingPets(true);
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/pets/');
-      if (res.ok) setPets(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setPets(Array.isArray(data) ? data : []);
+      }
     } catch (err) {
       console.error(err);
     } finally {
       setLoadingPets(false); 
     }
-  };
+  }, []);
 
-  const fetchInventory = async () => {
+  const fetchInventory = useCallback(async () => {
     setLoadingInventory(true);
     try {
-      const res = await fetch('https://taskforcebruno.onrender.com/api/inventory/');
-      const ledgerRes = await fetch('https://taskforcebruno.onrender.com/api/inventory/transactions/');
-      if (res.ok) setInventoryItems(await res.json());
-      if (ledgerRes.ok) setTransactionLedger(await ledgerRes.json());
+      const [res, ledgerRes] = await Promise.all([
+        fetch('https://taskforcebruno.onrender.com/api/inventory/'),
+        fetch('https://taskforcebruno.onrender.com/api/inventory/transactions/')
+      ]);
+      if (res.ok) {
+        const invData = await res.json();
+        setInventoryItems(Array.isArray(invData) ? invData : []);
+      }
+      if (ledgerRes.ok) {
+        const ledData = await ledgerRes.json();
+        setTransactionLedger(Array.isArray(ledData) ? ledData : []);
+      }
     } catch (err) {
       console.error(err);
     } finally {
       setLoadingInventory(false);
     }
-  };
-
-  useEffect(() => {
-    fetchAllRegisteredPets();
-    fetchInventory();
   }, []);
 
   useEffect(() => {
-    if (activeMenu === 'Pet Listings') fetchAllRegisteredPets();
-    if (activeMenu === 'Inventory Control') fetchInventory();
-  }, [activeMenu]);
+    let cancelled = false;
+    const loadInitial = async () => {
+      try {
+        const [petsRes, invRes, ledRes] = await Promise.all([
+          fetch('https://taskforcebruno.onrender.com/api/pets/'),
+          fetch('https://taskforcebruno.onrender.com/api/inventory/'),
+          fetch('https://taskforcebruno.onrender.com/api/inventory/transactions/')
+        ]);
+        if (!cancelled) {
+          if (petsRes.ok) {
+            const p = await petsRes.json();
+            setPets(Array.isArray(p) ? p : []);
+          }
+          if (invRes.ok) {
+            const inv = await invRes.json();
+            setInventoryItems(Array.isArray(inv) ? inv : []);
+          }
+          if (ledRes.ok) {
+            const led = await ledRes.json();
+            setTransactionLedger(Array.isArray(led) ? led : []);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    loadInitial();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleMenuChange = (menu) => {
+    setActiveMenu(menu);
+    setIsMobileOpen(false);
+    if (menu === 'Pet Listings' || menu === 'Medical Logs') {
+      fetchAllRegisteredPets();
+    }
+    if (menu === 'Inventory Control') {
+      fetchInventory();
+    }
+  };
 
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-800 font-sans antialiased relative">
@@ -109,7 +154,7 @@ export default function StaffDashboard({ session, onLogout }) {
             {['Community Newsfeed', 'Pending Applications', 'Pet Listings', 'Add New Pet', 'Medical Logs', 'Inventory Control', 'Sighting Reports', 'Broadcast Bulletin'].map((menu) => (
               <button 
                 key={menu} 
-                onClick={() => { setActiveMenu(menu); setIsMobileOpen(false); }} 
+                onClick={() => handleMenuChange(menu)} 
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${activeMenu === menu ? 'bg-white text-[#5C0612] shadow-md font-semibold' : 'text-stone-200 hover:bg-white/5'}`}
               >
                 <span>{menu}</span>
@@ -173,10 +218,10 @@ export default function StaffDashboard({ session, onLogout }) {
 
         <div className={`flex-1 ${activeMenu === 'Community Newsfeed' ? 'overflow-hidden px-4 md:px-8 pb-4 pt-6' : 'overflow-y-auto p-4 md:p-8'}`}>
           {activeMenu === 'Community Newsfeed' && <NewsfeedView session={session} />}
-          {activeMenu === 'Pending Applications' && <PendingApplications />}
+          {activeMenu === 'Pending Applications' && <PendingApplications onRefresh={fetchAllRegisteredPets} />}
           {activeMenu === 'Pet Listings' && <PetListings pets={pets} loadingPets={loadingPets} onRefresh={fetchAllRegisteredPets} />}
           {activeMenu === 'Add New Pet' && <AddNewPet onRefresh={fetchAllRegisteredPets} />}
-          {activeMenu === 'Medical Logs' && <MedicalLogs pets={pets} />}
+          {activeMenu === 'Medical Logs' && <MedicalLogs pets={pets} onRefresh={fetchAllRegisteredPets} />}
           {activeMenu === 'Inventory Control' && (
             <InventoryControl
               inventoryItems={inventoryItems}
@@ -185,7 +230,12 @@ export default function StaffDashboard({ session, onLogout }) {
               onRefresh={fetchInventory}
             />
           )}
-          {activeMenu === 'Sighting Reports' && <SightingTriage session={session} />}
+          {activeMenu === 'Sighting Reports' && (
+            <SightingTriage
+              session={session}
+              onAdmitStray={() => setActiveMenu('Add New Pet')}
+            />
+          )}
           {activeMenu === 'Broadcast Bulletin' && <PostAnnouncement session={session} />}
         </div>
       </main>

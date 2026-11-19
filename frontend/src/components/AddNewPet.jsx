@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 const ALLOWED_LOCATIONS = [
   "Wildcat Innovation Labs",
@@ -12,53 +12,72 @@ const ALLOWED_LOCATIONS = [
   "Elementary Building"
 ];
 
+function matchAllowedLocation(rawLoc) {
+  if (!rawLoc) return ALLOWED_LOCATIONS[0];
+  const s = rawLoc.toLowerCase();
+  if (s.includes('wildcat') || s.includes('innovation') || s.includes('lab')) return "Wildcat Innovation Labs";
+  if (s.includes('nge')) return "NGE Building 1st Floor";
+  if (s.includes('gle') || s.includes('science')) return "GLE Building 1st Floor";
+  if (s.includes('espacio')) return "Espacio";
+  if (s.includes('court') || s.includes('basketball')) return "CIT-U Basketball Court";
+  if (s.includes('canteen') || s.includes('engineering') || s.includes('cafeteria')) return "CIT-U Canteen";
+  if (s.includes('sal')) return "SAL Building";
+  if (s.includes('gym') || s.includes('gymnasium')) return "CIT-U Gymnasium";
+  if (s.includes('elementary') || s.includes('high school')) return "Elementary Building";
+  return ALLOWED_LOCATIONS.includes(rawLoc) ? rawLoc : ALLOWED_LOCATIONS[0];
+}
+
+function consumeStrayHandoff() {
+  try {
+    const raw = sessionStorage.getItem('tfb_stray_handoff');
+    if (raw) {
+      sessionStorage.removeItem('tfb_stray_handoff');
+      return JSON.parse(raw);
+    }
+  } catch {
+    // Ignore malformed handoff payload
+  }
+  return null;
+}
+
 export default function AddNewPet({ onRefresh }) {
-  const [isStrayMode, setIsStrayMode] = useState(false);
-  const [newPetForm, setNewPetForm] = useState({
+  const [initialHandoff] = useState(() => consumeStrayHandoff());
+  const [isStrayMode, setIsStrayMode] = useState(() => Boolean(initialHandoff));
+  const [handedOffImageUrl, setHandedOffImageUrl] = useState(() => initialHandoff?.image_url || '');
+  const [newPetForm, setNewPetForm] = useState(() => ({
     pet_id: '',
     name: '',
-    species: 'Cat',
-    pet_type: 'Campus Pet',
+    species: initialHandoff?.species || 'Cat',
+    pet_type: initialHandoff ? 'Pet for Adoption' : 'Campus Pet',
     breed: '',
     gender: 'Male',
     age: '',
     weight: '',
     size: 'Small',
-    vaccination_status: 'Fully Vaccinated',
-    spayed_neutered: true,
-    adoption_status: 'Permanent Resident',
-    found_near: 'Wildcat Innovation Labs',
+    vaccination_status: initialHandoff ? 'Not Vaccinated' : 'Fully Vaccinated',
+    spayed_neutered: !initialHandoff,
+    adoption_status: initialHandoff ? 'Available' : 'Campus Pet',
+    found_near: initialHandoff ? matchAllowedLocation(initialHandoff.found_near) : 'Wildcat Innovation Labs',
     rescue_date: new Date().toISOString().split('T')[0],
     current_conditions: 'None',
     behavior_notes: 'Friendly',
-    about_text: '',
-    description: ''
-  });
-
-  // Hydrate handoff from an investigated Sighting Triage report
-  useEffect(() => {
-    try {
-      const handoff = sessionStorage.getItem('tfb_stray_handoff');
-      if (handoff) {
-        const data = JSON.parse(handoff);
-        setIsStrayMode(true);
-        setNewPetForm(prev => ({
-          ...prev,
-          pet_type: 'For Adoption',
-          adoption_status: 'Available',
-          species: data.species || 'Cat',
-          found_near: data.found_near || prev.found_near,
-          description: data.description || ''
-        }));
-        sessionStorage.removeItem('tfb_stray_handoff');
-      }
-    } catch {}
-  }, []);
+    about_text: initialHandoff?.sighting_id ? `Admitted via Sighting Report #${initialHandoff.sighting_id}.` : '',
+    description: initialHandoff?.description || ''
+  }));
 
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(() => initialHandoff?.image_url || null);
   const [formMessage, setFormMessage] = useState({ type: '', text: '' });
   const [submitting, setSubmitting] = useState(false);
+
+  // Revoke locally created blob URLs on change or unmount to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl && imagePreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+    };
+  }, [imagePreviewUrl]);
 
   const calculateSizeCategory = (weightVal) => {
     const num = parseFloat(weightVal);
@@ -101,6 +120,7 @@ export default function AddNewPet({ onRefresh }) {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setImageFile(file);
+      setHandedOffImageUrl('');
       setImagePreviewUrl(URL.createObjectURL(file));
     }
   };
@@ -108,6 +128,13 @@ export default function AddNewPet({ onRefresh }) {
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
     setFormMessage({ type: '', text: '' });
+
+    const weightNum = parseFloat(newPetForm.weight);
+    if (newPetForm.weight !== '' && (Number.isNaN(weightNum) || weightNum <= 0)) {
+      setFormMessage({ type: 'error', text: 'Please enter a valid positive weight in kg.' });
+      return;
+    }
+
     setSubmitting(true);
 
     const multiPartFormPayload = new FormData();
@@ -116,24 +143,26 @@ export default function AddNewPet({ onRefresh }) {
     const formattedWeightPayload = massValueString ? `${massValueString} kg` : 'Unknown';
 
     let finalizedPetId = newPetForm.pet_id.trim().toUpperCase();
-    let finalizedSpecies = newPetForm.species;
+    const finalizedSpecies = newPetForm.species;
     let finalizedPetType = newPetForm.pet_type;
     let finalizedName = newPetForm.name.trim();
 
     if (isStrayMode) {
       finalizedPetId = `STRAY-${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`;
-      finalizedPetType = 'For Adoption';
+      finalizedPetType = 'Pet for Adoption';
 
       let strayCount = 1;
       try {
         const checkRes = await fetch('https://taskforcebruno.onrender.com/api/pets/');
         if (checkRes.ok) {
           const allIndexedPets = await checkRes.json();
-          const matchingStrays = allIndexedPets.filter(p =>
-            p.pet_id?.startsWith('STRAY-') &&
-            p.species?.toLowerCase() === finalizedSpecies.toLowerCase()
-          );
-          strayCount = matchingStrays.length + 1;
+          if (Array.isArray(allIndexedPets)) {
+            const matchingStrays = allIndexedPets.filter(p =>
+              p.pet_id?.startsWith('STRAY-') &&
+              p.species?.toLowerCase() === finalizedSpecies.toLowerCase()
+            );
+            strayCount = matchingStrays.length + 1;
+          }
         }
       } catch (err) {
         console.error('Error calculating incremental profile counts:', err);
@@ -155,7 +184,7 @@ export default function AddNewPet({ onRefresh }) {
     multiPartFormPayload.append('size', newPetForm.size);
     multiPartFormPayload.append('vaccination_status', newPetForm.vaccination_status);
     multiPartFormPayload.append('spayed_neutered', newPetForm.spayed_neutered);
-    multiPartFormPayload.append('adoption_status', newPetForm.adoption_status);
+    multiPartFormPayload.append('adoption_status', isStrayMode && newPetForm.adoption_status === 'Campus Pet' ? 'Available' : newPetForm.adoption_status);
     multiPartFormPayload.append('found_near', newPetForm.found_near.trim());
     multiPartFormPayload.append('rescue_date', newPetForm.rescue_date);
     multiPartFormPayload.append('current_conditions', newPetForm.current_conditions.trim() || 'None');
@@ -165,6 +194,8 @@ export default function AddNewPet({ onRefresh }) {
 
     if (imageFile) {
       multiPartFormPayload.append('image', imageFile);
+    } else if (handedOffImageUrl) {
+      multiPartFormPayload.append('primary_image', handedOffImageUrl);
     }
 
     try {
@@ -176,20 +207,24 @@ export default function AddNewPet({ onRefresh }) {
       if (res.ok) {
         setFormMessage({ type: 'success', text: `Animal profile registered successfully for ${finalizedName} (${finalizedPetId})!` });
         setNewPetForm({
-          pet_id: '', name: '', species: 'Cat', pet_type: 'Campus Pet', breed: '', gender: 'Male', age: '', weight: '', size: 'Small',
-          vaccination_status: 'Fully Vaccinated', spayed_neutered: true, adoption_status: 'Permanent Resident',
+          pet_id: '', name: '', species: 'Cat',
+          pet_type: isStrayMode ? 'Pet for Adoption' : 'Campus Pet',
+          breed: '', gender: 'Male', age: '', weight: '', size: 'Small',
+          vaccination_status: 'Fully Vaccinated', spayed_neutered: true,
+          adoption_status: isStrayMode ? 'Available' : 'Campus Pet',
           found_near: 'Wildcat Innovation Labs', rescue_date: new Date().toISOString().split('T')[0], current_conditions: 'None',
           behavior_notes: 'Friendly', about_text: '', description: ''
         });
         setImageFile(null);
+        setHandedOffImageUrl('');
         setImagePreviewUrl(null);
         if (e.target) e.target.reset();
-        onRefresh();
+        if (onRefresh) onRefresh();
       } else {
-        const errorData = await res.json();
+        const errorData = await res.json().catch(() => ({}));
         setFormMessage({ type: 'error', text: errorData.error || 'Failed to register animal record.' });
       }
-    } catch (err) {
+    } catch {
       setFormMessage({ type: 'error', text: 'Network connection failure with animal registry server.' });
     } finally {
       setSubmitting(false);
@@ -386,6 +421,8 @@ export default function AddNewPet({ onRefresh }) {
                   <input
                     type="number"
                     step="0.01"
+                    min="0.01"
+                    required
                     name="weight"
                     value={newPetForm.weight}
                     onChange={handleCreateChange}

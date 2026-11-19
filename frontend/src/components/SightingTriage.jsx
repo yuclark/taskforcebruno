@@ -1,38 +1,64 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
-export default function SightingTriage({ session }) {
+export default function SightingTriage({ session, onAdmitStray }) {
   const [reports, setReports] = useState([]);
   const [filter, setFilter] = useState('Active'); // 'Active', 'Urgent', 'Pending', 'Investigated', 'All'
   const [loading, setLoading] = useState(true);
+  const [submittingStatus, setSubmittingStatus] = useState(false);
+  const [statusError, setStatusError] = useState('');
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [triageModal, setTriageModal] = useState({ isOpen: false, reportId: null, targetStatus: null });
 
-  const fetchActiveReports = async () => {
+  const fetchActiveReports = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/sightings/');
       if (res.ok) {
         const data = await res.json();
-        setReports(data);
+        setReports(Array.isArray(data) ? data : []);
+        setNowMs(Date.now());
       }
     } catch (err) {
       console.error('Error fetching sightings:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchActiveReports();
+    let cancelled = false;
+    const init = async () => {
+      try {
+        const res = await fetch('https://taskforcebruno.onrender.com/api/sightings/');
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setReports(Array.isArray(data) ? data : []);
+          setNowMs(Date.now());
+        }
+      } catch (err) {
+        console.error('Error fetching sightings:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    init();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const openConfirmModal = (reportId, targetStatus) => {
+    setStatusError('');
     setTriageModal({ isOpen: true, reportId, targetStatus });
   };
 
   const handleStatusMutation = async () => {
+    if (submittingStatus) return;
     const { reportId, targetStatus } = triageModal;
+    setSubmittingStatus(true);
+    setStatusError('');
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/sightings/${reportId}/`, {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/sightings/${encodeURIComponent(reportId)}/`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus })
@@ -40,19 +66,27 @@ export default function SightingTriage({ session }) {
       if (res.ok) {
         setTriageModal({ isOpen: false, reportId: null, targetStatus: null });
         fetchActiveReports();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setStatusError(errData.error || 'Failed to update sighting status.');
       }
     } catch (err) {
       console.error('Status sync error:', err);
+      setStatusError('Network error while updating sighting status.');
+    } finally {
+      setSubmittingStatus(false);
     }
   };
 
   const getRelativeTime = (isoString) => {
-    if (!isoString) return '';
-    const diff = (Date.now() - new Date(isoString).getTime()) / 1000;
+    if (!isoString) return 'Recently';
+    const parsed = new Date(isoString);
+    if (Number.isNaN(parsed.getTime())) return 'Recently';
+    const diff = (nowMs - parsed.getTime()) / 1000;
     if (diff < 60) return 'Just now';
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return new Date(isoString).toLocaleDateString();
+    return parsed.toLocaleDateString();
   };
 
   if (loading) {
@@ -190,7 +224,7 @@ export default function SightingTriage({ session }) {
                         </span>
                       </div>
                       <p className="font-mono text-[10px] text-slate-400 mt-1">
-                        Reported by: <strong className="text-slate-700 font-sans">{report.reporter_email}</strong> &bull; {getRelativeTime(report.logged_at)} ({new Date(report.logged_at).toLocaleString()})
+                        Reported by: <strong className="text-slate-700 font-sans">{report.reporter_email}</strong> &bull; {getRelativeTime(report.logged_at)}{report.logged_at && !Number.isNaN(new Date(report.logged_at).getTime()) ? ` (${new Date(report.logged_at).toLocaleString()})` : ''}
                       </p>
                     </div>
                     <span className="font-mono bg-slate-100 px-2.5 py-1 rounded-xl font-bold text-[10px] text-slate-600 shrink-0">
@@ -257,10 +291,15 @@ export default function SightingTriage({ session }) {
                         found_near: report.location_details,
                         description: report.distinct_features,
                         species: report.animal_type?.toLowerCase().includes('dog') ? 'Dog' : 'Cat',
+                        image_url: report.image_url || '',
                         sighting_id: report.sighting_id
                       }));
-                      localStorage.setItem('tfb_staff_tab', 'Add New Pet');
-                      window.location.reload();
+                      if (onAdmitStray) {
+                        onAdmitStray();
+                      } else {
+                        localStorage.setItem('tfb_staff_tab', 'Add New Pet');
+                        window.location.reload();
+                      }
                     }}
                     className="px-4 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 font-bold rounded-xl tracking-wide text-[10px] uppercase transition-colors flex items-center gap-1.5"
                     title="Animal caught and admitted to clinic for full veterinary intake"
@@ -295,18 +334,25 @@ export default function SightingTriage({ session }) {
               Transition Sighting Report <strong>#{triageModal.reportId}</strong> to status{' '}
               <strong className="text-[#5C0612] uppercase font-bold">{triageModal.targetStatus}</strong>?
             </p>
+            {statusError && (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-[11px] font-medium">
+                {statusError}
+              </div>
+            )}
             <div className="flex gap-2.5 font-sans font-bold pt-2">
               <button 
                 onClick={() => setTriageModal({ isOpen: false, reportId: null, targetStatus: null })} 
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] uppercase transition-colors"
+                disabled={submittingStatus}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 rounded-xl text-[11px] uppercase transition-colors"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleStatusMutation} 
-                className="flex-1 py-2.5 bg-[#5C0612] hover:bg-[#42040B] text-white rounded-xl text-[11px] uppercase shadow-md border-b-2 border-[#D4AF37] transition-all"
+                disabled={submittingStatus}
+                className="flex-1 py-2.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-50 text-white rounded-xl text-[11px] uppercase shadow-md border-b-2 border-[#D4AF37] transition-all"
               >
-                Confirm Update
+                {submittingStatus ? 'Updating...' : 'Confirm Update'}
               </button>
             </div>
           </div>

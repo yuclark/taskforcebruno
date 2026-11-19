@@ -1,13 +1,50 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import jsQR from 'jsqr';
 
+function extractPetId(raw) {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+
+  // Check if full URL (e.g. /passport/PET-001 or ?pet=PET-001)
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      for (const [key, val] of url.searchParams.entries()) {
+        if (['pet', 'id', 'pet_id', 'passport'].includes(key.toLowerCase()) && val) {
+          return decodeURIComponent(val).trim().toUpperCase();
+        }
+      }
+      const segments = url.pathname.split('/').filter(Boolean);
+      if (segments.length >= 2 && (segments[0].toLowerCase() === 'passport' || segments[0].toLowerCase() === 'pet')) {
+        return decodeURIComponent(segments[1]).trim().toUpperCase();
+      }
+      if (segments.length > 0) {
+        const last = decodeURIComponent(segments[segments.length - 1]).trim();
+        if (last && !['passport', 'pet'].includes(last.toLowerCase())) {
+          return last.toUpperCase();
+        }
+      }
+    } catch {
+      // Fallback to regex extraction below
+    }
+  }
+
+  // Path match /passport/PET-001
+  const pathMatch = trimmed.match(/(?:\/passport\/|\/pet\/)([A-Za-z0-9_-]+)/i);
+  if (pathMatch) return pathMatch[1].toUpperCase();
+
+  // Standard ID regex
+  const idMatch = trimmed.match(/(?:PET|STRAY|TF|CIT|ADOPT)[-_A-Z0-9]+/i);
+  if (idMatch) return idMatch[0].toUpperCase();
+
+  return trimmed.replace(/^[#/]+/, '').trim().toUpperCase();
+}
+
 /**
- * Task Force Bruno — CollarQRScanner.jsx (SDD Component / TC-QR-001)
- * Hardware Camera QR Scanning & Public Passport Lookup
- * Captures collar QR tag matrix in < 2.0s and redirects to /passport/:id
+ * Task Force Bruno — CollarQRScanner.jsx (SDD Component / TC-QR-001 & TC-QR-002)
+ * Hardware Camera QR Scanning & Static Photo Fallback for Public Passport Lookup
  */
 export default function CollarQRScanner({ onScanSuccess, onClose }) {
-  const [isActiveCamera, setIsActiveCamera] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Initializing camera...');
   const [errorMessage, setErrorMessage] = useState('');
@@ -17,111 +54,10 @@ export default function CollarQRScanner({ onScanSuccess, onClose }) {
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const animationFrameRef = useRef(null);
-  const scanStartTimeRef = useRef(Date.now());
+  const scanStartTimeRef = useRef(0);
+  const isMountedRef = useRef(true);
 
-  useEffect(() => {
-    startCamera();
-    return () => stopCamera();
-  }, []);
-
-  const extractPetId = (raw) => {
-    if (!raw) return '';
-    const trimmed = raw.trim();
-
-    // Check if full URL (e.g. /passport/PET-001 or ?pet=PET-001)
-    if (/^https?:\/\//i.test(trimmed)) {
-      try {
-        const url = new URL(trimmed);
-        for (const [key, val] of url.searchParams.entries()) {
-          if (['pet', 'id', 'pet_id', 'passport'].includes(key.toLowerCase()) && val) {
-            return decodeURIComponent(val).trim().toUpperCase();
-          }
-        }
-        const segments = url.pathname.split('/').filter(Boolean);
-        if (segments.length >= 2 && (segments[0].toLowerCase() === 'passport' || segments[0].toLowerCase() === 'pet')) {
-          return decodeURIComponent(segments[1]).trim().toUpperCase();
-        }
-        if (segments.length > 0) {
-          const last = decodeURIComponent(segments[segments.length - 1]).trim();
-          if (last && !['passport', 'pet'].includes(last.toLowerCase())) {
-            return last.toUpperCase();
-          }
-        }
-      } catch {}
-    }
-
-    // Path match /passport/PET-001
-    const pathMatch = trimmed.match(/(?:\/passport\/|\/pet\/)([A-Za-z0-9_-]+)/i);
-    if (pathMatch) return pathMatch[1].toUpperCase();
-
-    // Standard ID regex
-    const idMatch = trimmed.match(/(?:PET|STRAY|TF|CIT|ADOPT)[-_A-Z0-9]+/i);
-    if (idMatch) return idMatch[0].toUpperCase();
-
-    return trimmed.replace(/^[#\/]+/, '').trim().toUpperCase();
-  };
-
-  const handleDetected = (rawResult) => {
-    const petId = extractPetId(rawResult);
-    if (!petId) return;
-
-    const elapsed = Date.now() - scanStartTimeRef.current;
-    setStatusMessage(`Collar QR Decoded in ${elapsed}ms: ${petId}`);
-    stopCamera();
-
-    // Update browser URL directly to /passport/:id without full page reload
-    try {
-      window.history.pushState(null, '', `/passport/${encodeURIComponent(petId)}`);
-    } catch {}
-
-    if (onScanSuccess) {
-      onScanSuccess(petId);
-    }
-  };
-
-  const startCamera = async () => {
-    setErrorMessage('');
-    setIsProcessing(true);
-    setStatusMessage('Requesting camera permissions...');
-    scanStartTimeRef.current = Date.now();
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setIsProcessing(false);
-      setErrorMessage('Hardware camera access is not supported on this browser context. Please enter collar ID manually.');
-      return;
-    }
-
-    try {
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 640 } }
-        });
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      }
-
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.setAttribute('playsinline', 'true');
-        videoRef.current.setAttribute('muted', 'true');
-        await videoRef.current.play().catch(() => {});
-      }
-
-      setIsActiveCamera(true);
-      setIsProcessing(false);
-      setStatusMessage('Point camera at the collar QR tag...');
-      animationFrameRef.current = requestAnimationFrame(scanLoop);
-    } catch (err) {
-      console.warn('Camera stream error:', err);
-      setIsProcessing(false);
-      setErrorMessage('Camera access was blocked or busy. Please allow camera permissions.');
-    }
-  };
-
-  const stopCamera = () => {
-    setIsActiveCamera(false);
+  const stopCamera = useCallback(() => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -133,36 +69,167 @@ export default function CollarQRScanner({ onScanSuccess, onClose }) {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-  };
+  }, []);
 
-  const scanLoop = () => {
-    if (!videoRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA) {
-      animationFrameRef.current = requestAnimationFrame(scanLoop);
-      return;
+  const handleDetected = useCallback((rawResult) => {
+    const petId = extractPetId(rawResult);
+    if (!petId) return;
+
+    const elapsed = scanStartTimeRef.current ? Date.now() - scanStartTimeRef.current : 0;
+    setStatusMessage(`Collar QR Decoded in ${elapsed}ms: ${petId}`);
+    stopCamera();
+
+    try {
+      window.history.pushState(null, '', `/passport/${encodeURIComponent(petId)}`);
+    } catch {
+      // Ignore history errors in restricted contexts
     }
 
-    const video = videoRef.current;
-    let canvas = canvasRef.current;
-    if (!canvas) {
-      canvas = document.createElement('canvas');
-      canvasRef.current = canvas;
+    if (onScanSuccess) {
+      onScanSuccess(petId);
     }
+  }, [onScanSuccess, stopCamera]);
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  useEffect(() => {
+    isMountedRef.current = true;
+    scanStartTimeRef.current = Date.now();
 
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imgData.data, imgData.width, imgData.height, {
-      inversionAttempts: 'dontInvert'
-    });
+    const scanLoop = () => {
+      if (!isMountedRef.current) return;
+      const video = videoRef.current;
+      if (!video || video.readyState !== video.HAVE_ENOUGH_DATA || video.videoWidth === 0 || video.videoHeight === 0) {
+        animationFrameRef.current = requestAnimationFrame(scanLoop);
+        return;
+      }
 
-    if (code && code.data) {
-      handleDetected(code.data);
-    } else {
-      animationFrameRef.current = requestAnimationFrame(scanLoop);
-    }
+      let canvas = canvasRef.current;
+      if (!canvas) {
+        canvas = document.createElement('canvas');
+        canvasRef.current = canvas;
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imgData.data, imgData.width, imgData.height, {
+        inversionAttempts: 'attemptBoth'
+      });
+
+      if (code && code.data) {
+        handleDetected(code.data);
+      } else {
+        animationFrameRef.current = requestAnimationFrame(scanLoop);
+      }
+    };
+
+    const startCamera = async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (isMountedRef.current) {
+          setIsProcessing(false);
+          setErrorMessage('Camera access is not supported on this browser. Please upload a QR photo or enter collar ID manually.');
+        }
+        return;
+      }
+
+      if (isMountedRef.current) {
+        setErrorMessage('');
+        setIsProcessing(true);
+        setStatusMessage('Requesting camera permissions...');
+      }
+
+      try {
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 640 } }
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        }
+
+        // Guard against unmount during async permission prompt to prevent camera stream leak
+        if (!isMountedRef.current) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.setAttribute('playsinline', 'true');
+          videoRef.current.setAttribute('muted', 'true');
+          await videoRef.current.play().catch(() => {});
+        }
+
+        if (isMountedRef.current) {
+          setIsProcessing(false);
+          setStatusMessage('Point camera at the collar QR tag...');
+          animationFrameRef.current = requestAnimationFrame(scanLoop);
+        }
+      } catch (err) {
+        console.warn('Camera stream error:', err);
+        if (isMountedRef.current) {
+          setIsProcessing(false);
+          setErrorMessage('Camera access blocked. Please upload a photo or enable permissions.');
+        }
+      }
+    };
+
+    startCamera();
+    return () => {
+      isMountedRef.current = false;
+      stopCamera();
+    };
+  }, [handleDetected, stopCamera]);
+
+  // TC-QR-002: Static image upload fallback when camera permission is denied
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    stopCamera();
+    setErrorMessage('');
+    setIsProcessing(true);
+    setStatusMessage('Decoding QR image from gallery...');
+    scanStartTimeRef.current = Date.now();
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'attemptBoth'
+          });
+          setIsProcessing(false);
+          if (code && code.data) {
+            handleDetected(code.data);
+          } else {
+            setStatusMessage('Unable to read QR code.');
+            setErrorMessage('No readable collar QR matrix detected in this photo. Please try a clearer image.');
+          }
+        } catch {
+          setIsProcessing(false);
+          setErrorMessage('Failed to process uploaded image file.');
+        }
+      };
+      img.onerror = () => {
+        setIsProcessing(false);
+        setErrorMessage('Unsupported or corrupted image file.');
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleManualLookup = (e) => {
@@ -208,16 +275,28 @@ export default function CollarQRScanner({ onScanSuccess, onClose }) {
 
             {isProcessing && (
               <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-xs font-mono">
-                Starting camera...
+                Processing...
               </div>
             )}
           </div>
 
-          <div className="text-center space-y-1">
+          <div className="text-center space-y-2">
             <p className="text-xs font-mono text-slate-600 font-medium">{statusMessage}</p>
             {errorMessage && (
               <p className="text-[11px] text-rose-600 bg-rose-50 p-2 rounded-xl border border-rose-200">{errorMessage}</p>
             )}
+            <label className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-amber-50 hover:bg-amber-100 text-[#5C0612] border border-[#D4AF37]/60 rounded-xl text-xs font-bold cursor-pointer transition-colors w-full">
+              <svg className="w-4 h-4 text-[#5C0612]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span>Upload QR Photo from Gallery</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
           </div>
 
           {/* Fallback Manual Tag ID Entry */}

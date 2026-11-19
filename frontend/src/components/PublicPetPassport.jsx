@@ -1,29 +1,45 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
   const [pet, setPet] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     if (!petId) return;
-    setLoading(true);
-    setError('');
+    let cancelled = false;
 
-    fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(petId)}/`)
-      .then((res) => {
+    const loadPassport = async () => {
+      try {
+        const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(petId)}/`);
         if (!res.ok) throw new Error(`Animal record for ID "${petId}" was not found.`);
-        return res.json();
-      })
-      .then((data) => {
-        setPet(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message || 'Unable to connect to campus registry.');
-        setLoading(false);
-      });
+        const data = await res.json();
+        if (!cancelled) {
+          setPet(data);
+          setError('');
+          setNowMs(Date.now());
+          setLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setPet(null);
+          setError(err.message || 'Unable to connect to campus registry.');
+          setLoading(false);
+        }
+      }
+    };
+
+    loadPassport();
+    return () => {
+      cancelled = true;
+    };
   }, [petId]);
+
+  const expiryMs = pet?.quarantine_expiry_date ? new Date(pet.quarantine_expiry_date).getTime() : NaN;
+  const hasValidExpiry = !Number.isNaN(expiryMs);
+  const isFullyVaccinated = Boolean(pet?.vaccination_status && pet.vaccination_status.toLowerCase().includes('fully'));
+  const isPartiallyVaccinated = Boolean(pet?.vaccination_status && pet.vaccination_status.toLowerCase().includes('partial'));
 
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
@@ -95,10 +111,10 @@ export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
                     </svg>
                     Campus Health Observation Notice (RA 9482)
                   </div>
-                  {pet.quarantine_expiry_date && (
+                  {hasValidExpiry && (
                     <span className="px-2 py-0.5 bg-rose-200 text-rose-900 rounded-full font-mono text-[10px] font-bold">
                       {(() => {
-                        const diff = new Date(pet.quarantine_expiry_date).getTime() - Date.now();
+                        const diff = expiryMs - nowMs;
                         if (diff <= 0) return 'Observation Completed';
                         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
                         const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
@@ -110,9 +126,9 @@ export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
                 <p className="text-[11px] leading-relaxed text-rose-800 font-medium">
                   This companion is currently under a routine 14-day observation protocol following a campus incident report. Please <strong>do not feed, touch, or handle</strong>. Report any irregular behavior to Campus Security or MDC.
                 </p>
-                {pet.quarantine_expiry_date && (
+                {hasValidExpiry && (
                   <div className="text-[10px] font-mono text-rose-700 bg-rose-100/60 px-2.5 py-1 rounded-lg">
-                    Quarantine Release Date: <strong>{new Date(pet.quarantine_expiry_date).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true })}</strong>
+                    Quarantine Release Date: <strong>{new Date(expiryMs).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true })}</strong>
                   </div>
                 )}
               </div>
@@ -151,10 +167,16 @@ export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
                     {pet.pet_type === 'Campus Pet' ? 'Permanent Campus Resident' : 'Rescue Animal'}
                   </span>
 
-                  <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    {pet.vaccination_status?.toLowerCase().includes('fully') || !pet.vaccination_status
+                  <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${
+                    isFullyVaccinated
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : isPartiallyVaccinated
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}>
+                    {isFullyVaccinated
                       ? 'Fully Vaccinated - Rabies Valid'
-                      : pet.vaccination_status}
+                      : pet.vaccination_status || 'Vaccination Unverified'}
                   </span>
 
                   {pet.spayed_neutered && (

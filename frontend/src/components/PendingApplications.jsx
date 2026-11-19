@@ -1,90 +1,105 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
-export default function PendingApplications() {
+function normalizeVolunteerList(rawList) {
+  return rawList.map((item, idx) => {
+    const id = item.application_id || item.id || `VOL-${idx + 1}-${Date.now().toString().slice(-4)}`;
+    return {
+      ...item,
+      application_id: id,
+      full_name: item.full_name || item.name || 'Anonymous Student',
+      student_id: item.student_id || item.studentId || 'N/A',
+      contact_number: item.contact_number || item.contactNum || 'N/A',
+      program: item.program || 'General Student Body',
+      role: item.role || 'Feeding Patrol',
+      availability: item.availability || 'Flexible schedule',
+      status: item.status || 'Pending',
+      created_at: item.created_at || item.submittedAt || new Date().toISOString()
+    };
+  });
+}
+
+function loadInitialVolunteerApplications() {
+  try {
+    const raw = localStorage.getItem('tfb_volunteer_applications');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const cleanList = parsed.filter(item => {
+          const name = (item.full_name || item.name || '').trim().toLowerCase();
+          const id = (item.student_id || item.studentId || '').trim();
+          const email = (item.email || '').trim().toLowerCase();
+          if (name.includes('maria clarissa santos') || name.includes('joshua emmanuel tan') || name.includes('andrea nicole ramos')) return false;
+          if (email === 'mc.santos@cit.edu' || email === 'je.tan@cit.edu' || email === 'an.ramos@cit.edu') return false;
+          if (id === '22-4102-184' || id === '23-1109-892' || id === '21-3304-451') return false;
+          return true;
+        });
+        const normalized = normalizeVolunteerList(cleanList);
+        localStorage.setItem('tfb_volunteer_applications', JSON.stringify(normalized));
+        return normalized;
+      }
+    }
+    localStorage.setItem('tfb_volunteer_applications', JSON.stringify([]));
+  } catch (err) {
+    console.error('Error loading volunteer applications:', err);
+  }
+  return [];
+}
+
+export default function PendingApplications({ onRefresh }) {
   const [activeTab, setActiveTab] = useState('adoption'); // 'adoption' | 'volunteer'
   
   // Adoption state
   const [adoptionApplications, setAdoptionApplications] = useState([]);
   const [loadingAdoptions, setLoadingAdoptions] = useState(true);
+  const [submittingDecision, setSubmittingDecision] = useState(false);
   const [decisionModal, setDecisionModal] = useState({ isOpen: false, appId: null, status: null, petId: null });
 
   // Volunteer state
-  const [volunteerApplications, setVolunteerApplications] = useState([]);
+  const [volunteerApplications, setVolunteerApplications] = useState(() => loadInitialVolunteerApplications());
   const [volunteerFilter, setVolunteerFilter] = useState('all'); // 'all' | 'Pending' | 'Approved' | 'Declined'
   const [volunteerModal, setVolunteerModal] = useState({ isOpen: false, appId: null, status: null, name: null });
   const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+  const [toastMessage, setToastMessage] = useState({ type: 'success', text: '' });
 
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 4000);
+  const showToast = (text, type = 'success') => {
+    setToastMessage({ type, text });
+    setTimeout(() => setToastMessage({ type: 'success', text: '' }), 4500);
   };
 
-  const fetchActiveApplicationsQueue = async () => {
+  const fetchActiveApplicationsQueue = useCallback(async () => {
     setLoadingAdoptions(true);
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/pets/applications/');
       if (res.ok) {
-        setAdoptionApplications(await res.json());
+        const data = await res.json();
+        setAdoptionApplications(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error('Error fetching adoption applications queue:', err);
     } finally {
       setLoadingAdoptions(false);
     }
-  };
-
-  const normalizeVolunteerList = (rawList) => {
-    return rawList.map((item, idx) => {
-      const id = item.application_id || item.id || `VOL-${idx + 1}-${Date.now().toString().slice(-4)}`;
-      return {
-        ...item,
-        application_id: id,
-        full_name: item.full_name || item.name || 'Anonymous Student',
-        student_id: item.student_id || item.studentId || 'N/A',
-        contact_number: item.contact_number || item.contactNum || 'N/A',
-        program: item.program || 'General Student Body',
-        role: item.role || 'Feeding Patrol',
-        availability: item.availability || 'Flexible schedule',
-        status: item.status || 'Pending',
-        created_at: item.created_at || item.submittedAt || new Date().toISOString()
-      };
-    });
-  };
-
-  const loadVolunteerApplications = () => {
-    try {
-      const raw = localStorage.getItem('tfb_volunteer_applications');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          // Filter out dummy placeholder volunteer records if present in storage
-          const cleanList = parsed.filter(item => {
-            const name = (item.full_name || item.name || '').trim().toLowerCase();
-            const id = (item.student_id || item.studentId || '').trim();
-            const email = (item.email || '').trim().toLowerCase();
-            if (name.includes('maria clarissa santos') || name.includes('joshua emmanuel tan') || name.includes('andrea nicole ramos')) return false;
-            if (email === 'mc.santos@cit.edu' || email === 'je.tan@cit.edu' || email === 'an.ramos@cit.edu') return false;
-            if (id === '22-4102-184' || id === '23-1109-892' || id === '21-3304-451') return false;
-            return true;
-          });
-          const normalized = normalizeVolunteerList(cleanList);
-          setVolunteerApplications(normalized);
-          localStorage.setItem('tfb_volunteer_applications', JSON.stringify(normalized));
-          return;
-        }
-      }
-      setVolunteerApplications([]);
-      localStorage.setItem('tfb_volunteer_applications', JSON.stringify([]));
-    } catch (err) {
-      console.error('Error loading volunteer applications:', err);
-      setVolunteerApplications([]);
-    }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchActiveApplicationsQueue();
-    loadVolunteerApplications();
+    let cancelled = false;
+    const initQueue = async () => {
+      try {
+        const res = await fetch('https://taskforcebruno.onrender.com/api/pets/applications/');
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setAdoptionApplications(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error('Error fetching adoption applications queue:', err);
+      } finally {
+        if (!cancelled) setLoadingAdoptions(false);
+      }
+    };
+    initQueue();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Adoption handlers
@@ -93,9 +108,11 @@ export default function PendingApplications() {
   };
 
   const confirmTriage = async () => {
+    if (submittingDecision) return;
     const { appId, status, petId } = decisionModal;
+    setSubmittingDecision(true);
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/applications/${appId}/`, {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/applications/${encodeURIComponent(appId)}/`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -106,13 +123,21 @@ export default function PendingApplications() {
 
       if (res.ok) {
         setDecisionModal({ isOpen: false, appId: null, status: null, petId: null });
-        showToast(`Adoption application #${appId} successfully marked as ${status}.`);
+        showToast(`Adoption application #${appId} successfully marked as ${status}.`, 'success');
         fetchActiveApplicationsQueue();
+        if (status === 'Approved' && onRefresh) {
+          onRefresh();
+        }
       } else {
-        alert('Server rejected application status update.');
+        const errData = await res.json().catch(() => ({}));
+        setDecisionModal({ isOpen: false, appId: null, status: null, petId: null });
+        showToast(errData.error || 'Server rejected application status update.', 'error');
       }
     } catch (err) {
       console.error('Error processing application triage mutation:', err);
+      showToast('Network error while updating application status.', 'error');
+    } finally {
+      setSubmittingDecision(false);
     }
   };
 
@@ -165,15 +190,19 @@ export default function PendingApplications() {
     <div className="w-full max-w-7xl mx-auto space-y-6 text-xs text-slate-700 animate-fade-in pb-12 text-left font-sans">
       
       {/* Toast Notification Banner */}
-      {toastMessage && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center justify-between font-medium animate-fade-in">
+      {toastMessage.text && (
+        <div className={`p-3.5 rounded-2xl flex items-center justify-between font-medium animate-fade-in border ${
+          toastMessage.type === 'error'
+            ? 'bg-rose-50 border-rose-200 text-rose-800'
+            : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+        }`}>
           <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+            <svg className={`w-4 h-4 ${toastMessage.type === 'error' ? 'text-rose-600' : 'text-emerald-600'}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d={toastMessage.type === 'error' ? 'M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z' : 'm4.5 12.75 6 6 9-13.5'} />
             </svg>
-            <span>{toastMessage}</span>
+            <span>{toastMessage.text}</span>
           </div>
-          <button onClick={() => setToastMessage('')} className="text-emerald-500 hover:text-emerald-800 text-xs font-bold">✕</button>
+          <button onClick={() => setToastMessage({ type: 'success', text: '' })} className="text-slate-500 hover:text-slate-800 text-xs font-bold">✕</button>
         </div>
       )}
 
@@ -618,19 +647,21 @@ export default function PendingApplications() {
             <div className="flex gap-2.5 pt-2">
               <button 
                 onClick={() => setDecisionModal({ isOpen: false, appId: null, status: null, petId: null })} 
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs uppercase tracking-wide transition-colors"
+                disabled={submittingDecision}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-bold rounded-xl text-xs uppercase tracking-wide transition-colors"
               >
                 Cancel
               </button>
               <button 
                 onClick={confirmTriage} 
-                className={`flex-1 py-2.5 text-white font-bold rounded-xl text-xs uppercase tracking-wide shadow-md transition-all ${
+                disabled={submittingDecision}
+                className={`flex-1 py-2.5 text-white font-bold rounded-xl text-xs uppercase tracking-wide shadow-md transition-all disabled:opacity-50 ${
                   decisionModal.status === 'Approved' 
                     ? 'bg-[#5C0612] hover:bg-[#42040B] border-b-2 border-[#D4AF37]' 
                     : 'bg-rose-600 hover:bg-rose-700'
                 }`}
               >
-                Confirm {decisionModal.status}
+                {submittingDecision ? 'Processing...' : `Confirm ${decisionModal.status}`}
               </button>
             </div>
           </div>

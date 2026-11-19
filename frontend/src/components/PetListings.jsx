@@ -9,7 +9,8 @@ const ALLOWED_LOCATIONS = [
   "CIT-U Basketball Court",
   "CIT-U Canteen",
   "SAL Building",
-  "CIT-U Gymnasium"
+  "CIT-U Gymnasium",
+  "Elementary Building"
 ];
 
 export default function PetListings({ pets, loadingPets, onRefresh }) {
@@ -28,7 +29,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     try {
       const targetUrl = `https://taskforcebruno.vercel.app/?pet=${encodeURIComponent(pet.pet_id)}`;
       const dataUrl = await QRCode.toDataURL(targetUrl, {
-        width: 360,
+        width: 1200,
         margin: 2,
         color: {
           dark: '#5C0612',
@@ -53,6 +54,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     if (s.includes("canteen") || s.includes("cafeteria") || s.includes("eat")) return "CIT-U Canteen";
     if (s.includes("sal")) return "SAL Building";
     if (s.includes("gym") || s.includes("gymnasium")) return "CIT-U Gymnasium";
+    if (s.includes("elementary") || s.includes("high school")) return "Elementary Building";
     
     let hash = 0;
     const trackingKey = petId || locStr;
@@ -81,7 +83,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     setExpandedPetData(null);
     setLoadingDetails(true);
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${petId}/`);
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(petId)}/`);
       if (res.ok) setExpandedPetData(await res.json());
     } catch (err) {
       console.error(err);
@@ -154,24 +156,39 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     setErrorMessage('');
 
     const isCampus = isCampusPet(editFormData.pet_type) || isCampusPet(editFormData.adoption_status);
+    // Strip virtual computed fields that do not exist as database columns
+    const {
+      is_quarantined: _q,
+      quarantine_until: _qu,
+      quarantine_expiry_date: _qe,
+      created_at: _ca,
+      pet_id: _pid,
+      ...cleanFormFields
+    } = editFormData;
+    void _q; void _qu; void _qe; void _ca; void _pid;
+
     const finalizedPayload = {
-      ...editFormData,
+      ...cleanFormFields,
       pet_type: isCampus ? 'Campus Pet' : 'Pet for Adoption',
       adoption_status: isCampus ? 'Campus Pet' : (editFormData.adoption_status === 'Campus Pet' ? 'Available' : (editFormData.adoption_status || 'Available')),
       weight: editFormData.weight ? `${editFormData.weight.toString().trim()} kg` : 'N/A'
     };
 
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${isEditingId}/`, {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(isEditingId)}/`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(finalizedPayload)
       });
       if (res.ok) {
+        const updatedRecord = await res.json().catch(() => null);
+        if (updatedRecord && expandedPetId === isEditingId) {
+          setExpandedPetData(prev => ({ ...prev, ...updatedRecord }));
+        }
         setIsEditingId(null);
         onRefresh();
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setErrorMessage(data.error || "Failed to update record context.");
       }
     } catch (err) {
@@ -185,7 +202,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
     setErrorMessage('');
     
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${petIdToPurge}/`, { 
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(petIdToPurge)}/`, { 
         method: 'DELETE' 
       });
       if (res.ok) {
@@ -593,7 +610,7 @@ export default function PetListings({ pets, loadingPets, onRefresh }) {
                       <span className="font-mono font-bold text-slate-900 shrink-0">{zoneCount}</span>
                     </div>
                     <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200/20">
-                      <div style={{ width: `${progressWidth}%` }} className="h-full bg-indigo-505 transition-all duration-500" />
+                      <div style={{ width: `${progressWidth}%` }} className="h-full bg-indigo-500 transition-all duration-500" />
                     </div>
                   </div>
                 );

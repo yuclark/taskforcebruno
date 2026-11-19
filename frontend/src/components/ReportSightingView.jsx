@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import EmergencyProtocolModal from './EmergencyProtocolModal';
 
 export default function ReportSightingView({ session }) {
@@ -27,8 +27,16 @@ export default function ReportSightingView({ session }) {
     'Other Campus Location'
   ];
 
+  useEffect(() => {
+    return () => {
+      if (imagePreview && imagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) {
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
@@ -76,9 +84,10 @@ export default function ReportSightingView({ session }) {
         setImagePreview(null);
         if (e.target) e.target.reset(); 
       } else {
-        setMsg({ text: 'Unable to submit sighting report. Please check required fields.', isError: true });
+        const errData = await res.json().catch(() => ({}));
+        setMsg({ text: errData.error || 'Unable to submit sighting report. Please check required fields.', isError: true });
       }
-    } catch (err) {
+    } catch {
       setMsg({ text: 'Network connection timeout. Please check your internet connection.', isError: true });
     } finally {
       setSubmitting(false);

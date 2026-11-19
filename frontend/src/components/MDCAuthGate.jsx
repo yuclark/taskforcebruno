@@ -1,34 +1,30 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+
+const STAFF_ROLES = new Set(['staff', 'mdc', 'admin', 'clinician', 'nurse', 'veterinarian']);
+
+function checkMDCAuthorization(session) {
+  if (!session) return false;
+  const role = (session.role || '').trim().toLowerCase();
+  const email = (session.email || '').trim().toLowerCase();
+
+  // Explicitly reject student role or student email domains
+  if (role === 'student' || role === 'user' || email.includes('student')) {
+    return false;
+  }
+
+  // Authorize staff and clinic personnel
+  return STAFF_ROLES.has(role) || email.includes('mdc') || email.includes('staff');
+}
 
 /**
  * SDD Component: MDCAuthGate.jsx
  * Mapped Requirement: SRS-1.2 & SRS-4.2 / DRF RBAC
- * 
- * Verifies that only authenticated personnel with MDC / Staff permissions
- * can access medical forms, clinical write portals, or the MDC dashboard.
- * Intercepts unauthorized students and redirects them to the main newsfeed
- * with an access denied security notification.
  */
 export default function MDCAuthGate({ session, onRedirectToNewsfeed, children }) {
-  const [accessDeniedToast, setAccessDeniedToast] = useState(false);
-
-  const isMDCAuthorized = () => {
-    if (!session) return false;
-    const role = (session.role || '').trim().toLowerCase();
-    const email = (session.email || '').trim().toLowerCase();
-
-    // Explicitly reject student role or student email domains
-    if (role === 'student' || role === 'user' || email.includes('student')) {
-      return false;
-    }
-
-    // Authorize staff and clinic personnel
-    return role === 'staff' || role === 'mdc' || role === 'admin' || email.includes('mdc') || email.includes('staff');
-  };
+  const authorized = checkMDCAuthorization(session);
 
   useEffect(() => {
-    if (!isMDCAuthorized()) {
-      setAccessDeniedToast(true);
+    if (!authorized) {
       const timer = setTimeout(() => {
         if (onRedirectToNewsfeed) {
           onRedirectToNewsfeed();
@@ -38,9 +34,9 @@ export default function MDCAuthGate({ session, onRedirectToNewsfeed, children })
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [session]);
+  }, [authorized, onRedirectToNewsfeed]);
 
-  if (!isMDCAuthorized()) {
+  if (!authorized) {
     return (
       <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl border border-rose-200 p-6 max-w-sm w-full text-center space-y-3 animate-bounce">

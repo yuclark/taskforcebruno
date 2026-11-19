@@ -1,48 +1,74 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+
+function formatUnitTotals(unitMap, fallback = '0 units') {
+  const entries = Object.entries(unitMap || {}).filter(([, qty]) => qty > 0);
+  if (entries.length === 0) return fallback;
+  return entries.map(([unit, qty]) => `${qty} ${unit}`).join(' & ');
+}
 
 export default function SupplyLogistics() {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchLiveLogistics = async () => {
+  const fetchLiveLogistics = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/inventory/');
       if (res.ok) {
-        setInventory(await res.json());
+        const data = await res.json();
+        setInventory(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error('Inventory fetch error:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchLiveLogistics();
+    let cancelled = false;
+    const init = async () => {
+      try {
+        const res = await fetch('https://taskforcebruno.onrender.com/api/inventory/');
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setInventory(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error('Inventory fetch error:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    init();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // --- ANALYTICS CALCULATIONS ---
-  const lowStockAlertsCount = inventory.filter(item => item.quantity <= item.min_threshold).length;
+  const lowStockAlertsCount = inventory.filter(item => (item.quantity ?? 0) <= (item.min_threshold ?? 10)).length;
   
   const expiringSoonCount = inventory.filter(item => {
     if (!item.expiration_date) return false;
     const expDate = new Date(item.expiration_date);
+    if (Number.isNaN(expDate.getTime())) return false;
     const today = new Date();
-    const gapTime = expDate.getTime() - today.getTime();
-    const gapDays = gapTime / (1000 * 60 * 60 * 24);
+    today.setHours(0, 0, 0, 0);
+    const gapDays = (expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
     return gapDays >= 0 && gapDays <= 90;
   }).length;
 
-  // Food breakdown: Cat vs Dog
+  // Food breakdown: Cat vs Dog (tracks ALL metric units cleanly without mixing dimensions)
   const foodBreakdown = inventory.reduce((acc, item) => {
-    const nameLower = item.item_name.toLowerCase();
+    const nameLower = (item.item_name || '').toLowerCase();
     const unitNormal = item.unit ? item.unit.toLowerCase().trim() : 'pcs';
+    const qty = Number(item.quantity) || 0;
     
-    if (nameLower.includes('cat food') || nameLower.includes('kitten')) {
-      acc.cat[unitNormal] = (acc.cat[unitNormal] || 0) + item.quantity;
-    } else if (nameLower.includes('dog food') || nameLower.includes('puppy')) {
-      acc.dog[unitNormal] = (acc.dog[unitNormal] || 0) + item.quantity;
+    if (item.category === 'Food' && (nameLower.includes('cat') || nameLower.includes('kitten'))) {
+      acc.cat[unitNormal] = (acc.cat[unitNormal] || 0) + qty;
+    } else if (item.category === 'Food' && (nameLower.includes('dog') || nameLower.includes('puppy'))) {
+      acc.dog[unitNormal] = (acc.dog[unitNormal] || 0) + qty;
     }
     return acc;
   }, { cat: {}, dog: {} });
@@ -50,27 +76,27 @@ export default function SupplyLogistics() {
   // Unit-aware category metrics (never adding kg to cans or vials)
   const categoryMetrics = {
     'Cat Food': {
-      skus: inventory.filter(i => (i.category === 'Food' && (i.item_name.toLowerCase().includes('cat') || i.item_name.toLowerCase().includes('kitten')))).length,
-      kg: inventory.filter(i => i.category === 'Food' && (i.item_name.toLowerCase().includes('cat') || i.item_name.toLowerCase().includes('kitten')) && i.unit?.toLowerCase() === 'kg').reduce((sum, i) => sum + i.quantity, 0),
-      cans: inventory.filter(i => i.category === 'Food' && (i.item_name.toLowerCase().includes('cat') || i.item_name.toLowerCase().includes('kitten')) && (i.unit?.toLowerCase() === 'cans' || i.unit?.toLowerCase() === 'pcs')).reduce((sum, i) => sum + i.quantity, 0),
+      skus: inventory.filter(i => i.category === 'Food' && ((i.item_name || '').toLowerCase().includes('cat') || (i.item_name || '').toLowerCase().includes('kitten'))).length,
+      summary: formatUnitTotals(foodBreakdown.cat, '0 kg')
     },
     'Dog Food': {
-      skus: inventory.filter(i => (i.category === 'Food' && (i.item_name.toLowerCase().includes('dog') || i.item_name.toLowerCase().includes('puppy')))).length,
-      kg: inventory.filter(i => i.category === 'Food' && (i.item_name.toLowerCase().includes('dog') || i.item_name.toLowerCase().includes('puppy')) && i.unit?.toLowerCase() === 'kg').reduce((sum, i) => sum + i.quantity, 0),
-      cans: inventory.filter(i => i.category === 'Food' && (i.item_name.toLowerCase().includes('dog') || i.item_name.toLowerCase().includes('puppy')) && (i.unit?.toLowerCase() === 'cans' || i.unit?.toLowerCase() === 'pcs')).reduce((sum, i) => sum + i.quantity, 0),
+      skus: inventory.filter(i => i.category === 'Food' && ((i.item_name || '').toLowerCase().includes('dog') || (i.item_name || '').toLowerCase().includes('puppy'))).length,
+      summary: formatUnitTotals(foodBreakdown.dog, '0 kg')
     },
     'Medical': {
       skus: inventory.filter(i => i.category === 'Medical').length,
-      vials: inventory.filter(i => i.category === 'Medical' && (i.unit?.toLowerCase() === 'vials' || i.unit?.toLowerCase() === 'doses')).reduce((sum, i) => sum + i.quantity, 0),
-      items: inventory.filter(i => i.category === 'Medical' && i.unit?.toLowerCase() !== 'vials' && i.unit?.toLowerCase() !== 'doses').reduce((sum, i) => sum + i.quantity, 0),
+      vials: inventory.filter(i => i.category === 'Medical' && (i.unit?.toLowerCase() === 'vials' || i.unit?.toLowerCase() === 'doses')).reduce((sum, i) => sum + (Number(i.quantity) || 0), 0),
+      items: inventory.filter(i => i.category === 'Medical' && i.unit?.toLowerCase() !== 'vials' && i.unit?.toLowerCase() !== 'doses').reduce((sum, i) => sum + (Number(i.quantity) || 0), 0),
     },
     'Supplies': {
       skus: inventory.filter(i => i.category === 'Supplies').length,
-      items: inventory.filter(i => i.category === 'Supplies').reduce((sum, i) => sum + i.quantity, 0),
+      items: inventory.filter(i => i.category === 'Supplies').reduce((sum, i) => sum + (Number(i.quantity) || 0), 0),
     }
   };
 
+  const activeCategoryCount = Object.values(categoryMetrics).filter(c => c.skus > 0).length;
   const totalCatalogSkus = Math.max(1, inventory.length);
+  const maxChartScale = Math.max(...inventory.map(i => Number(i.quantity) || 0), 120);
 
   if (loading) {
     return (
@@ -152,7 +178,7 @@ export default function SupplyLogistics() {
         <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider font-mono">Active Categories</span>
-            <p className="text-2xl font-black text-slate-900 mt-0.5 font-mono">4</p>
+            <p className="text-2xl font-black text-slate-900 mt-0.5 font-mono">{activeCategoryCount}</p>
           </div>
           <div className="p-2.5 rounded-xl bg-[#5C0612] text-[#D4AF37] font-mono text-xs font-bold">
             HUB
@@ -224,9 +250,9 @@ export default function SupplyLogistics() {
           ) : (
             <div className="flex items-end justify-around w-full gap-3 h-48 border-b border-slate-200 pb-2 relative px-2">
               {inventory.map((item) => {
-                const maxScale = Math.max(...inventory.map(i => i.quantity), 120);
-                const currentHeightPercent = Math.min(100, Math.max(8, (item.quantity / maxScale) * 100));
-                const isDeficitState = item.quantity <= item.min_threshold;
+                const qty = Number(item.quantity) || 0;
+                const currentHeightPercent = Math.min(100, Math.max(8, (qty / maxChartScale) * 100));
+                const isDeficitState = qty <= (item.min_threshold ?? 10);
                 
                 return (
                   <div key={item.item_id} className="flex-1 flex flex-col items-center group relative max-w-[58px] h-full justify-end">
@@ -254,11 +280,11 @@ export default function SupplyLogistics() {
           )}
 
           <div className="flex justify-around w-full gap-3 pt-3 text-[10px] font-semibold text-slate-500 text-center select-none font-mono">
-            {inventory.map(item => (
-              <span key={item.item_id} className="truncate flex-1 max-w-[58px] leading-tight block">
-                {item.item_name.replace('Cat Food - ', '').replace('Dog Food - ', '').split(' ')[0]}
-              </span>
-            ))}
+              {inventory.map(item => (
+                <span key={item.item_id} className="truncate flex-1 max-w-[58px] leading-tight block">
+                  {(item.item_name || 'Item').replace('Cat Food - ', '').replace('Dog Food - ', '').split(' ')[0]}
+                </span>
+              ))}
           </div>
         </div>
 
@@ -276,14 +302,14 @@ export default function SupplyLogistics() {
                 name: 'Cat Food Rations', 
                 key: 'Cat Food', 
                 color: 'bg-[#5C0612]',
-                summary: `${categoryMetrics['Cat Food'].kg > 0 ? `${categoryMetrics['Cat Food'].kg} kg dry` : ''}${categoryMetrics['Cat Food'].kg > 0 && categoryMetrics['Cat Food'].cans > 0 ? ' & ' : ''}${categoryMetrics['Cat Food'].cans > 0 ? `${categoryMetrics['Cat Food'].cans} cans` : ''}` || '0 kg',
+                summary: categoryMetrics['Cat Food'].summary,
                 skus: categoryMetrics['Cat Food'].skus
               },
               { 
                 name: 'Dog Food Rations', 
                 key: 'Dog Food', 
                 color: 'bg-amber-600',
-                summary: `${categoryMetrics['Dog Food'].kg > 0 ? `${categoryMetrics['Dog Food'].kg} kg dry` : ''}${categoryMetrics['Dog Food'].kg > 0 && categoryMetrics['Dog Food'].cans > 0 ? ' & ' : ''}${categoryMetrics['Dog Food'].cans > 0 ? `${categoryMetrics['Dog Food'].cans} cans` : ''}` || '0 kg',
+                summary: categoryMetrics['Dog Food'].summary,
                 skus: categoryMetrics['Dog Food'].skus
               },
               { 
@@ -360,7 +386,7 @@ export default function SupplyLogistics() {
                 </tr>
               ) : (
                 inventory.map((item) => {
-                  const isLow = item.quantity <= item.min_threshold;
+                  const isLow = (item.quantity ?? 0) <= (item.min_threshold ?? 10);
                   return (
                     <tr key={item.item_id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="p-3.5 pl-5 font-bold text-slate-900">

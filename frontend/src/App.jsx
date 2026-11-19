@@ -1,10 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Login from './components/Login';
 import Register from './components/Register';
 import DashboardContainer from './components/DashboardContainer';
 import StaffDashboard from './components/StaffDashboard';
 import PublicPetPassport from './components/PublicPetPassport';
-import MDCAuthGate from './components/MDCAuthGate';
+
+const STAFF_ROLES = new Set(['staff', 'mdc', 'admin', 'clinician', 'nurse', 'veterinarian']);
+
+function isStaffOrMDCSession(session) {
+  if (!session) return false;
+  const role = (session.role || '').trim().toLowerCase();
+  const email = (session.email || '').trim().toLowerCase();
+  if (role === 'student' || role === 'user') return false;
+  return STAFF_ROLES.has(role) || email.includes('mdc') || email.includes('staff');
+}
 
 export default function App() {
   // TC-QR-001: Public Pet Passport trigger from physical QR scan (e.g. /passport/PET-001 or ?pet=PET-001)
@@ -23,28 +32,6 @@ export default function App() {
     }
     return null;
   });
-
-  const [toastMessage, setToastMessage] = useState(null);
-
-  useEffect(() => {
-    const checkPassportRoute = () => {
-      try {
-        const pathSegments = window.location.pathname.split('/').filter(Boolean);
-        if (pathSegments.length >= 2 && (pathSegments[0].toLowerCase() === 'pet' || pathSegments[0].toLowerCase() === 'passport')) {
-          setPublicPetId(decodeURIComponent(pathSegments[1]).trim());
-          return;
-        }
-        const urlParams = new URLSearchParams(window.location.search);
-        const petQuery = urlParams.get('pet') || urlParams.get('id');
-        if (petQuery) {
-          setPublicPetId(petQuery.trim());
-          return;
-        }
-      } catch {}
-    };
-    window.addEventListener('popstate', checkPassportRoute);
-    return () => window.removeEventListener('popstate', checkPassportRoute);
-  }, []);
 
   const [session, setSession] = useState(() => {
     const saved = localStorage.getItem('tfb_session');
@@ -77,8 +64,55 @@ export default function App() {
     }
   });
 
+  // TC-MED-003: Guard restricted /mdc/dashboard route from unauthorized students on load
+  const [toastMessage, setToastMessage] = useState(() => {
+    try {
+      const currentPath = window.location.pathname.toLowerCase();
+      if ((currentPath.includes('/mdc/dashboard') || currentPath.startsWith('/mdc')) && !isStaffOrMDCSession(session)) {
+        window.history.replaceState(null, '', '/dashboard');
+        return 'Access Denied: MDC Personnel Only';
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = setTimeout(() => setToastMessage(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
+
+  useEffect(() => {
+    const checkRoute = () => {
+      try {
+        const currentPath = window.location.pathname.toLowerCase();
+        if ((currentPath.includes('/mdc/dashboard') || currentPath.startsWith('/mdc')) && !isStaffOrMDCSession(session)) {
+          window.history.replaceState(null, '', '/dashboard');
+          setToastMessage('Access Denied: MDC Personnel Only');
+          return;
+        }
+        const pathSegments = window.location.pathname.split('/').filter(Boolean);
+        if (pathSegments.length >= 2 && (pathSegments[0].toLowerCase() === 'pet' || pathSegments[0].toLowerCase() === 'passport')) {
+          setPublicPetId(decodeURIComponent(pathSegments[1]).trim());
+          return;
+        }
+        const urlParams = new URLSearchParams(window.location.search);
+        const petQuery = urlParams.get('pet') || urlParams.get('id');
+        if (petQuery) {
+          setPublicPetId(petQuery.trim());
+        }
+      } catch {
+        // Ignore malformed URL parameters
+      }
+    };
+    window.addEventListener('popstate', checkRoute);
+    return () => window.removeEventListener('popstate', checkRoute);
+  }, [session]);
+
   const [isLogin, setIsLogin] = useState(true);
-  const lastActivityUpdateRef = useRef(Date.now());
+  const lastActivityUpdateRef = useRef(0);
 
   const handleLoginSuccess = (sessionData) => {
     const now = Date.now();
@@ -93,14 +127,14 @@ export default function App() {
     setSession(normalized);
   };
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     localStorage.removeItem('tfb_session');
     localStorage.removeItem('tfb_staff_tab'); 
     localStorage.removeItem('tfb_user_tab');  
     sessionStorage.clear();
     setSession(null);
     setIsLogin(true);
-  };
+  }, []);
 
   // ── SLIDING INACTIVITY TIMER: Resets on user actions, only expires after 15m of pure zero activity ──
   useEffect(() => {
@@ -108,6 +142,7 @@ export default function App() {
 
     let idleTimer;
     const fifteenMinutes = 15 * 60 * 1000;
+    lastActivityUpdateRef.current = Date.now();
 
     const recordUserActivity = () => {
       // Throttle localStorage updates to once every 15 seconds to maintain smooth 60fps performance
@@ -120,7 +155,9 @@ export default function App() {
             current.lastActiveAt = now;
             localStorage.setItem('tfb_session', JSON.stringify(current));
           }
-        } catch {}
+        } catch {
+          // Ignore storage quota errors
+        }
       }
 
       // Reset the 15-minute sliding countdown
@@ -145,24 +182,9 @@ export default function App() {
         window.removeEventListener(event, recordUserActivity)
       );
     };
-  }, [session]);
+  }, [session, handleLogout]);
 
-  // TC-MED-003: Guard restricted /mdc/dashboard route from unauthorized students
-  useEffect(() => {
-    const currentPath = window.location.pathname.toLowerCase();
-    if (currentPath.includes('/mdc/dashboard') || currentPath.startsWith('/mdc')) {
-      const role = (session?.role || '').toLowerCase();
-      const email = (session?.email || '').toLowerCase();
-      const isStaffOrMDC = role === 'staff' || role === 'mdc' || role === 'admin' || email.includes('mdc') || email.includes('staff');
-
-      if (!isStaffOrMDC) {
-        window.history.replaceState(null, '', '/dashboard');
-        setToastMessage('Access Denied: MDC Personnel Only');
-        const timer = setTimeout(() => setToastMessage(null), 4000);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [session]);
+  const isStaff = isStaffOrMDCSession(session);
 
   return (
     <>
@@ -184,13 +206,13 @@ export default function App() {
           petId={publicPetId}
           onClose={() => {
             setPublicPetId(null);
-            if (window.location.pathname.toLowerCase().includes('/passport') || window.location.pathname.toLowerCase().includes('/pet')) {
+            if (window.location.pathname.toLowerCase().includes('/passport') || window.location.pathname.toLowerCase().includes('/pet') || window.location.search.includes('pet=')) {
               window.history.pushState(null, '', '/');
             }
           }}
           onGoLogin={() => {
             setPublicPetId(null);
-            if (window.location.pathname.toLowerCase().includes('/passport') || window.location.pathname.toLowerCase().includes('/pet')) {
+            if (window.location.pathname.toLowerCase().includes('/passport') || window.location.pathname.toLowerCase().includes('/pet') || window.location.search.includes('pet=')) {
               window.history.pushState(null, '', '/');
             }
             setIsLogin(true);
@@ -211,7 +233,7 @@ export default function App() {
             <Register togglePage={() => setIsLogin(true)} />
           )}
         </div>
-      ) : session.role === 'staff' ? (
+      ) : isStaff ? (
         <StaffDashboard
           key={`staff-${session.email}`}
           session={session}

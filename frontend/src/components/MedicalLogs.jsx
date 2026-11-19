@@ -1,10 +1,44 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
-export default function MedicalLogs({ pets = [] }) {
-  const [selectedMedicalPetId, setSelectedMedicalPetId] = useState('');
+function parseLocalDate(dateStr) {
+  if (!dateStr) return null;
+  const datePart = String(dateStr).trim().split('T')[0].split(' ')[0];
+  const parts = datePart.split('-').map(Number);
+  if (parts.length === 3 && parts.every(n => !Number.isNaN(n))) {
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+  const fallback = new Date(dateStr);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
+
+function computeQuarantineReleaseDate(baseDateStr) {
+  const base = parseLocalDate(baseDateStr) || new Date();
+  const release = new Date(base.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const yyyy = release.getFullYear();
+  const mm = String(release.getMonth() + 1).padStart(2, '0');
+  const dd = String(release.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function generateVaccineLotCode() {
+  return `LOT-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
+}
+
+const VACCINE_PRESETS = [
+  { label: 'Anti-Rabies (Annual)', name: 'Anti-Rabies Inactivated Vaccine', dueMonths: 12 },
+  { label: 'Canine 5-in-1 (DHPP)', name: 'DHPP 5-in-1 (Distemper, Hepatitis, Parvo, Parainfluenza)', dueMonths: 12 },
+  { label: 'Feline 3-in-1 (FVRCP)', name: 'FVRCP 3-in-1 Feline Viral Rhinotracheitis, Calicivirus, Panleukopenia', dueMonths: 12 },
+  { label: 'Deworming (Anthelmintic)', name: 'Broad-Spectrum Dewormer (Pyrantel / Praziquantel)', dueMonths: 3 },
+  { label: 'Kennel Cough (Bordetella)', name: 'Bordetella Bronchiseptica Inhalation/Injectable', dueMonths: 12 },
+];
+
+export default function MedicalLogs({ pets = [], onRefresh }) {
+  const [selectedMedicalPetId, setSelectedMedicalPetId] = useState(() => pets[0]?.pet_id || '');
   const [medicalLogs, setMedicalLogs] = useState([]);
   const [vaccineLogs, setVaccineLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [submittingMed, setSubmittingMed] = useState(false);
+  const [submittingVac, setSubmittingVac] = useState(false);
 
   // Active workspace view: 'patient' (individual consultation) or 'matrix' (campus booster matrix)
   const [workspaceView, setWorkspaceView] = useState('patient');
@@ -18,7 +52,7 @@ export default function MedicalLogs({ pets = [] }) {
 
   // --- REALISTIC CLINICAL STATE MODELS ---
   const [medType, setMedType] = useState('Check-up');
-  const [medDate, setMedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [medDate, setMedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [medWeight, setMedWeight] = useState('');
   const [medVet, setMedVet] = useState('');
 
@@ -30,14 +64,14 @@ export default function MedicalLogs({ pets = [] }) {
   const [medFollowup, setMedFollowup] = useState('');
 
   // Rabies Bite/Scratch Protocol specific (Philippine RA 9482 / Campus Public Safety)
-  const [exposureCategory, setExposureCategory] = useState('Category II - Minor scratch/abrasion');
+  const [exposureCategory, setExposureCategory] = useState('Category II - Minor scratch/abrasion without bleeding');
   const [victimType, setVictimType] = useState('CIT-U Student');
   const [incidentLocation, setIncidentLocation] = useState('NGE Building Ground');
   const [quarantineStatus, setQuarantineStatus] = useState('Active 14-Day Rabies Observation');
 
   // Vaccine form state
   const [vacName, setVacName] = useState('');
-  const [vacDate, setVacDate] = useState(new Date().toISOString().split('T')[0]);
+  const [vacDate, setVacDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [vacNextDue, setVacNextDue] = useState('');
   const [vacLot, setVacLot] = useState('');
   const [vacWeight, setVacWeight] = useState('');
@@ -45,66 +79,75 @@ export default function MedicalLogs({ pets = [] }) {
 
   const [formMessage, setFormMessage] = useState({ target: '', type: '', text: '' });
 
-  // Selected pet object
-  const activePet = pets.find(p => p.pet_id === selectedMedicalPetId) || pets[0] || null;
+  // Selected pet object (falls back cleanly when pets prop loads asynchronously)
+  const effectivePetId = selectedMedicalPetId || pets[0]?.pet_id || '';
+  const activePet = pets.find(p => p.pet_id === effectivePetId) || pets[0] || null;
 
-  // 1-Click Vaccine Presets for realistic clinical workflows
-  const vaccinePresets = [
-    { label: 'Anti-Rabies (Annual)', name: 'Anti-Rabies Inactivated Vaccine', dueMonths: 12 },
-    { label: 'Canine 5-in-1 (DHPP)', name: 'DHPP 5-in-1 (Distemper, Hepatitis, Parvo, Parainfluenza)', dueMonths: 12 },
-    { label: 'Feline 3-in-1 (FVRCP)', name: 'FVRCP 3-in-1 Feline Viral Rhinotracheitis, Calicivirus, Panleukopenia', dueMonths: 12 },
-    { label: 'Deworming (Anthelmintic)', name: 'Broad-Spectrum Dewormer (Pyrantel / Praziquantel)', dueMonths: 3 },
-    { label: 'Kennel Cough (Bordetella)', name: 'Bordetella Bronchiseptica Inhalation/Injectable', dueMonths: 12 },
-  ];
-
-  const applyVaccinePreset = (preset) => {
+  const applyVaccinePreset = (preset, targetPetOverride = null) => {
     setVacName(preset.name);
-    const d = new Date(vacDate || new Date());
+    const d = parseLocalDate(vacDate) || new Date();
     d.setMonth(d.getMonth() + preset.dueMonths);
-    setVacNextDue(d.toISOString().split('T')[0]);
-    if (!vacLot) setVacLot(`LOT-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`);
-    if (activePet && activePet.weight && !vacWeight) {
-      setVacWeight(activePet.weight.replace(/[^\d.]/g, '') || '');
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    setVacNextDue(`${yyyy}-${mm}-${dd}`);
+    if (!vacLot) setVacLot(generateVaccineLotCode());
+    const petForWeight = targetPetOverride || activePet;
+    if (petForWeight && petForWeight.weight) {
+      setVacWeight(String(petForWeight.weight).replace(/[^\d.]/g, '') || '');
     }
   };
 
-  // Pre-fill 14-day observation release date when Bite Incident is selected
+  // Pre-fill 14-day observation release date relative to medDate when Bite/Scratch Incident is selected
   const handleTypeChange = (newType) => {
     setMedType(newType);
     setClinicalNotes('');
     setMedPrescription('');
     if (newType === 'Bite Incident' || newType === 'Scratch Incident') {
-      const releaseDate = new Date();
-      releaseDate.setDate(releaseDate.getDate() + 14);
-      setMedFollowup(releaseDate.toISOString().split('T')[0]);
+      setMedFollowup(computeQuarantineReleaseDate(medDate));
     } else {
       setMedFollowup('');
     }
   };
 
-  const fetchMedicalLogsForTarget = async (id) => {
+  const handleMedDateChange = (nextDate) => {
+    setMedDate(nextDate);
+    if (medType === 'Bite Incident' || medType === 'Scratch Incident') {
+      setMedFollowup(computeQuarantineReleaseDate(nextDate));
+    }
+  };
+
+  const fetchMedicalLogsForTarget = useCallback(async (id) => {
     if (!id) return;
     setLoadingLogs(true);
     try {
-      const medRes = await fetch(`https://taskforcebruno.onrender.com/api/medical/${id}/`);
-      const vacRes = await fetch(`https://taskforcebruno.onrender.com/api/vaccinations/${id}/`);
-      if (medRes.ok) setMedicalLogs(await medRes.json());
-      if (vacRes.ok) setVaccineLogs(await vacRes.json());
+      const [medRes, vacRes] = await Promise.all([
+        fetch(`https://taskforcebruno.onrender.com/api/medical/${encodeURIComponent(id)}/`),
+        fetch(`https://taskforcebruno.onrender.com/api/vaccinations/${encodeURIComponent(id)}/`)
+      ]);
+      if (medRes.ok) {
+        const medData = await medRes.json();
+        setMedicalLogs(Array.isArray(medData) ? medData : []);
+      }
+      if (vacRes.ok) {
+        const vacData = await vacRes.json();
+        setVaccineLogs(Array.isArray(vacData) ? vacData : []);
+      }
     } catch (err) {
       console.error('Error fetching clinical history:', err);
     } finally {
       setLoadingLogs(false);
     }
-  };
+  }, []);
 
-  const fetchAllVaccinations = async () => {
+  const fetchAllVaccinations = useCallback(async () => {
     if (!pets || pets.length === 0) return;
     setLoadingMatrix(true);
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/vaccinations/all/');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           const map = {};
           data.forEach(v => {
             if (!map[v.pet_id]) map[v.pet_id] = [];
@@ -115,15 +158,18 @@ export default function MedicalLogs({ pets = [] }) {
           return;
         }
       }
-      // Fallback: parallel query per pet
+      // Fallback: parallel query per pet only if /all/ failed
       const map = {};
       await Promise.all(pets.map(async (p) => {
         try {
-          const r = await fetch(`https://taskforcebruno.onrender.com/api/vaccinations/${p.pet_id}/`);
+          const r = await fetch(`https://taskforcebruno.onrender.com/api/vaccinations/${encodeURIComponent(p.pet_id)}/`);
           if (r.ok) {
-            map[p.pet_id] = await r.json();
+            const rows = await r.json();
+            map[p.pet_id] = Array.isArray(rows) ? rows : [];
           }
-        } catch {}
+        } catch {
+          // Skip individual pet fetch error
+        }
       }));
       setAllVaccinationsMap(map);
     } catch (err) {
@@ -131,43 +177,85 @@ export default function MedicalLogs({ pets = [] }) {
     } finally {
       setLoadingMatrix(false);
     }
-  };
-
-  useEffect(() => {
-    fetchAllVaccinations();
   }, [pets]);
 
   useEffect(() => {
-    if (pets.length > 0 && !selectedMedicalPetId) {
-      setSelectedMedicalPetId(pets[0].pet_id);
-    }
-  }, [pets]);
-
-  useEffect(() => {
-    if (selectedMedicalPetId) {
-      fetchMedicalLogsForTarget(selectedMedicalPetId);
-      setFormMessage({ target: '', type: '', text: '' });
-      // Pre-fill pet weight
-      const current = pets.find(p => p.pet_id === selectedMedicalPetId);
-      if (current && current.weight) {
-        const cleanWeight = current.weight.replace(/[^\d.]/g, '');
-        setMedWeight(cleanWeight);
-        setVacWeight(cleanWeight);
+    if (!pets || pets.length === 0) return;
+    let cancelled = false;
+    const loadMatrix = async () => {
+      try {
+        const res = await fetch('https://taskforcebruno.onrender.com/api/vaccinations/all/');
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            const map = {};
+            data.forEach(v => {
+              if (!map[v.pet_id]) map[v.pet_id] = [];
+              map[v.pet_id].push(v);
+            });
+            setAllVaccinationsMap(map);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Matrix load error:', err);
       }
+    };
+    loadMatrix();
+    return () => {
+      cancelled = true;
+    };
+  }, [pets]);
+
+  useEffect(() => {
+    if (!effectivePetId) return;
+    let cancelled = false;
+    const loadTargetLogs = async () => {
+      try {
+        const [medRes, vacRes] = await Promise.all([
+          fetch(`https://taskforcebruno.onrender.com/api/medical/${encodeURIComponent(effectivePetId)}/`),
+          fetch(`https://taskforcebruno.onrender.com/api/vaccinations/${encodeURIComponent(effectivePetId)}/`)
+        ]);
+        if (!cancelled) {
+          if (medRes.ok) {
+            const medData = await medRes.json();
+            setMedicalLogs(Array.isArray(medData) ? medData : []);
+          }
+          if (vacRes.ok) {
+            const vacData = await vacRes.json();
+            setVaccineLogs(Array.isArray(vacData) ? vacData : []);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching clinical history:', err);
+      }
+    };
+    loadTargetLogs();
+    return () => {
+      cancelled = true;
+    };
+  }, [effectivePetId]);
+
+  const handleSelectPatient = (nextId) => {
+    setSelectedMedicalPetId(nextId);
+    setFormMessage({ target: '', type: '', text: '' });
+    const current = pets.find(p => p.pet_id === nextId);
+    if (current && current.weight) {
+      const cleanWeight = String(current.weight).replace(/[^\d.]/g, '');
+      setMedWeight(cleanWeight);
+      setVacWeight(cleanWeight);
+    } else {
+      setMedWeight('');
+      setVacWeight('');
     }
-  }, [selectedMedicalPetId]);
+  };
 
   const handleAddMedicalRecord = async (e) => {
     e.preventDefault();
-    if (!clinicalNotes.trim()) return;
+    if (submittingMed || !clinicalNotes.trim() || !effectivePetId) return;
 
     const isBiteOrScratch = medType === 'Bite Incident' || medType === 'Scratch Incident' || medType.includes('Bite') || medType.includes('Scratch');
-    let computedQuarantineExpiry = null;
-    if (isBiteOrScratch) {
-      const baseDate = medDate ? new Date(medDate) : new Date();
-      const expiry = new Date(baseDate.getTime() + 14 * 24 * 60 * 60 * 1000);
-      computedQuarantineExpiry = expiry.toISOString();
-    }
+    const computedExpiryDateStr = isBiteOrScratch ? computeQuarantineReleaseDate(medDate) : null;
 
     // Build realistic veterinary notes string combining clinical parameters
     let compiledNotes = clinicalNotes.trim();
@@ -184,7 +272,7 @@ export default function MedicalLogs({ pets = [] }) {
       notes: compiledNotes,
       log_date: medDate,
       medication_prescribed: medPrescription.trim() || 'None / Supportive Care',
-      next_followup_date: medFollowup || (computedQuarantineExpiry ? computedQuarantineExpiry.split('T')[0] : null),
+      next_followup_date: medFollowup || computedExpiryDateStr || null,
       weight_at_log: medWeight ? `${medWeight} kg` : 'N/A',
       veterinarian: medVet.trim() || 'MDC Attending Clinician'
     };
@@ -195,8 +283,9 @@ export default function MedicalLogs({ pets = [] }) {
       ...(savedSession?.access_token ? { 'Authorization': `Bearer ${savedSession.access_token}` } : {})
     };
 
+    setSubmittingMed(true);
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/medical/${selectedMedicalPetId}/`, {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/medical/${encodeURIComponent(effectivePetId)}/`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify(payload)
@@ -206,38 +295,26 @@ export default function MedicalLogs({ pets = [] }) {
         setMedPrescription('');
         setTemperature('');
         setFormMessage({ target: 'med', type: 'success', text: 'Clinical examination record committed to patient medical history.' });
-
-        // TC-MED-002: Update target pet profile to Quarantine Observation status in database
-        if (isBiteOrScratch && selectedMedicalPetId) {
-          try {
-            await fetch(`https://taskforcebruno.onrender.com/api/pets/${selectedMedicalPetId}/`, {
-              method: 'PUT',
-              headers: authHeaders,
-              body: JSON.stringify({
-                status: 'Quarantine / Rabies Observation',
-                current_conditions: `Under 14-day Rabies Observation (until ${computedQuarantineExpiry ? computedQuarantineExpiry.split('T')[0] : medFollowup})`
-              })
-            });
-          } catch (petErr) {
-            console.warn('Could not propagate quarantine status to pet profile:', petErr);
-          }
+        fetchMedicalLogsForTarget(effectivePetId);
+        if (isBiteOrScratch && onRefresh) {
+          onRefresh();
         }
-
-        fetchMedicalLogsForTarget(selectedMedicalPetId);
       } else if (res.status === 403) {
         setFormMessage({ target: 'med', type: 'error', text: 'Access Denied: You do not have permission to perform this action (MDC Personnel Only).' });
       } else {
         const errJson = await res.json().catch(() => ({}));
         setFormMessage({ target: 'med', type: 'error', text: errJson.detail || errJson.error || 'Unable to commit clinical record. Please verify entries.' });
       }
-    } catch (err) {
+    } catch {
       setFormMessage({ target: 'med', type: 'error', text: 'Network communication failure.' });
+    } finally {
+      setSubmittingMed(false);
     }
   };
 
   const handleAddVaccine = async (e) => {
     e.preventDefault();
-    if (!vacName.trim()) return;
+    if (submittingVac || !vacName.trim() || !effectivePetId) return;
 
     const payload = {
       vaccine_name: vacName.trim(),
@@ -254,8 +331,9 @@ export default function MedicalLogs({ pets = [] }) {
       ...(savedSession?.access_token ? { 'Authorization': `Bearer ${savedSession.access_token}` } : {})
     };
 
+    setSubmittingVac(true);
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/vaccinations/${selectedMedicalPetId}/`, {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/vaccinations/${encodeURIComponent(effectivePetId)}/`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify(payload)
@@ -266,25 +344,29 @@ export default function MedicalLogs({ pets = [] }) {
         setVacLot('');
         setVacAdminBy('');
         setFormMessage({ target: 'vac', type: 'success', text: 'Immunization certificate successfully registered.' });
-        fetchMedicalLogsForTarget(selectedMedicalPetId);
+        fetchMedicalLogsForTarget(effectivePetId);
         fetchAllVaccinations();
+        if (onRefresh) onRefresh();
       } else if (res.status === 403) {
         setFormMessage({ target: 'vac', type: 'error', text: 'Access Denied: You do not have permission to perform this action (MDC Personnel Only).' });
       } else {
         const errJson = await res.json().catch(() => ({}));
         setFormMessage({ target: 'vac', type: 'error', text: errJson.detail || errJson.error || 'Unable to record immunization certificate.' });
       }
-    } catch (err) {
+    } catch {
       setFormMessage({ target: 'vac', type: 'error', text: 'Network communication failure.' });
+    } finally {
+      setSubmittingVac(false);
     }
   };
 
-  // Helper to evaluate vaccine due status
+  // Helper to evaluate vaccine due status using local date parsing
   const getVaccineDueBadge = (dueDateStr) => {
-    if (!dueDateStr) return null;
+    const due = parseLocalDate(dueDateStr);
+    if (!due) return null;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const due = new Date(dueDateStr);
+    due.setHours(0, 0, 0, 0);
     const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
 
     if (diffDays < 0) {
@@ -341,18 +423,22 @@ export default function MedicalLogs({ pets = [] }) {
     let minDays = Infinity;
     let rabiesDays = null;
     if (latestRabies && latestRabies.next_due_date) {
-      const d = new Date(latestRabies.next_due_date);
-      d.setHours(0, 0, 0, 0);
-      rabiesDays = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      if (rabiesDays < minDays) minDays = rabiesDays;
+      const d = parseLocalDate(latestRabies.next_due_date);
+      if (d) {
+        d.setHours(0, 0, 0, 0);
+        rabiesDays = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        if (rabiesDays < minDays) minDays = rabiesDays;
+      }
     }
 
     let coreDays = null;
     if (latestCore && latestCore.next_due_date) {
-      const d = new Date(latestCore.next_due_date);
-      d.setHours(0, 0, 0, 0);
-      coreDays = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      if (coreDays < minDays) minDays = coreDays;
+      const d = parseLocalDate(latestCore.next_due_date);
+      if (d) {
+        d.setHours(0, 0, 0, 0);
+        coreDays = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        if (coreDays < minDays) minDays = coreDays;
+      }
     }
 
     if (minDays === Infinity) {
@@ -407,10 +493,10 @@ export default function MedicalLogs({ pets = [] }) {
   };
 
   const jumpToInoculatePet = (pet, targetPresetName) => {
-    setSelectedMedicalPetId(pet.pet_id);
+    handleSelectPatient(pet.pet_id);
     setWorkspaceView('patient');
-    const preset = vaccinePresets.find(p => p.label.toLowerCase().includes(targetPresetName?.toLowerCase() || 'rabies')) || vaccinePresets[0];
-    applyVaccinePreset(preset);
+    const preset = VACCINE_PRESETS.find(p => p.label.toLowerCase().includes(targetPresetName?.toLowerCase() || 'rabies')) || VACCINE_PRESETS[0];
+    applyVaccinePreset(preset, pet);
     setTimeout(() => {
       const el = document.getElementById('vaccine-registration-form');
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -585,8 +671,8 @@ export default function MedicalLogs({ pets = [] }) {
               <span className="text-xs text-slate-600 font-medium">Switching loads complete history</span>
             </div>
             <select
-              value={selectedMedicalPetId}
-              onChange={(e) => setSelectedMedicalPetId(e.target.value)}
+              value={effectivePetId}
+              onChange={(e) => handleSelectPatient(e.target.value)}
               className="px-4 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded-xl font-medium text-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-[#5C0612]/20 shadow-sm transition-all"
             >
               {pets.map(p => (
@@ -702,7 +788,7 @@ export default function MedicalLogs({ pets = [] }) {
                     type="text"
                     required
                     value={medDate}
-                    onChange={(e) => setMedDate(e.target.value)}
+                    onChange={(e) => handleMedDateChange(e.target.value)}
                     placeholder="YYYY-MM-DD or 2026-10-01 09:30 AM"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-mono text-xs text-slate-800"
                   />
@@ -794,7 +880,6 @@ export default function MedicalLogs({ pets = [] }) {
                       >
                         <option value="Bite Incident">Bite — Human Skin Contact</option>
                         <option value="Scratch Incident">Scratch — Human Skin Contact</option>
-                        <option value="Bite Incident">Bite Incident (Other)</option>
                       </select>
                     </div>
 
@@ -904,12 +989,13 @@ export default function MedicalLogs({ pets = [] }) {
               <div className="pt-2 flex justify-end">
                 <button
                   type="submit"
-                  className="px-6 py-2.5 bg-[#5C0612] hover:bg-[#42040B] text-white font-bold rounded-xl border-b-2 border-[#D4AF37] shadow-sm transition-all text-xs uppercase tracking-wider flex items-center gap-2"
+                  disabled={submittingMed || !effectivePetId}
+                  className="px-6 py-2.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-50 text-white font-bold rounded-xl border-b-2 border-[#D4AF37] shadow-sm transition-all text-xs uppercase tracking-wider flex items-center gap-2"
                 >
                   <svg className="w-4 h-4 text-[#D4AF37]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                   </svg>
-                  Commit Clinical Record
+                  {submittingMed ? 'Saving Record...' : 'Commit Clinical Record'}
                 </button>
               </div>
 
@@ -1059,7 +1145,7 @@ export default function MedicalLogs({ pets = [] }) {
                 Quick Biological Presets
               </span>
               <div className="flex flex-wrap gap-1.5">
-                {vaccinePresets.map((preset) => (
+                {VACCINE_PRESETS.map((preset) => (
                   <button
                     key={preset.label}
                     type="button"
@@ -1168,12 +1254,13 @@ export default function MedicalLogs({ pets = [] }) {
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-slate-900 hover:bg-black text-white font-bold rounded-xl shadow-sm transition-all text-xs uppercase tracking-wider flex items-center justify-center gap-2"
+                disabled={submittingVac || !effectivePetId}
+                className="w-full py-2.5 bg-slate-900 hover:bg-black disabled:opacity-50 text-white font-bold rounded-xl shadow-sm transition-all text-xs uppercase tracking-wider flex items-center justify-center gap-2"
               >
                 <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
-                Register Immunization Dose
+                {submittingVac ? 'Registering Dose...' : 'Register Immunization Dose'}
               </button>
             </form>
           </div>
@@ -1195,9 +1282,9 @@ export default function MedicalLogs({ pets = [] }) {
               </div>
             ) : (
               <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                {vaccineLogs.map((vac) => (
+                {vaccineLogs.map((vac, idx) => (
                   <div
-                    key={vac.log_id}
+                    key={vac.log_id || vac.vaccine_id || vac.id || idx}
                     className="p-3.5 bg-slate-50/70 border border-slate-200/80 rounded-2xl hover:bg-white transition-all space-y-2 shadow-sm"
                   >
                     <div className="flex justify-between items-start gap-2">

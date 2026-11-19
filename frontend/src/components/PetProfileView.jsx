@@ -1,5 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import EmergencyProtocolModal from './EmergencyProtocolModal';
+
+function parseLocalDate(dateStr) {
+  if (!dateStr) return null;
+  const parts = String(dateStr).split('T')[0].split('-').map(Number);
+  if (parts.length === 3 && parts.every(n => !Number.isNaN(n))) {
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+  const fallback = new Date(dateStr);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
 
 export default function PetProfileView({ petId, onBackToScanner }) {
   const [petData, setPetData] = useState(null);
@@ -7,33 +17,46 @@ export default function PetProfileView({ petId, onBackToScanner }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     if (!petId) return;
-    setLoading(true);
-    setError('');
+    let cancelled = false;
 
-    // Fetch animal metadata
-    fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(petId)}/`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Animal record for ID "${petId}" was not found.`);
-        return res.json();
-      })
-      .then((data) => {
-        setPetData(data);
-        setLoading(false);
-      })
-      .catch((err) => {
+    const loadProfile = async () => {
+      try {
+        const [petRes, vacRes] = await Promise.all([
+          fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(petId)}/`),
+          fetch(`https://taskforcebruno.onrender.com/api/vaccinations/${encodeURIComponent(petId)}/`).catch(() => null)
+        ]);
+
+        if (!petRes.ok) {
+          throw new Error(`Animal record for ID "${petId}" was not found.`);
+        }
+        const data = await petRes.json();
+        const vacData = vacRes && vacRes.ok ? await vacRes.json().catch(() => []) : [];
+
+        if (!cancelled) {
+          setPetData(data);
+          setVaccinations(Array.isArray(vacData) ? vacData : []);
+          setError('');
+          setNowMs(Date.now());
+          setLoading(false);
+        }
+      } catch (err) {
         console.error('Error loading pet profile:', err);
-        setError(err.message || 'Unable to connect to campus registry.');
-        setLoading(false);
-      });
+        if (!cancelled) {
+          setPetData(null);
+          setError(err.message || 'Unable to connect to campus registry.');
+          setLoading(false);
+        }
+      }
+    };
 
-    // Fetch vaccination ledger for booster tracking
-    fetch(`https://taskforcebruno.onrender.com/api/vaccinations/${encodeURIComponent(petId)}/`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setVaccinations(Array.isArray(data) ? data : []))
-      .catch(() => setVaccinations([]));
+    loadProfile();
+    return () => {
+      cancelled = true;
+    };
   }, [petId]);
 
   const isCampus = (pet) => {
@@ -95,10 +118,15 @@ export default function PetProfileView({ petId, onBackToScanner }) {
   if (latestRabies && latestRabies.next_due_date) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const due = new Date(latestRabies.next_due_date);
-    due.setHours(0, 0, 0, 0);
-    rabiesDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+    const due = parseLocalDate(latestRabies.next_due_date);
+    if (due) {
+      due.setHours(0, 0, 0, 0);
+      rabiesDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+    }
   }
+
+  const expiryMs = petData.quarantine_expiry_date ? new Date(petData.quarantine_expiry_date).getTime() : NaN;
+  const hasValidExpiry = !Number.isNaN(expiryMs);
 
   return (
     <div className="w-full max-w-4xl mx-auto py-2 px-2 sm:px-4 animate-fade-in text-slate-800 space-y-5 text-left">
@@ -225,10 +253,10 @@ export default function PetProfileView({ petId, onBackToScanner }) {
                       </svg>
                       Quarantine / Rabies Observation (RA 9482)
                     </div>
-                    {petData.quarantine_expiry_date && (
+                    {hasValidExpiry && (
                       <span className="px-2 py-0.5 bg-rose-200 text-rose-900 rounded-full font-mono text-[10px] font-bold">
                         {(() => {
-                          const diff = new Date(petData.quarantine_expiry_date).getTime() - Date.now();
+                          const diff = expiryMs - nowMs;
                           if (diff <= 0) return 'Observation Completed';
                           const days = Math.floor(diff / (1000 * 60 * 60 * 24));
                           const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
@@ -240,9 +268,9 @@ export default function PetProfileView({ petId, onBackToScanner }) {
                   <p className="text-[11px] leading-relaxed text-rose-700">
                     This animal is currently under temporary 14-day observation. Please avoid direct handling. Report any concerns to MDC / Security.
                   </p>
-                  {petData.quarantine_expiry_date && (
+                  {hasValidExpiry && (
                     <div className="text-[10px] font-mono text-rose-700 bg-rose-100/60 px-2.5 py-1 rounded-lg">
-                      Quarantine Release Date: <strong>{new Date(petData.quarantine_expiry_date).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true })}</strong>
+                      Quarantine Release Date: <strong>{new Date(expiryMs).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true })}</strong>
                     </div>
                   )}
                 </div>

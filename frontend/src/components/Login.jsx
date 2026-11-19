@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import CollarQRScanner from './CollarQRScanner';
 
 export default function Login({ onLoginSuccess, togglePage, onScanCollar }) {
@@ -37,7 +37,7 @@ export default function Login({ onLoginSuccess, togglePage, onScanCollar }) {
       } else {
         setMessage({ type: 'error', text: data.error || 'Authentication failed. Please verify credentials.' });
       }
-    } catch (err) {
+    } catch {
       setMessage({ type: 'error', text: 'Connection error: Unable to reach authentication server. Please check your internet.' });
     } finally {
       setIsLoading(false);

@@ -1,12 +1,20 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function PostAnnouncement({ session }) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
-  const [statusMsg, setStatusMsg] = useState('');
+  const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview && imagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -20,7 +28,7 @@ export default function PostAnnouncement({ session }) {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
 
-    setStatusMsg('');
+    setStatusMsg({ type: '', text: '' });
     setLoading(true);
     
     const uploadFormPayload = new FormData();
@@ -39,18 +47,19 @@ export default function PostAnnouncement({ session }) {
       });
       
       if (res.ok) {
-        setStatusMsg('Official bulletin broadcasted successfully to the community newsfeed!');
+        setStatusMsg({ type: 'success', text: 'Official bulletin broadcasted successfully to the community newsfeed!' });
         setTitle('');
         setContent('');
         setImageFile(null);
         setImagePreview(null);
         if (e.target) e.target.reset(); 
       } else {
-        setStatusMsg('Server rejected announcement payload structure.');
+        const errData = await res.json().catch(() => ({}));
+        setStatusMsg({ type: 'error', text: errData.error || 'Server rejected announcement payload structure.' });
       }
     } catch (err) {
       console.error(err);
-      setStatusMsg('Network connection failure with announcement server.');
+      setStatusMsg({ type: 'error', text: 'Network connection failure with announcement server.' });
     } finally {
       setLoading(false);
     }
@@ -74,9 +83,13 @@ export default function PostAnnouncement({ session }) {
         </span>
       </div>
 
-      {statusMsg && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl text-center font-semibold text-xs shadow-sm">
-          {statusMsg}
+      {statusMsg.text && (
+        <div className={`p-4 border rounded-2xl text-center font-semibold text-xs shadow-sm ${
+          statusMsg.type === 'error'
+            ? 'bg-rose-50 border-rose-200 text-rose-900'
+            : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+        }`}>
+          {statusMsg.text}
         </div>
       )}
 

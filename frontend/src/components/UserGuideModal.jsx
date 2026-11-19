@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 export default function UserGuideModal({ isOpen, onClose }) {
   const [activeStep, setActiveStep] = useState(0);

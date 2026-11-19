@@ -1,8 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+
+function resolveApplicantFullName(session) {
+  let name = session?.full_name || '';
+  if (!name && (session?.first_name || session?.last_name)) {
+    name = `${session.first_name || ''} ${session.last_name || ''}`.trim();
+  }
+  if (session?.email) {
+    try {
+      const savedProf = JSON.parse(localStorage.getItem(`tfb_user_profile_${session.email}`) || '{}');
+      if (!name && savedProf.full_name) name = savedProf.full_name;
+      if (!name && savedProf.first_name) name = `${savedProf.first_name} ${savedProf.last_name || ''}`.trim();
+    } catch {
+      // Ignore malformed profile storage
+    }
+
+    if (!name) {
+      try {
+        const pastVols = JSON.parse(localStorage.getItem('tfb_volunteer_applications') || '[]');
+        const match = pastVols.find(v => (v.email || '').toLowerCase() === session.email.toLowerCase() && v.full_name);
+        if (match) name = match.full_name;
+      } catch {
+        // Ignore malformed volunteer storage
+      }
+    }
+
+    if (!name) {
+      const userPart = session.email.split('@')[0];
+      const segments = userPart.split('.').map(seg => seg.charAt(0).toUpperCase() + seg.slice(1));
+      name = segments.join(' ').trim();
+    }
+  }
+  return name;
+}
+
+const DEFAULT_BUDGET = 'Moderate (PHP 2,000 - 5,000)';
 
 export default function AdoptionGallery({ session }) {
   const [pets, setPets] = useState([]);
-  const [filteredPets, setFilteredPets] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   
@@ -16,46 +50,17 @@ export default function AdoptionGallery({ session }) {
 
   // Popup overlay configurations
   const [showApplyForm, setShowApplyForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
   // Custom modal state trigger for cancellations
   const [cancelModal, setCancelModal] = useState({ isOpen: false, appId: null });
 
-  const getInitialFullName = () => {
-    let name = session?.full_name || '';
-    if (!name && (session?.first_name || session?.last_name)) {
-      name = `${session.first_name || ''} ${session.last_name || ''}`.trim();
-    }
-    if (session?.email) {
-      try {
-        const savedProf = JSON.parse(localStorage.getItem(`tfb_user_profile_${session.email}`) || '{}');
-        if (!name && savedProf.full_name) name = savedProf.full_name;
-        if (!name && savedProf.first_name) name = `${savedProf.first_name} ${savedProf.last_name || ''}`.trim();
-      } catch {}
+  const verifiedFullName = resolveApplicantFullName(session);
 
-      if (!name) {
-        try {
-          const pastVols = JSON.parse(localStorage.getItem('tfb_volunteer_applications') || '[]');
-          const match = pastVols.find(v => (v.email || '').toLowerCase() === session.email.toLowerCase() && v.full_name);
-          if (match) name = match.full_name;
-        } catch {}
-      }
-
-      if (!name) {
-        const userPart = session.email.split('@')[0];
-        const segments = userPart.split('.').flatMap(seg => {
-          if (seg.toLowerCase() === 'vinceclark') return ['Vince', 'Clark'];
-          return [seg.charAt(0).toUpperCase() + seg.slice(1)];
-        });
-        name = segments.join(' ').trim();
-      }
-    }
-    return name;
-  };
-
-  const [applicationForm, setApplicationForm] = useState({
-    fullName: getInitialFullName(), 
+  const [applicationForm, setApplicationForm] = useState(() => ({
+    fullName: verifiedFullName, 
     email: session?.email || '', 
     contactNum: '',
     address: '',
@@ -63,15 +68,16 @@ export default function AdoptionGallery({ session }) {
     housingType: 'Owned House',
     hasSecureFence: false,
     householdAgreement: false,
-    petCareBudget: 'Moderate',
+    petCareBudget: DEFAULT_BUDGET,
     planIfMoving: ''
-  });
+  }));
 
-  const fetchAvailablePlacements = () => {
+  const fetchAvailablePlacements = useCallback(async () => {
     setLoading(true);
-    fetch('https://taskforcebruno.onrender.com/api/pets/')
-      .then((res) => res.json())
-      .then((data) => {
+    try {
+      const res = await fetch('https://taskforcebruno.onrender.com/api/pets/');
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) {
         const adoptionPlacements = data.filter(p => {
           const type = (p.pet_type || '').toLowerCase();
           const status = (p.adoption_status || '').toLowerCase();
@@ -80,43 +86,94 @@ export default function AdoptionGallery({ session }) {
           return !isCampus && !isAdopted && (status === 'available' || type.includes('adoption') || p.pet_id?.startsWith('STRAY-'));
         });
         setPets(adoptionPlacements);
-        setFilteredPets(adoptionPlacements);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error('Adoption fetch error:', err);
-        setLoading(false);
-      });
-  };
+      } else {
+        setPets([]);
+      }
+    } catch (err) {
+      console.error('Adoption fetch error:', err);
+      setPets([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const fetchMyTrackingLogs = () => {
-    if (!session?.email) return;
+  const sessionEmail = session?.email || '';
+
+  const fetchMyTrackingLogs = useCallback(async () => {
+    if (!sessionEmail) {
+      setLoadingTracking(false);
+      return;
+    }
     setLoadingTracking(true);
-    fetch(`https://taskforcebruno.onrender.com/api/pets/applications/?email=${encodeURIComponent(session.email)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setMyApplications(Array.isArray(data) ? data : []);
-        setLoadingTracking(false);
-      })
-      .catch((err) => {
-        console.error('Tracking log error:', err);
-        setMyApplications([]); 
-        setLoadingTracking(false);
-      });
-  };
+    try {
+      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/applications/?email=${encodeURIComponent(sessionEmail)}`);
+      const data = await res.json();
+      setMyApplications(res.ok && Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Tracking log error:', err);
+      setMyApplications([]);
+    } finally {
+      setLoadingTracking(false);
+    }
+  }, [sessionEmail]);
 
   useEffect(() => {
-    fetchAvailablePlacements();
-    fetchMyTrackingLogs();
-  }, [session]);
+    let cancelled = false;
+    const init = async () => {
+      try {
+        const petsRes = await fetch('https://taskforcebruno.onrender.com/api/pets/');
+        const petsData = await petsRes.json();
+        if (!cancelled) {
+          if (petsRes.ok && Array.isArray(petsData)) {
+            const adoptionPlacements = petsData.filter(p => {
+              const type = (p.pet_type || '').toLowerCase();
+              const status = (p.adoption_status || '').toLowerCase();
+              const isCampus = type.includes('campus') || type.includes('resident') || status.includes('campus') || status === 'not for adoption';
+              const isAdopted = status === 'adopted';
+              return !isCampus && !isAdopted && (status === 'available' || type.includes('adoption') || p.pet_id?.startsWith('STRAY-'));
+            });
+            setPets(adoptionPlacements);
+          }
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Adoption fetch error:', err);
+        if (!cancelled) setLoading(false);
+      }
 
-  useEffect(() => {
+      if (session?.email) {
+        try {
+          const appsRes = await fetch(`https://taskforcebruno.onrender.com/api/pets/applications/?email=${encodeURIComponent(session.email)}`);
+          const appsData = await appsRes.json();
+          if (!cancelled) {
+            setMyApplications(appsRes.ok && Array.isArray(appsData) ? appsData : []);
+            setLoadingTracking(false);
+          }
+        } catch (err) {
+          console.error('Tracking log error:', err);
+          if (!cancelled) {
+            setMyApplications([]);
+            setLoadingTracking(false);
+          }
+        }
+      } else if (!cancelled) {
+        setLoadingTracking(false);
+      }
+    };
+    init();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.email]);
+
+  const filteredPets = useMemo(() => {
     let result = pets;
     if (speciesFilter !== 'All') result = result.filter(p => p.species === speciesFilter);
     if (sizeFilter !== 'All') result = result.filter(p => p.size === sizeFilter);
-    setFilteredPets(result);
-    setCurrentIndex(0); 
+    return result;
   }, [speciesFilter, sizeFilter, pets]);
+
+  const safeIndex = filteredPets.length > 0 ? Math.min(currentIndex, filteredPets.length - 1) : 0;
 
   const handleNextCard = () => {
     if (filteredPets.length === 0) return;
@@ -130,16 +187,23 @@ export default function AdoptionGallery({ session }) {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setApplicationForm({
-      ...applicationForm,
+    setApplicationForm(prev => ({
+      ...prev,
       [name]: type === 'checkbox' ? checked : value
-    });
+    }));
   };
 
   const handleApplySubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setSuccessMessage('');
     setErrorMessage('');
+
+    const targetPet = filteredPets[safeIndex];
+    if (!targetPet) {
+      setErrorMessage('No companion is currently selected.');
+      return;
+    }
 
     const fullNameClean = (applicationForm.fullName || '').trim();
     const contactNumClean = (applicationForm.contactNum || '').trim();
@@ -173,9 +237,9 @@ export default function AdoptionGallery({ session }) {
     }
 
     const payload = {
-      pet_id: filteredPets[currentIndex].pet_id,
+      pet_id: targetPet.pet_id,
       full_name: fullNameClean, 
-      email: applicationForm.email, 
+      email: applicationForm.email || session?.email || '', 
       contact_number: contactNumClean,
       address: addressClean,
       experience_level: applicationForm.experience,
@@ -186,6 +250,7 @@ export default function AdoptionGallery({ session }) {
       plan_if_moving: planIfMovingClean
     };
 
+    setIsSubmitting(true);
     try {
       const res = await fetch('https://taskforcebruno.onrender.com/api/pets/applications/', {
         method: 'POST',
@@ -194,25 +259,28 @@ export default function AdoptionGallery({ session }) {
       });
 
       if (res.ok) {
-        setSuccessMessage(`Application for ${filteredPets[currentIndex].name} has been submitted successfully.`);
+        setSuccessMessage(`Application for ${targetPet.name} has been submitted successfully.`);
         setTimeout(() => {
           setSuccessMessage('');
           setShowApplyForm(false);
           setApplicationForm({
-            fullName: '', 
+            fullName: resolveApplicantFullName(session), 
             email: session?.email || '', 
             contactNum: '', address: '', experience: 'Beginner',
             housingType: 'Owned House', hasSecureFence: false, householdAgreement: false,
-            petCareBudget: 'Moderate', planIfMoving: ''
+            petCareBudget: DEFAULT_BUDGET, planIfMoving: ''
           });
           fetchAvailablePlacements();
           fetchMyTrackingLogs(); 
         }, 2200);
       } else {
-        setErrorMessage('Server could not process your application submission. Please verify all fields.');
+        const errData = await res.json().catch(() => ({}));
+        setErrorMessage(errData.error || 'Server could not process your application submission. Please verify all fields.');
       }
-    } catch (err) {
+    } catch {
       setErrorMessage('Network error connecting to server. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -252,8 +320,8 @@ export default function AdoptionGallery({ session }) {
     );
   }
 
-  const currentPet = filteredPets[currentIndex];
-  const progressPercent = filteredPets.length > 0 ? ((currentIndex + 1) / filteredPets.length) * 100 : 0;
+  const currentPet = filteredPets[safeIndex];
+  const progressPercent = filteredPets.length > 0 ? ((safeIndex + 1) / filteredPets.length) * 100 : 0;
 
   return (
     <div className="w-full max-w-6xl xl:max-w-7xl flex flex-col gap-6 animate-fade-in text-xs text-slate-700 mx-auto px-2 sm:px-4 py-2">
@@ -311,7 +379,7 @@ export default function AdoptionGallery({ session }) {
                     <button
                       key={sp}
                       type="button"
-                      onClick={() => setSpeciesFilter(sp)}
+                      onClick={() => { setSpeciesFilter(sp); setCurrentIndex(0); }}
                       className={`flex-1 py-1.5 px-2 rounded-lg transition-all font-semibold text-xs text-center ${
                         speciesFilter === sp
                           ? 'bg-[#5C0612] text-white shadow-sm'
@@ -334,7 +402,7 @@ export default function AdoptionGallery({ session }) {
                     <button
                       key={sz}
                       type="button"
-                      onClick={() => setSizeFilter(sz)}
+                      onClick={() => { setSizeFilter(sz); setCurrentIndex(0); }}
                       className={`flex-1 py-1.5 px-1 rounded-lg transition-all font-semibold text-xs text-center truncate ${
                         sizeFilter === sz
                           ? 'bg-[#5C0612] text-white shadow-sm'
@@ -447,7 +515,7 @@ export default function AdoptionGallery({ session }) {
                 </button>
                 
                 <span className="font-mono text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Companion {currentIndex + 1} of {filteredPets.length}
+                  Companion {safeIndex + 1} of {filteredPets.length}
                 </span>
 
                 <button
@@ -529,7 +597,7 @@ export default function AdoptionGallery({ session }) {
                             </span>
                           </div>
                           <p className="text-slate-500 text-[11px]">
-                            Submitted: {new Date(app.submitted_at).toLocaleDateString()}
+                            Submitted: {app.submitted_at && !Number.isNaN(new Date(app.submitted_at).getTime()) ? new Date(app.submitted_at).toLocaleDateString() : 'Recently'}
                           </p>
                           <p className="text-slate-600 truncate text-[11px]">
                             Address: <span className="font-medium text-slate-800">{app.address}</span>
@@ -586,7 +654,7 @@ export default function AdoptionGallery({ session }) {
               <div>
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">Adoption Inquiry Application</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Submitting inquiry for: <strong className="text-[#5C0612]">{filteredPets[currentIndex].name}</strong> ({filteredPets[currentIndex].pet_id})
+                  Submitting inquiry for: <strong className="text-[#5C0612]">{currentPet.name}</strong> ({currentPet.pet_id})
                 </p>
               </div>
               <button
@@ -632,11 +700,14 @@ export default function AdoptionGallery({ session }) {
                       <input
                         type="text"
                         name="fullName"
-                        readOnly
+                        readOnly={Boolean(verifiedFullName)}
                         required
                         value={applicationForm.fullName}
+                        onChange={handleInputChange}
                         placeholder="e.g. Maria Santos"
-                        className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-slate-700 font-semibold text-xs cursor-not-allowed select-none focus:outline-none"
+                        className={`w-full px-3 py-2 border border-slate-200 rounded-xl text-slate-700 font-semibold text-xs focus:outline-none ${
+                          verifiedFullName ? 'bg-slate-100 cursor-not-allowed select-none' : 'bg-white focus:ring-2 focus:ring-[#5C0612]/20'
+                        }`}
                       />
                     </div>
                     <div>
@@ -785,9 +856,10 @@ export default function AdoptionGallery({ session }) {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 bg-[#5C0612] hover:bg-[#720817] text-white font-bold border-b-2 border-[#D4AF37] rounded-xl shadow-md uppercase tracking-wider text-xs transition-all"
+                    disabled={isSubmitting}
+                    className="flex-1 py-2.5 bg-[#5C0612] hover:bg-[#720817] disabled:opacity-50 text-white font-bold border-b-2 border-[#D4AF37] rounded-xl shadow-md uppercase tracking-wider text-xs transition-all"
                   >
-                    Submit Application
+                    {isSubmitting ? 'Submitting...' : 'Submit Application'}
                   </button>
                 </div>
               </form>

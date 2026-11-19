@@ -1,69 +1,72 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 
-export default function SupportAndVolunteers({ session }) {
-  const resolveUserIdentity = () => {
-    let name = session?.full_name || '';
-    if (!name && (session?.first_name || session?.last_name)) {
-      name = `${session.first_name || ''} ${session.last_name || ''}`.trim();
+const ID_PATTERN = /^\d{2}-\d{4}-\d{3}$/;
+const PHONE_PATTERN = /^(09|\+639)\d{9}$/;
+
+function resolveUserIdentity(session) {
+  let name = session?.full_name || '';
+  if (!name && (session?.first_name || session?.last_name)) {
+    name = `${session.first_name || ''} ${session.last_name || ''}`.trim();
+  }
+  
+  let studentId = session?.student_id || session?.custom_id || session?.user_id || '';
+  if (studentId && !ID_PATTERN.test(studentId)) {
+    studentId = '';
+  }
+
+  const emailKey = (session?.email || '').trim().toLowerCase();
+  if (!studentId && emailKey) {
+    const storedForEmail = localStorage.getItem(`tfb_student_id_${emailKey}`) || '';
+    if (ID_PATTERN.test(storedForEmail)) {
+      studentId = storedForEmail;
     }
-    
-    let studentId = session?.student_id || session?.custom_id || session?.user_id || session?.id || '';
+  }
 
-    // Check saved local profile for this email or direct student id keys
-    const emailKey = session?.email || '';
-    if (!studentId) {
-      studentId = localStorage.getItem('tfb_student_id') || 
-                  (emailKey ? localStorage.getItem(`tfb_student_id_${emailKey}`) : '') || '';
+  if (emailKey) {
+    try {
+      const savedProf = JSON.parse(localStorage.getItem(`tfb_user_profile_${emailKey}`) || '{}');
+      if (!name && savedProf.full_name) name = savedProf.full_name;
+      if (!name && savedProf.first_name) name = `${savedProf.first_name} ${savedProf.last_name || ''}`.trim();
+      const profId = savedProf.student_id || savedProf.custom_id || savedProf.id || '';
+      if (!studentId && ID_PATTERN.test(profId)) {
+        studentId = profId;
+      }
+    } catch {
+      // Ignore malformed local profile JSON
     }
 
-    if (emailKey) {
+    // Only match past volunteer applications submitted by THIS EXACT email (never another student!)
+    if (!name || !studentId) {
       try {
-        const savedProf = JSON.parse(localStorage.getItem(`tfb_user_profile_${emailKey}`) || '{}');
-        if (!name && savedProf.full_name) name = savedProf.full_name;
-        if (!name && savedProf.first_name) name = `${savedProf.first_name} ${savedProf.last_name || ''}`.trim();
-        if (!studentId && (savedProf.id || savedProf.student_id || savedProf.custom_id)) {
-          studentId = savedProf.id || savedProf.student_id || savedProf.custom_id;
+        const pastVols = JSON.parse(localStorage.getItem('tfb_volunteer_applications') || '[]');
+        const match = pastVols.find(v => (v.email || '').trim().toLowerCase() === emailKey && (v.student_id || v.full_name));
+        if (match) {
+          if (!name && match.full_name) name = match.full_name;
+          if (!studentId && match.student_id && ID_PATTERN.test(match.student_id)) {
+            studentId = match.student_id;
+          }
         }
-      } catch {}
-
-      // Check existing volunteer applications submitted by this email or any valid student ID
-      if (!name || !studentId) {
-        try {
-          const pastVols = JSON.parse(localStorage.getItem('tfb_volunteer_applications') || '[]');
-          const match = pastVols.find(v => (v.email || '').toLowerCase() === emailKey.toLowerCase() && (v.student_id || v.full_name));
-          if (match) {
-            if (!name && match.full_name) name = match.full_name;
-            if (!studentId && match.student_id) studentId = match.student_id;
-          }
-          if (!studentId) {
-            const anyWithId = pastVols.find(v => v.student_id && /^\d{2}-\d{4}-\d{3}$/.test(v.student_id));
-            if (anyWithId) studentId = anyWithId.student_id;
-          }
-        } catch {}
+      } catch {
+        // Ignore malformed volunteer cache
       }
     }
+  }
 
-    // Default fallback for student account if still empty
-    if (!studentId && emailKey.toLowerCase() === 'vinceclark.lanticse@cit.edu') {
-      studentId = '22-4893-322';
-    }
+  if (!name && emailKey) {
+    const userPart = emailKey.split('@')[0];
+    const segments = userPart.split('.').map(seg => seg.charAt(0).toUpperCase() + seg.slice(1));
+    name = segments.join(' ').trim();
+  }
 
-    // Smart fallback formatting for CIT email handles (e.g., vinceclark.lanticse -> Vince Clark Lanticse)
-    if (!name && emailKey) {
-      const userPart = emailKey.split('@')[0];
-      const segments = userPart.split('.').flatMap(seg => {
-        if (seg.toLowerCase() === 'vinceclark') return ['Vince', 'Clark'];
-        return [seg.charAt(0).toUpperCase() + seg.slice(1)];
-      });
-      name = segments.join(' ').trim();
-    }
+  return { name, studentId };
+}
 
-    return { name, studentId };
-  };
+export default function SupportAndVolunteers({ session }) {
+  const initialIdentity = resolveUserIdentity(session);
+  const hasVerifiedName = Boolean(initialIdentity.name);
+  const hasVerifiedStudentId = ID_PATTERN.test(initialIdentity.studentId);
 
-  const initialIdentity = resolveUserIdentity();
-
-  const [volunteerForm, setVolunteerForm] = useState({
+  const [volunteerForm, setVolunteerForm] = useState(() => ({
     name: initialIdentity.name,
     studentId: initialIdentity.studentId,
     contactNum: '',
@@ -71,20 +74,20 @@ export default function SupportAndVolunteers({ session }) {
     role: 'Feeding Patrol',
     availability: '',
     notes: ''
-  });
-
-  // Sync when session or storage updates
-  useEffect(() => {
-    const resolved = resolveUserIdentity();
-    setVolunteerForm(prev => ({
-      ...prev,
-      name: prev.name || resolved.name,
-      studentId: prev.studentId || resolved.studentId
-    }));
-  }, [session]);
+  }));
 
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+
+  const handleStudentIdChange = (e) => {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 9) value = value.slice(0, 9);
+    let formatted = '';
+    if (value.length > 0) formatted += value.substring(0, 2);
+    if (value.length > 2) formatted += '-' + value.substring(2, 6);
+    if (value.length > 6) formatted += '-' + value.substring(6, 9);
+    setVolunteerForm(prev => ({ ...prev, studentId: formatted }));
+  };
 
   const WISHLIST_ITEMS = [
     { 
@@ -198,9 +201,6 @@ export default function SupportAndVolunteers({ session }) {
     }
   ];
 
-  const ID_PATTERN = /^\d{2}-\d{4}-\d{3}$/;
-  const PHONE_PATTERN = /^(09|\+639)\d{9}$/;
-
   const handleVolunteerSubmit = (e) => {
     e.preventDefault();
     setError('');
@@ -248,7 +248,9 @@ export default function SupportAndVolunteers({ session }) {
           program: trimmedProgram,
           email: session.email
         }));
-      } catch {}
+      } catch {
+        // Ignore storage quota errors
+      }
     }
 
     // Save in localStorage so staff reviewer can screen and approve
@@ -444,7 +446,7 @@ export default function SupportAndVolunteers({ session }) {
                 type="button"
                 onClick={() => {
                   setSubmitted(false);
-                  const resetId = resolveUserIdentity();
+                  const resetId = resolveUserIdentity(session);
                   setVolunteerForm({
                     name: resetId.name,
                     studentId: resetId.studentId,
@@ -482,11 +484,14 @@ export default function SupportAndVolunteers({ session }) {
                 </div>
                 <input
                   type="text"
-                  readOnly
+                  readOnly={hasVerifiedName}
                   required
                   placeholder="e.g. Juan Dela Cruz"
                   value={volunteerForm.name}
-                  className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-700 font-semibold text-xs cursor-not-allowed select-none focus:outline-none"
+                  onChange={(e) => setVolunteerForm(prev => ({ ...prev, name: e.target.value }))}
+                  className={`w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-slate-700 font-semibold text-xs focus:outline-none ${
+                    hasVerifiedName ? 'bg-slate-100 cursor-not-allowed select-none' : 'bg-slate-50 focus:bg-white'
+                  }`}
                 />
               </div>
 
@@ -496,20 +501,25 @@ export default function SupportAndVolunteers({ session }) {
                     <label className="block text-[10px] font-bold uppercase text-slate-600">
                       Student ID *
                     </label>
-                    <span className="text-[9px] font-mono text-emerald-700 font-semibold flex items-center gap-1">
-                      <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                      </svg>
-                      Verified
-                    </span>
+                    {hasVerifiedStudentId && (
+                      <span className="text-[9px] font-mono text-emerald-700 font-semibold flex items-center gap-1">
+                        <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                        </svg>
+                        Verified
+                      </span>
+                    )}
                   </div>
                   <input
                     type="text"
-                    readOnly
+                    readOnly={hasVerifiedStudentId}
                     required
                     placeholder="XX-XXXX-XXX"
                     value={volunteerForm.studentId}
-                    className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl font-mono text-slate-700 font-bold text-xs cursor-not-allowed select-none focus:outline-none"
+                    onChange={handleStudentIdChange}
+                    className={`w-full px-3.5 py-2.5 border border-slate-200 rounded-xl font-mono text-slate-700 font-bold text-xs focus:outline-none ${
+                      hasVerifiedStudentId ? 'bg-slate-100 cursor-not-allowed select-none' : 'bg-slate-50 focus:bg-white'
+                    }`}
                   />
                   <span className="text-[9px] text-slate-400 font-mono mt-0.5 block">Format: 22-4102-184</span>
                 </div>

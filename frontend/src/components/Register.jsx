@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 export default function Register({ togglePage }) {
   const [formData, setFormData] = useState({ id: '', first_name: '', last_name: '', email: '', password: '' });
@@ -31,6 +31,11 @@ export default function Register({ togglePage }) {
     const firstNameClean = (formData.first_name || '').trim();
     const lastNameClean = (formData.last_name || '').trim();
     const passwordClean = formData.password || '';
+
+    if (!firstNameClean || !lastNameClean) {
+      setMessage({ type: 'error', text: 'Both First Name and Last Name are required.' });
+      return;
+    }
 
     if (!idClean || !/^\d{2}-\d{4}-\d{3}$/.test(idClean)) {
       setMessage({ type: 'error', text: 'Institutional ID format mismatch. Must be XX-XXXX-XXX.' });
@@ -72,13 +77,15 @@ export default function Register({ togglePage }) {
             full_name: `${firstNameClean} ${lastNameClean}`.trim(),
             email: emailClean
           }));
-        } catch {}
+        } catch {
+          // Ignore storage quota errors
+        }
         setMessage({ type: 'success', text: data.message || 'Account initialized successfully! You may now sign in.' });
         setFormData({ id: '', first_name: '', last_name: '', email: '', password: '' });
       } else {
         setMessage({ type: 'error', text: data.error || 'Account creation failed. Please check inputs.' });
       }
-    } catch (err) {
+    } catch {
       setMessage({ type: 'error', text: 'Connection error: Unable to reach registration server. Please check your internet.' });
     } finally {
       setIsLoading(false);

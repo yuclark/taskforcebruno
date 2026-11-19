@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import QRScannerView from './QRScannerView';
 import PetProfileView from './PetProfileView';
 import SupplyLogistics from './SupplyLogistics';
