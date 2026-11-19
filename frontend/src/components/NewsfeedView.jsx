@@ -36,6 +36,7 @@ export default function NewsfeedView({ session }) {
   const [moderationError, setModerationError] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [feedFilter, setFeedFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedComments, setExpandedComments] = useState({});
 
@@ -320,9 +321,9 @@ export default function NewsfeedView({ session }) {
     );
   }
 
-  const totalCampusPetsCount = petsData.length > 0 
-    ? petsData.length 
-    : feedItems.filter(i => i.item_type === 'pet').length;
+  const roamingPetsCount = petsData.length > 0
+    ? petsData.filter(p => (p.adoption_status || '').toLowerCase() !== 'adopted').length
+    : feedItems.filter(i => i.item_type === 'pet' && (i.badge_text || '').toLowerCase() !== 'adopted').length;
 
   const petsAwaitingHomeCount = petsData.length > 0
     ? petsData.filter(p => {
@@ -341,12 +342,28 @@ export default function NewsfeedView({ session }) {
     : feedItems.filter(i => {
         if (i.item_type !== 'pet') return false;
         const badge = (i.badge_text || '').toLowerCase();
-        return badge === 'available' || badge.includes('adoption');
+        return badge === 'available' || badge === 'stray' || badge.includes('adoption');
       }).length;
 
   const sightingsCount = feedItems.filter(i => i.item_type === 'sighting').length;
+  const announcementsCount = feedItems.filter(i => i.item_type === 'announcement').length;
+  const petPostsCount = feedItems.filter(i => i.item_type === 'pet').length;
+  const urgentPostsCount = feedItems.filter(i =>
+    (i.badge_text || '').toLowerCase().includes('urgent') ||
+    (i.body || '').toLowerCase().includes('urgent emergency')
+  ).length;
 
   const filteredFeedItems = feedItems.filter(item => {
+    if (feedFilter === 'announcement' && item.item_type !== 'announcement') return false;
+    if (feedFilter === 'sighting' && item.item_type !== 'sighting') return false;
+    if (feedFilter === 'pet' && item.item_type !== 'pet') return false;
+    if (feedFilter === 'urgent') {
+      const isUrgent =
+        (item.badge_text || '').toLowerCase().includes('urgent') ||
+        (item.body || '').toLowerCase().includes('urgent emergency');
+      if (!isUrgent) return false;
+    }
+
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
     return (
@@ -385,14 +402,48 @@ export default function NewsfeedView({ session }) {
           {/* Quick Metrics Bar */}
           <div className="flex items-center justify-between bg-white px-4 py-3 rounded-2xl border border-slate-200/80 shadow-sm select-none shrink-0 mb-3">
             <span className="text-xs font-semibold text-slate-700 truncate">
-              {totalCampusPetsCount} registered pets on campus &bull; {petsAwaitingHomeCount} awaiting adoption
+              {roamingPetsCount} {roamingPetsCount === 1 ? 'pet' : 'pets'} roaming in the campus &bull; {petsAwaitingHomeCount} awaiting adoption
             </span>
             <span className="text-[10px] font-mono font-bold uppercase bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg border border-slate-200 shrink-0">
               Live Feed
             </span>
           </div>
 
-          {/* Search Input Bar (No emoji) */}
+          {/* Quick 1-Click Category Filter Buttons */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 shrink-0 mb-2.5 select-none">
+            {[
+              { key: 'all', label: `All (${feedItems.length})` },
+              { key: 'announcement', label: `Bulletins (${announcementsCount})` },
+              { key: 'sighting', label: `Sightings (${sightingsCount})` },
+              { key: 'pet', label: `Campus Pets (${petPostsCount})` },
+              { key: 'urgent', label: `Urgent (${urgentPostsCount})`, urgent: true },
+            ].map((tab) => {
+              const isActive = feedFilter === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => {
+                    setFeedFilter(tab.key);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-mono font-bold border transition-all whitespace-nowrap ${
+                    isActive
+                      ? tab.urgent
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                        : 'bg-[#5C0612] text-white border-[#5C0612] shadow-sm'
+                      : tab.urgent && urgentPostsCount > 0
+                      ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search Input Bar (Optional Keyword Search) */}
           <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-2.5 shrink-0 mb-3">
             <div className="text-slate-400 pl-2 select-none">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -406,7 +457,7 @@ export default function NewsfeedView({ session }) {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              placeholder="Filter announcements, sightings, and bulletins by keyword..."
+              placeholder="Search by keyword, pet name, or landmark (optional)..."
               className="w-full bg-transparent text-xs text-slate-800 focus:outline-none placeholder-slate-400 font-medium"
             />
             {searchQuery && (
@@ -788,9 +839,9 @@ export default function NewsfeedView({ session }) {
 
             <div className="grid grid-cols-3 gap-2 text-center select-none">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80">
-                <span className="text-[10px] font-mono text-slate-400 block font-bold">ANIMALS</span>
-                <span className="text-lg font-black text-slate-900 font-mono mt-0.5 block">{totalCampusPetsCount}</span>
-                <span className="text-[9px] text-slate-500">Registered</span>
+                <span className="text-[10px] font-mono text-slate-400 block font-bold">ROAMING</span>
+                <span className="text-lg font-black text-slate-900 font-mono mt-0.5 block">{roamingPetsCount}</span>
+                <span className="text-[9px] text-slate-500">On Campus</span>
               </div>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80">
