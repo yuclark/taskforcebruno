@@ -435,47 +435,54 @@ class PetListAPIView(APIView):
             res_data = supabase.table("pets").select("*").execute().data or []
             
             # Augment pets dynamically from medical_records & vaccination_logs (Single Source of Truth)
+            # Use select("*") and isolated try/except blocks so missing optional columns never abort enrichment.
+            logs_by_pet = {}
             try:
-                med_logs = supabase.table("medical_records").select("pet_id, record_type, log_date, next_followup_date, notes").execute().data or []
-                logs_by_pet = {}
+                med_logs = supabase.table("medical_records").select("*").execute().data or []
                 for m in med_logs:
                     pid = m.get("pet_id")
                     if pid:
                         logs_by_pet.setdefault(pid, []).append(m)
+            except Exception as med_err:
+                print(f"[Warning] Pet medical_records enrichment skipped: {med_err}")
 
-                vac_logs = supabase.table("vaccination_logs").select("pet_id, vaccine_name, administered_date, next_due_date, expiration_date").execute().data or []
-                vacs_by_pet = {}
+            vacs_by_pet = {}
+            vacs_loaded = False
+            try:
+                vac_logs = supabase.table("vaccination_logs").select("*").execute().data or []
+                vacs_loaded = True
                 for v in vac_logs:
                     pid = v.get("pet_id")
                     if pid:
                         vacs_by_pet.setdefault(pid, []).append(v)
+            except Exception as vac_err:
+                print(f"[Warning] Pet vaccination_logs enrichment skipped: {vac_err}")
 
-                for pet in res_data:
-                    p_id = pet.get("pet_id")
-                    pet_med_logs = logs_by_pet.get(p_id, [])
-                    pet_vac_logs = vacs_by_pet.get(p_id, [])
+            for pet in res_data:
+                p_id = pet.get("pet_id")
+                pet_med_logs = logs_by_pet.get(p_id, [])
+                pet_vac_logs = vacs_by_pet.get(p_id, [])
 
-                    # 1. Dynamic Vaccination Status (Option A: Rabies-First)
+                # 1. Dynamic Vaccination Status (Option A: Rabies-First)
+                if vacs_loaded:
                     pet["vaccination_status"] = compute_vaccination_status(pet_vac_logs)
 
-                    # 2. Dynamic TNR Sterilization Status (must be backed by medical_records)
-                    pet["spayed_neutered"] = compute_spayed_neutered(pet_med_logs)
+                # 2. Dynamic TNR Sterilization Status (must be backed by medical_records)
+                pet["spayed_neutered"] = compute_spayed_neutered(pet_med_logs)
 
-                    # 3. Active RA 9482 14-Day Quarantine Status
-                    is_q, q_until, q_iso = compute_active_quarantine(pet, pet_med_logs)
-                    if is_q:
-                        pet["is_quarantined"] = True
-                        pet["status"] = "Quarantine / Rabies Observation"
-                        if q_until:
-                            pet["quarantine_until"] = q_until
-                        if q_iso:
-                            pet["quarantine_expiry_date"] = q_iso
-                    else:
-                        pet["is_quarantined"] = False
-                        if pet.get("status") == "Quarantine / Rabies Observation":
-                            pet["status"] = "Active / Campus Resident"
-            except Exception as aug_err:
-                print(f"[Warning] Pet clinical enrichment skipped: {aug_err}")
+                # 3. Active RA 9482 14-Day Quarantine Status
+                is_q, q_until, q_iso = compute_active_quarantine(pet, pet_med_logs)
+                if is_q:
+                    pet["is_quarantined"] = True
+                    pet["status"] = "Quarantine / Rabies Observation"
+                    if q_until:
+                        pet["quarantine_until"] = q_until
+                    if q_iso:
+                        pet["quarantine_expiry_date"] = q_iso
+                else:
+                    pet["is_quarantined"] = False
+                    if pet.get("status") == "Quarantine / Rabies Observation":
+                        pet["status"] = "Active / Campus Resident"
 
             res_data.sort(key=lambda x: str(x.get('created_at') or x.get('rescue_date') or ''), reverse=True)
             return Response(res_data, status=status.HTTP_200_OK)
@@ -971,6 +978,34 @@ class VaccinationLogsAPIView(APIView):
 
             p["pet_id"] = target_pet
             p["vaccine_name"] = vaccine_name
+
+            # Enforce species-appropriate vaccine guard (prevent canine vaccines on cats & feline vaccines on dogs)
+            try:
+                pet_row = supabase.table("pets").select("species").eq("pet_id", target_pet).execute()
+                if pet_row.data:
+                    pet_species = str(pet_row.data[0].get("species") or "").strip().lower()
+                    vac_lower = vaccine_name.lower()
+                    canine_only_terms = (
+                        "canine", "dhpp", "da2pp", "parvo", "distemper",
+                        "kennel cough", "bordetella", "leptospirosis", "5-in-1", "8-in-1"
+                    )
+                    feline_only_terms = (
+                        "feline", "fvrcp", "tricat", "felv", "fiv",
+                        "panleukopenia", "rhinotracheitis", "calicivirus", "3-in-1", "4-in-1"
+                    )
+                    if pet_species == "cat" and any(term in vac_lower for term in canine_only_terms):
+                        return Response(
+                            {"error": f'"{vaccine_name}" is a canine vaccine and cannot be logged for a Cat patient.'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    if pet_species == "dog" and any(term in vac_lower for term in feline_only_terms):
+                        return Response(
+                            {"error": f'"{vaccine_name}" is a feline vaccine and cannot be logged for a Dog patient.'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+            except Exception as sp_err:
+                print(f"[Warning] Species check skipped: {sp_err}")
+
             for date_key in ("administered_date", "next_due_date", "expiration_date"):
                 if date_key in p:
                     p[date_key] = normalize_date_str(p.get(date_key))
@@ -989,8 +1024,9 @@ class VaccinationLogsAPIView(APIView):
                 return Response({"error": "Failed to save vaccination log."}, status=status.HTTP_400_BAD_REQUEST)
 
             # Recompute and sync pet vaccination_status from vaccination_logs (Single Source of Truth)
+            # Always use select("*") so optional columns like expiration_date never trigger schema errors.
             try:
-                all_pet_vacs = supabase.table("vaccination_logs").select("vaccine_name, administered_date, next_due_date, expiration_date").eq("pet_id", target_pet).execute().data or []
+                all_pet_vacs = supabase.table("vaccination_logs").select("*").eq("pet_id", target_pet).execute().data or []
                 computed_vac_status = compute_vaccination_status(all_pet_vacs)
                 safe_sync_pet_vaccination_status(target_pet, computed_vac_status)
             except Exception as sync_err:

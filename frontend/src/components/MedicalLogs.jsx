@@ -25,12 +25,70 @@ function generateVaccineLotCode() {
 }
 
 const VACCINE_PRESETS = [
-  { label: 'Anti-Rabies (Annual)', name: 'Anti-Rabies Inactivated Vaccine', dueMonths: 12 },
-  { label: 'Canine 5-in-1 (DHPP)', name: 'DHPP 5-in-1 (Distemper, Hepatitis, Parvo, Parainfluenza)', dueMonths: 12 },
-  { label: 'Feline 3-in-1 (FVRCP)', name: 'FVRCP 3-in-1 Feline Viral Rhinotracheitis, Calicivirus, Panleukopenia', dueMonths: 12 },
-  { label: 'Deworming (Anthelmintic)', name: 'Broad-Spectrum Dewormer (Pyrantel / Praziquantel)', dueMonths: 3 },
-  { label: 'Kennel Cough (Bordetella)', name: 'Bordetella Bronchiseptica Inhalation/Injectable', dueMonths: 12 },
+  { label: 'Anti-Rabies (Annual)', name: 'Anti-Rabies Inactivated Vaccine', dueMonths: 12, species: 'both' },
+  { label: 'Canine 5-in-1 (DHPP)', name: 'DHPP 5-in-1 (Distemper, Hepatitis, Parvo, Parainfluenza)', dueMonths: 12, species: 'dog' },
+  { label: 'Canine 8-in-1 (DHPPiL)', name: 'DHPPiL 8-in-1 (Canine Core + Leptospirosis)', dueMonths: 12, species: 'dog' },
+  { label: 'Kennel Cough (Bordetella)', name: 'Bordetella Bronchiseptica (Canine Kennel Cough)', dueMonths: 12, species: 'dog' },
+  { label: 'Feline 3-in-1 (FVRCP)', name: 'FVRCP 3-in-1 Feline Viral Rhinotracheitis, Calicivirus, Panleukopenia', dueMonths: 12, species: 'cat' },
+  { label: 'Feline 4-in-1 (FVRCP-C)', name: 'FVRCP-C 4-in-1 Feline Core + Chlamydia', dueMonths: 12, species: 'cat' },
+  { label: 'Feline Leukemia (FeLV)', name: 'FeLV (Feline Leukemia Virus Vaccine)', dueMonths: 12, species: 'cat' },
+  { label: 'Deworming (Anthelmintic)', name: 'Broad-Spectrum Dewormer (Pyrantel / Praziquantel)', dueMonths: 3, species: 'both' },
 ];
+
+function getPresetsForSpecies(speciesStr) {
+  const sp = (speciesStr || '').trim().toLowerCase();
+  if (sp === 'cat' || sp === 'feline') {
+    return VACCINE_PRESETS.filter((p) => p.species === 'both' || p.species === 'cat');
+  }
+  if (sp === 'dog' || sp === 'canine') {
+    return VACCINE_PRESETS.filter((p) => p.species === 'both' || p.species === 'dog');
+  }
+  return VACCINE_PRESETS;
+}
+
+function isNonVaccineDewormer(vaccineName) {
+  const n = (vaccineName || '').toLowerCase();
+  return (
+    !n.trim() ||
+    n.includes('deworm') ||
+    n.includes('anthelmintic') ||
+    n.includes('pyrantel') ||
+    n.includes('praziquantel') ||
+    n.includes('flea') ||
+    n.includes('tick') ||
+    n.includes('heartworm')
+  );
+}
+
+function computeOptionAVaccinationStatus(vacs) {
+  const realVacs = (vacs || []).filter((v) => !isNonVaccineDewormer(v.vaccine_name));
+  if (realVacs.length === 0) return 'Not Vaccinated';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const isActive = (v) => {
+    const due = parseLocalDate(v.next_due_date || v.expiration_date);
+    if (due) {
+      due.setHours(0, 0, 0, 0);
+      return due.getTime() >= today.getTime();
+    }
+    const admin = parseLocalDate(v.administered_date);
+    if (admin) {
+      admin.setHours(0, 0, 0, 0);
+      const expiry = new Date(admin.getTime() + 365 * 24 * 60 * 60 * 1000);
+      return expiry.getTime() >= today.getTime();
+    }
+    return false;
+  };
+
+  const rabies = realVacs.filter((v) => (v.vaccine_name || '').toLowerCase().includes('rabies'));
+  const core = realVacs.filter((v) => !(v.vaccine_name || '').toLowerCase().includes('rabies'));
+
+  if (rabies.some(isActive)) return 'Fully Vaccinated';
+  if (core.some(isActive)) return 'Core Only (No Anti-Rabies)';
+  return 'Booster Overdue';
+}
 
 export default function MedicalLogs({ pets = [], onRefresh }) {
   const [selectedMedicalPetId, setSelectedMedicalPetId] = useState(() => pets[0]?.pet_id || '');
@@ -247,6 +305,8 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
   const handleSelectPatient = (nextId) => {
     setSelectedMedicalPetId(nextId);
     setFormMessage({ target: '', type: '', text: '' });
+    setVacName('');
+    setVacNextDue('');
     const current = pets.find(p => p.pet_id === nextId);
     if (current && current.weight) {
       const cleanWeight = String(current.weight).replace(/[^\d.]/g, '');
@@ -333,6 +393,20 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
   const handleAddVaccine = async (e) => {
     e.preventDefault();
     if (submittingVac || !vacName.trim() || !effectivePetId) return;
+
+    const speciesLower = (activePet?.species || '').trim().toLowerCase();
+    const vacLower = vacName.trim().toLowerCase();
+    const canineOnlyTerms = ['canine', 'dhpp', 'da2pp', 'parvo', 'distemper', 'kennel cough', 'bordetella', 'leptospirosis', '5-in-1', '8-in-1'];
+    const felineOnlyTerms = ['feline', 'fvrcp', 'tricat', 'felv', 'fiv', 'panleukopenia', 'rhinotracheitis', 'calicivirus', '3-in-1', '4-in-1'];
+
+    if (speciesLower === 'cat' && canineOnlyTerms.some((t) => vacLower.includes(t))) {
+      setFormMessage({ target: 'vac', type: 'error', text: `"${vacName.trim()}" is a canine vaccine and cannot be logged for a Cat patient.` });
+      return;
+    }
+    if (speciesLower === 'dog' && felineOnlyTerms.some((t) => vacLower.includes(t))) {
+      setFormMessage({ target: 'vac', type: 'error', text: `"${vacName.trim()}" is a feline vaccine and cannot be logged for a Dog patient.` });
+      return;
+    }
 
     const payload = {
       vaccine_name: vacName.trim(),
@@ -517,7 +591,8 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
   const jumpToInoculatePet = (pet, targetPresetName) => {
     handleSelectPatient(pet.pet_id);
     setWorkspaceView('patient');
-    const preset = VACCINE_PRESETS.find(p => p.label.toLowerCase().includes(targetPresetName?.toLowerCase() || 'rabies')) || VACCINE_PRESETS[0];
+    const speciesPresets = getPresetsForSpecies(pet.species);
+    const preset = speciesPresets.find(p => p.label.toLowerCase().includes(targetPresetName?.toLowerCase() || 'rabies')) || speciesPresets[0];
     applyVaccinePreset(preset, pet);
     setTimeout(() => {
       const el = document.getElementById('vaccine-registration-form');
@@ -554,12 +629,17 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
   // Filtered medical records
   const filteredMedicalLogs = medicalLogs.filter(m => {
     if (logFilter === 'all') return true;
-    if (logFilter === 'clinical') return m.record_type === 'Check-up' || m.record_type === 'Clinical Treatment';
+    if (logFilter === 'clinical') return m.record_type === 'Check-up' || m.record_type === 'Clinical Treatment' || m.record_type === 'Spay / Neuter';
     if (logFilter === 'quarantine') return m.record_type === 'Bite Incident' || m.record_type === 'Scratch Incident';
     return true;
   });
 
   const activePetBooster = activePet ? getPetBoosterAnalysis(activePet.pet_id) : null;
+  const activePetLiveVacs = vaccineLogs.length > 0 ? vaccineLogs : (activePet ? allVaccinationsMap[activePet.pet_id] || [] : []);
+  const activePetVaccinationStatus = activePet
+    ? (activePetLiveVacs.length > 0 ? computeOptionAVaccinationStatus(activePetLiveVacs) : (activePet.vaccination_status || 'Not Vaccinated'))
+    : 'Not Vaccinated';
+  const activeSpeciesPresets = getPresetsForSpecies(activePet?.species);
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 animate-fade-in text-xs text-slate-700 pb-12">
@@ -659,13 +739,13 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
                       ID: {activePet?.pet_id || 'N/A'}
                     </span>
                     <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${
-                      activePet?.vaccination_status === 'Fully Vaccinated' 
+                      activePetVaccinationStatus === 'Fully Vaccinated' 
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                        : (activePet?.vaccination_status?.toLowerCase().includes('core') || activePet?.vaccination_status === 'Partially Vaccinated')
+                        : (activePetVaccinationStatus?.toLowerCase().includes('core') || activePetVaccinationStatus === 'Partially Vaccinated')
                         ? 'bg-amber-50 text-amber-800 border-amber-200'
                         : 'bg-rose-50 text-rose-700 border-rose-200'
                     }`}>
-                      {activePet?.vaccination_status || 'Not Vaccinated'}
+                      {activePetVaccinationStatus}
                     </span>
                     <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
                       {activePet?.spayed_neutered ? 'TNR Sterilized' : 'Intact'}
@@ -1221,13 +1301,13 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
               <p className="text-[11px] text-slate-400 mt-0.5">Register licensed biologicals, vaccine lot numbers, and auto-scheduled boosters.</p>
             </div>
 
-            {/* Quick 1-Click Clinical Presets */}
+            {/* Quick 1-Click Clinical Presets (Filtered strictly by Patient Species) */}
             <div>
               <span className="text-[10px] font-bold text-slate-400 font-mono uppercase tracking-wider block mb-2">
-                Quick Biological Presets
+                Quick Biological Presets {activePet?.species ? `(${activePet.species} Only)` : ''}
               </span>
               <div className="flex flex-wrap gap-1.5">
-                {VACCINE_PRESETS.map((preset) => (
+                {activeSpeciesPresets.map((preset) => (
                   <button
                     key={preset.label}
                     type="button"
