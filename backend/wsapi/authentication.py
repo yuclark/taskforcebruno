@@ -42,6 +42,11 @@ class AuthenticatedUser:
     custom_id: str = ""
 
     @property
+    def pk(self) -> str:
+        # Required by DRF's UserRateThrottle (uses request.user.pk as the cache identity)
+        return self.id
+
+    @property
     def is_authenticated(self) -> bool:
         return True
 

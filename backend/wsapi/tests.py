@@ -398,6 +398,29 @@ class SecurityAndAPITests(TestCase):
             self.assertEqual(len(res.data), 1)
             self.assertEqual(res.data[0]["pet_id"], "PET-002")
 
+    def test_authenticated_requests_work_with_rate_throttling_enabled(self):
+        from django.core.cache import cache
+        from rest_framework.settings import api_settings
+
+        cache.clear()
+        fake_db = FakeDB(tables={"profiles": [{"id": "stu-1", "email": "juan.cruz@cit.edu", "role": "user"}]})
+        throttled = {
+            **api_settings.user_settings,
+            "DEFAULT_THROTTLE_CLASSES": [
+                "rest_framework.throttling.AnonRateThrottle",
+                "rest_framework.throttling.UserRateThrottle",
+                "rest_framework.throttling.ScopedRateThrottle",
+            ],
+        }
+        from rest_framework.views import APIView
+
+        with override_settings(REST_FRAMEWORK=throttled), \
+                patch.object(APIView, "throttle_classes", [__import__("rest_framework.throttling", fromlist=["UserRateThrottle"]).UserRateThrottle]), \
+                patch("wsapi.authentication.get_db_client", return_value=fake_db):
+            res = self.client.get("/api/session/", **self._auth(self.student_token))
+            self.assertEqual(res.status_code, 200)
+        cache.clear()
+
     def test_session_endpoint_returns_authoritative_role_and_logout_succeeds(self):
         fake_db = FakeDB(tables={
             "profiles": [
