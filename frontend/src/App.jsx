@@ -1,76 +1,60 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { AlertCircle, CheckCircle2, X } from 'lucide-react';
 import Login from './components/Login';
 import Register from './components/Register';
-import DashboardContainer from './components/DashboardContainer';
-import StaffDashboard from './components/StaffDashboard';
-import PublicPetPassport from './components/PublicPetPassport';
+import MDCAuthGate from './components/MDCAuthGate';
+import { apiGet, apiPost, UNAUTHORIZED_EVENT } from './lib/api';
+import {
+  INACTIVITY_TIMEOUT_MS,
+  SESSION_STORAGE_KEY,
+  clearStoredSession,
+  isStaffSession,
+  loadStoredSession,
+  saveStoredSession,
+} from './lib/auth';
 
-const STAFF_ROLES = new Set(['staff', 'mdc', 'admin', 'clinician', 'nurse', 'veterinarian']);
+const DashboardContainer = lazy(() => import('./components/DashboardContainer'));
+const StaffDashboard = lazy(() => import('./components/StaffDashboard'));
+const PublicPetPassport = lazy(() => import('./components/PublicPetPassport'));
 
-function isStaffOrMDCSession(session) {
-  if (!session) return false;
-  const role = (session.role || '').trim().toLowerCase();
-  const email = (session.email || '').trim().toLowerCase();
-  if (role === 'student' || role === 'user') return false;
-  return STAFF_ROLES.has(role) || email.includes('mdc') || email.includes('staff');
+function getInitialPublicPetId() {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const petQuery = urlParams.get('pet') || urlParams.get('id');
+    if (petQuery) return petQuery.trim();
+
+    const pathSegments = window.location.pathname.split('/').filter(Boolean);
+    if (
+      pathSegments.length >= 2 &&
+      (pathSegments[0].toLowerCase() === 'pet' || pathSegments[0].toLowerCase() === 'passport')
+    ) {
+      return decodeURIComponent(pathSegments[1]).trim();
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function PageLoadingFallback() {
+  return (
+    <div className="min-h-dvh bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-500">
+      <div className="w-9 h-9 border-3 border-slate-200 border-t-[#5C0612] rounded-full animate-spin mb-3" />
+      <p className="text-xs font-medium">Loading Wildcat Welfare Portal...</p>
+    </div>
+  );
 }
 
 export default function App() {
-  // TC-QR-001: Public Pet Passport trigger from physical QR scan (e.g. /passport/PET-001 or ?pet=PET-001)
-  const [publicPetId, setPublicPetId] = useState(() => {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const petQuery = urlParams.get('pet') || urlParams.get('id');
-      if (petQuery) return petQuery.trim();
+  const [publicPetId, setPublicPetId] = useState(getInitialPublicPetId);
+  const [session, setSession] = useState(loadStoredSession);
 
-      const pathSegments = window.location.pathname.split('/').filter(Boolean);
-      if (pathSegments.length >= 2 && (pathSegments[0].toLowerCase() === 'pet' || pathSegments[0].toLowerCase() === 'passport')) {
-        return decodeURIComponent(pathSegments[1]).trim();
-      }
-    } catch {
-      return null;
-    }
-    return null;
-  });
-
-  const [session, setSession] = useState(() => {
-    const saved = localStorage.getItem('tfb_session');
-    if (!saved) return null;
-    try {
-      const parsed = JSON.parse(saved);
-      const fifteenMinutes = 15 * 60 * 1000;
-      const lastActive = parsed.lastActiveAt || parsed.createdAt;
-
-      // Sliding window: only invalidate if there was no active interaction in the last 15 minutes
-      if (lastActive && Date.now() - lastActive > fifteenMinutes) {
-        localStorage.removeItem('tfb_session');
-        localStorage.removeItem('tfb_staff_tab');
-        localStorage.removeItem('tfb_user_tab');
-        return null;
-      }
-
-      // Refresh activity stamp on successful hydration
-      const refreshed = {
-        ...parsed,
-        lastActiveAt: Date.now(),
-        email: (parsed?.email || '').trim().toLowerCase(),
-        role: (parsed?.role || 'user').trim().toLowerCase()
-      };
-      localStorage.setItem('tfb_session', JSON.stringify(refreshed));
-      return refreshed;
-    } catch {
-      localStorage.removeItem('tfb_session');
-      return null;
-    }
-  });
-
-  // TC-MED-003: Guard restricted /mdc/dashboard route from unauthorized students on load
-  const [toastMessage, setToastMessage] = useState(() => {
+  const [toast, setToast] = useState(() => {
     try {
       const currentPath = window.location.pathname.toLowerCase();
-      if ((currentPath.includes('/mdc/dashboard') || currentPath.startsWith('/mdc')) && !isStaffOrMDCSession(session)) {
+      if ((currentPath.includes('/mdc/dashboard') || currentPath.startsWith('/mdc')) && !isStaffSession(session)) {
         window.history.replaceState(null, '', session ? '/student/dashboard' : '/login');
-        return 'Access Denied: MDC Personnel Only';
+        return { type: 'error', text: 'Access Denied: MDC Personnel Only' };
       }
     } catch {
       return null;
@@ -85,16 +69,115 @@ export default function App() {
       return true;
     }
   });
-  const lastActivityUpdateRef = useRef(0);
 
-  const isStaff = isStaffOrMDCSession(session);
+  const lastActivityUpdateRef = useRef(0);
+  const isStaff = isStaffSession(session);
+
+  const showToast = useCallback((text, type = 'info') => {
+    setToast({ text, type });
+  }, []);
+
+  // Auto-dismiss notifications after 5 seconds
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  const handleLogout = useCallback(
+    (noticeText = '', noticeType = 'info') => {
+      const activeToken = session?.access_token;
+      if (activeToken) {
+        apiPost('/logout/', {}, { auth: true }).catch(() => {});
+      }
+      clearStoredSession();
+      sessionStorage.clear();
+      setSession(null);
+      setIsLogin(true);
+      if (noticeText) {
+        showToast(noticeText, noticeType);
+      }
+      try {
+        window.history.pushState(null, '', '/login');
+      } catch {
+        // Ignore restricted history API contexts
+      }
+    },
+    [session?.access_token, showToast]
+  );
+
+  const handleLoginSuccess = useCallback(
+    (sessionData, welcomeMessage = '') => {
+      const normalized = saveStoredSession(sessionData);
+      setSession(normalized);
+      if (welcomeMessage) {
+        showToast(welcomeMessage, 'success');
+      }
+      try {
+        const targetPath = isStaffSession(normalized) ? '/mdc/dashboard' : '/student/dashboard';
+        window.history.pushState(null, '', targetPath);
+      } catch {
+        // Ignore history API errors
+      }
+    },
+    [showToast]
+  );
+
+  // Verify cached session token against the backend on mount to sync authoritative role & profile
+  useEffect(() => {
+    if (!session?.access_token) return undefined;
+    let cancelled = false;
+
+    const verifySession = async () => {
+      const res = await apiGet('/session/');
+      if (cancelled) return;
+      if (res.ok && res.data?.user) {
+        const serverUser = res.data.user;
+        setSession((prev) => {
+          if (!prev) return null;
+          const synced = saveStoredSession({
+            ...prev,
+            email: serverUser.email || prev.email,
+            role: serverUser.role || prev.role,
+            is_staff: serverUser.is_staff,
+            first_name: serverUser.first_name || prev.first_name,
+            last_name: serverUser.last_name || prev.last_name,
+            full_name: serverUser.full_name || prev.full_name,
+            custom_id: serverUser.custom_id || prev.custom_id,
+            student_id: serverUser.student_id || prev.student_id,
+          });
+          return synced;
+        });
+      } else if (res.status === 401) {
+        handleLogout('Your session has expired. Please sign in again.', 'error');
+      }
+    };
+
+    verifySession();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.access_token, handleLogout]);
+
+  // Listen for global 401 unauthorized events from the API client
+  useEffect(() => {
+    const onUnauthorized = () => {
+      if (session) {
+        handleLogout('Your session has expired. Please sign in again.', 'error');
+      }
+    };
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+  }, [session, handleLogout]);
 
   // Keep browser URL synchronized with authenticated role & auth screen
   useEffect(() => {
     if (publicPetId) return;
     try {
       const targetPath = !session
-        ? (isLogin ? '/login' : '/register')
+        ? isLogin
+          ? '/login'
+          : '/register'
         : isStaff
         ? '/mdc/dashboard'
         : '/student/dashboard';
@@ -103,27 +186,25 @@ export default function App() {
         window.history.replaceState(null, '', targetPath);
       }
     } catch {
-      // Ignore history API errors in restricted environments
+      // Ignore history API errors
     }
   }, [session, isStaff, isLogin, publicPetId]);
 
-  useEffect(() => {
-    if (!toastMessage) return;
-    const timer = setTimeout(() => setToastMessage(null), 4000);
-    return () => clearTimeout(timer);
-  }, [toastMessage]);
-
+  // Browser back/forward route sync & /mdc route protection
   useEffect(() => {
     const checkRoute = () => {
       try {
         const currentPath = window.location.pathname.toLowerCase();
-        if ((currentPath.includes('/mdc/dashboard') || currentPath.startsWith('/mdc')) && !isStaffOrMDCSession(session)) {
+        if ((currentPath.includes('/mdc/dashboard') || currentPath.startsWith('/mdc')) && !isStaffSession(session)) {
           window.history.replaceState(null, '', session ? '/student/dashboard' : '/login');
-          setToastMessage('Access Denied: MDC Personnel Only');
+          showToast('Access Denied: MDC Personnel Only', 'error');
           return;
         }
         const pathSegments = window.location.pathname.split('/').filter(Boolean);
-        if (pathSegments.length >= 2 && (pathSegments[0].toLowerCase() === 'pet' || pathSegments[0].toLowerCase() === 'passport')) {
+        if (
+          pathSegments.length >= 2 &&
+          (pathSegments[0].toLowerCase() === 'pet' || pathSegments[0].toLowerCase() === 'passport')
+        ) {
           setPublicPetId(decodeURIComponent(pathSegments[1]).trim());
           return;
         }
@@ -133,6 +214,7 @@ export default function App() {
           setPublicPetId(petQuery.trim());
           return;
         }
+        setPublicPetId(null);
         if (!session) {
           if (currentPath === '/register') setIsLogin(false);
           else if (currentPath === '/login' || currentPath === '/') setIsLogin(true);
@@ -143,138 +225,123 @@ export default function App() {
     };
     window.addEventListener('popstate', checkRoute);
     return () => window.removeEventListener('popstate', checkRoute);
-  }, [session]);
+  }, [session, showToast]);
 
-  const handleLoginSuccess = (sessionData) => {
-    const now = Date.now();
-    const normalized = {
-      ...sessionData,
-      email: (sessionData?.email || '').trim().toLowerCase(),
-      role: (sessionData?.role || 'user').trim().toLowerCase(),
-      createdAt: now,
-      lastActiveAt: now
-    };
-    localStorage.setItem('tfb_session', JSON.stringify(normalized));
-    setSession(normalized);
-    try {
-      const targetPath = isStaffOrMDCSession(normalized) ? '/mdc/dashboard' : '/student/dashboard';
-      window.history.pushState(null, '', targetPath);
-    } catch {
-      // Ignore history API errors
-    }
-  };
-
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem('tfb_session');
-    localStorage.removeItem('tfb_staff_tab'); 
-    localStorage.removeItem('tfb_user_tab');  
-    sessionStorage.clear();
-    setSession(null);
-    setIsLogin(true);
-    try {
-      window.history.pushState(null, '', '/login');
-    } catch {
-      // Ignore history API errors
-    }
-  }, []);
-
-  // ── SLIDING INACTIVITY TIMER: Resets on user actions, only expires after 15m of pure zero activity ──
+  // Sliding 15-minute inactivity timeout for shared campus devices
   useEffect(() => {
-    if (!session) return;
+    if (!session) return undefined;
 
     let idleTimer;
-    const fifteenMinutes = 15 * 60 * 1000;
     lastActivityUpdateRef.current = Date.now();
 
     const recordUserActivity = () => {
-      // Throttle localStorage updates to once every 15 seconds to maintain smooth 60fps performance
       const now = Date.now();
       if (now - lastActivityUpdateRef.current > 15000) {
         lastActivityUpdateRef.current = now;
         try {
-          const current = JSON.parse(localStorage.getItem('tfb_session') || '{}');
+          const current = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || '{}');
           if (current?.email) {
             current.lastActiveAt = now;
-            localStorage.setItem('tfb_session', JSON.stringify(current));
+            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(current));
           }
         } catch {
           // Ignore storage quota errors
         }
       }
 
-      // Reset the 15-minute sliding countdown
       clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
-        handleLogout();
-        alert("Your session has timed out due to 15 minutes of inactivity for institutional safety.");
-      }, fifteenMinutes);
+        handleLogout('Your session has expired due to 15 minutes of inactivity.', 'error');
+      }, INACTIVITY_TIMEOUT_MS);
     };
 
-    const userInteractionEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-    userInteractionEvents.forEach(event => 
-      window.addEventListener(event, recordUserActivity, { passive: true })
-    );
-
-    // Initial countdown start
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    events.forEach((evt) => window.addEventListener(evt, recordUserActivity, { passive: true }));
     recordUserActivity();
 
     return () => {
       clearTimeout(idleTimer);
-      userInteractionEvents.forEach(event => 
-        window.removeEventListener(event, recordUserActivity)
-      );
+      events.forEach((evt) => window.removeEventListener(evt, recordUserActivity));
     };
   }, [session, handleLogout]);
 
   return (
     <>
-      {/* ACCESS DENIED SECURITY TOAST NOTIFICATION (TC-MED-003) */}
-      {toastMessage && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] animate-bounce">
-          <div className="bg-rose-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-rose-500/50 flex items-center gap-3 text-xs font-bold tracking-wide">
-            <svg className="w-5 h-5 text-rose-300 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 7.5h.008v.008H12v-.008Z" />
-            </svg>
-            <span>{toastMessage}</span>
+      {/* Global Non-Blocking Toast Banner */}
+      {toast?.text && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed top-4 inset-x-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-[120] flex justify-center pointer-events-none animate-fade-in"
+        >
+          <div
+            className={`pointer-events-auto max-w-md w-full sm:w-auto px-4 py-3 rounded-2xl shadow-xl border flex items-center gap-3 text-xs font-semibold ${
+              toast.type === 'error'
+                ? 'bg-rose-950 text-white border-rose-500/40'
+                : toast.type === 'success'
+                ? 'bg-emerald-950 text-white border-emerald-500/40'
+                : 'bg-slate-900 text-white border-slate-700'
+            }`}
+          >
+            {toast.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-300 shrink-0" />
+            )}
+            <span className="flex-1 leading-snug">{toast.text}</span>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              aria-label="Dismiss notification"
+              className="p-1 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       )}
 
-      {/* PUBLIC PET PASSPORT MODAL (Emergency Collar QR Scan view) */}
+      {/* Public Pet Passport Modal (Unauthenticated Collar QR Lookup) */}
       {publicPetId && (
-        <PublicPetPassport
-          petId={publicPetId}
-          onClose={() => {
-            setPublicPetId(null);
-            const fallbackPath = !session
-              ? (isLogin ? '/login' : '/register')
-              : isStaff
-              ? '/mdc/dashboard'
-              : '/student/dashboard';
-            window.history.pushState(null, '', fallbackPath);
-          }}
-          onGoLogin={() => {
-            setPublicPetId(null);
-            setIsLogin(true);
-            window.history.pushState(null, '', '/login');
-          }}
-        />
+        <Suspense fallback={<PageLoadingFallback />}>
+          <PublicPetPassport
+            petId={publicPetId}
+            isLoggedIn={Boolean(session)}
+            onClose={() => {
+              setPublicPetId(null);
+              const fallbackPath = !session
+                ? isLogin
+                  ? '/login'
+                  : '/register'
+                : isStaff
+                ? '/mdc/dashboard'
+                : '/student/dashboard';
+              window.history.pushState(null, '', fallbackPath);
+            }}
+            onGoLogin={() => {
+              setPublicPetId(null);
+              setIsLogin(true);
+              window.history.pushState(null, '', '/login');
+            }}
+          />
+        </Suspense>
       )}
 
-      {/* CORE APPLICATION ROUTING */}
+      {/* Core Portal Views */}
       {!session ? (
-        <div className="min-h-screen bg-slate-100 font-sans antialiased">
+        <div className="min-h-dvh bg-slate-50 font-sans antialiased">
           {isLogin ? (
-            <Login 
-              onLoginSuccess={handleLoginSuccess} 
+            <Login
+              onLoginSuccess={(s) => handleLoginSuccess(s)}
               togglePage={() => {
                 setIsLogin(false);
                 window.history.pushState(null, '', '/register');
-              }} 
+              }}
               onScanCollar={(id) => setPublicPetId(id)}
             />
           ) : (
             <Register
+              onRegisterSuccess={(s, msg) => handleLoginSuccess(s, msg)}
               togglePage={() => {
                 setIsLogin(true);
                 window.history.pushState(null, '', '/login');
@@ -283,17 +350,29 @@ export default function App() {
           )}
         </div>
       ) : isStaff ? (
-        <StaffDashboard
-          key={`staff-${session.email}`}
+        <MDCAuthGate
           session={session}
-          onLogout={handleLogout}
-        />
+          onRedirectToNewsfeed={() => {
+            showToast('Access Denied: MDC Personnel Only', 'error');
+            window.history.replaceState(null, '', '/student/dashboard');
+          }}
+        >
+          <Suspense fallback={<PageLoadingFallback />}>
+            <StaffDashboard
+              key={`staff-${session.email}`}
+              session={session}
+              onLogout={() => handleLogout()}
+            />
+          </Suspense>
+        </MDCAuthGate>
       ) : (
-        <DashboardContainer
-          key={`user-${session.email}`}
-          session={session}
-          onLogout={handleLogout}
-        />
+        <Suspense fallback={<PageLoadingFallback />}>
+          <DashboardContainer
+            key={`user-${session.email}`}
+            session={session}
+            onLogout={() => handleLogout()}
+          />
+        </Suspense>
       )}
     </>
   );

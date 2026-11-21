@@ -1,16 +1,30 @@
-# React + Vite
+# Task Force Bruno — Frontend (Wildcat Welfare Portal)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite 8 + Tailwind CSS v4 single-page application for CIT-U's Task Force Bruno campus animal welfare portal.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
 
-## React Compiler
+## Environment Variables
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `VITE_API_BASE_URL` | `https://taskforcebruno.onrender.com/api` | Base URL for the Django REST API |
+| `VITE_PUBLIC_APP_URL` | `window.location.origin` | Base URL embedded in generated pet collar QR tags |
 
-## Expanding the ESLint configuration
+## Scripts
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- `npm run dev` — Start Vite development server
+- `npm run lint` — Run ESLint across the codebase
+- `npm run build` — Production build with vendor and lazy route code-splitting
+- `npm run preview` — Preview the production build locally
+
+## Structure
+
+- `src/lib/` — Shared authenticated API client (`api.js`), session/auth helpers (`auth.js`), pet/location utilities (`pets.js`), date helpers (`dates.js`), and QR decoding & 300 DPI tag rendering (`qr.js`).
+- `src/components/` — Community Portal (`DashboardContainer`), Staff Portal (`StaffDashboard`), Public QR Passport (`PublicPetPassport`), Clinical Records, Inventory Control, Adoption Gallery, Sighting Triage, and Newsfeed modules.

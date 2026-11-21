@@ -1,25 +1,94 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
 @theme {
-  --font-sans: 'Poppins', 'Inter', sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply font-sans bg-slate-50 text-slate-900 antialiased m-0 p-0;
+    overflow-x: hidden;
+  }
+
+  button:not(:disabled),
+  a[href] {
+    cursor: pointer;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid #5C0612;
+    outline-offset: 2px;
   }
 }
 
-/* Smooth active state scaling for form controls */
-input, button {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+@keyframes tfbFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tfbScaleUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes tfbScanline {
+  0%, 100% {
+    top: 10%;
+  }
+  50% {
+    top: 86%;
+  }
+}
+
+.animate-fade-in {
+  animation: tfbFadeIn 0.2s ease-out both;
+}
+
+.animate-scale-up {
+  animation: tfbScaleUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-scanline {
+  animation: tfbScanline 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-scale-up,
+  .animate-scanline {
+    animation: none !important;
+  }
 }
 
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
 .no-scrollbar {
-  -ms-overflow-style: none;  /* IE/Edge */
-  scrollbar-width: none;     /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }

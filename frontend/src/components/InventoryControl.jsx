@@ -1,5 +1,18 @@
-import React, { useState, useRef } from 'react';
-import { Package, AlertTriangle, Utensils, Stethoscope } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Package,
+  AlertTriangle,
+  Utensils,
+  Stethoscope,
+  RefreshCw,
+  Trash2,
+  MinusCircle,
+  CheckCircle2,
+  AlertCircle,
+  Search,
+  X,
+} from 'lucide-react';
+import { apiPost, apiPut, apiDelete } from '../lib/api';
 
 const CATEGORY_UNITS = {
   Food: [
@@ -7,71 +20,104 @@ const CATEGORY_UNITS = {
     { value: 'cans', label: 'cans (Canned Wet Food)' },
     { value: 'bags', label: 'bags (Sacks / Pouches)' },
     { value: 'packs', label: 'packs (Portion Packs)' },
-    { value: 'g', label: 'g (Grams)' }
+    { value: 'g', label: 'g (Grams)' },
   ],
   Medical: [
     { value: 'vials', label: 'vials (Injectables / Vaccines)' },
     { value: 'pcs', label: 'pcs (Pieces / Tablets)' },
     { value: 'bottles', label: 'bottles (Liquid Solutions)' },
     { value: 'boxes', label: 'boxes (Cases / Kits)' },
-    { value: 'packs', label: 'packs (Sterile Packs)' }
+    { value: 'packs', label: 'packs (Sterile Packs)' },
   ],
   Supplies: [
     { value: 'pcs', label: 'pcs (Pieces / Collars)' },
     { value: 'units', label: 'units (Equipment Sets)' },
-    { value: 'boxes', label: 'boxes (Cases)' }
-  ]
+    { value: 'boxes', label: 'boxes (Cases)' },
+  ],
 };
 
-export default function InventoryControl({ 
-  inventoryItems = [], 
-  transactionLedger = [], 
-  loadingInventory = false, 
-  onRefresh 
+export default function InventoryControl({
+  inventoryItems = [],
+  transactionLedger = [],
+  loadingInventory = false,
+  onRefresh,
 }) {
   const [inventorySubTab, setInventorySubTab] = useState('stock-list');
   const [selectedActionItemId, setSelectedActionItemId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
-  
-  // Operational transaction input state
-  const [actionForm, setActionForm] = useState({ 
-    transaction_type: 'IN', quantity_changed: '', reason: 'Bulk Purchase / Donation', supplier_donor: '', expiration_date: '' 
+
+  const [actionForm, setActionForm] = useState({
+    transaction_type: 'IN',
+    quantity_changed: '',
+    reason: 'Bulk Purchase / Donation',
+    supplier_donor: '',
+    expiration_date: '',
   });
+  const [submittingTx, setSubmittingTx] = useState(false);
   const [thresholdDraft, setThresholdDraft] = useState('');
   const [savingThreshold, setSavingThreshold] = useState(false);
 
-  const [newInventoryForm, setNewInventoryForm] = useState({ 
-    item_name: '', category: 'Food', food_type: 'Cat Food', quantity: '', unit: 'kg', min_threshold: '10', supplier_donor: '', expiration_date: '' 
+  const [newInventoryForm, setNewInventoryForm] = useState({
+    item_name: '',
+    category: 'Food',
+    food_type: 'Cat Food',
+    quantity: '',
+    unit: 'kg',
+    min_threshold: '10',
+    supplier_donor: '',
+    expiration_date: '',
   });
+  const [submittingCreate, setSubmittingCreate] = useState(false);
   const [formMessage, setFormMessage] = useState({ type: '', text: '' });
 
-  // Confirmation Modals
   const [deductionModal, setDeductionModal] = useState({
     isOpen: false,
     item: null,
     qtyDelta: 0,
     reason: '',
     supplier_donor: '',
-    submitting: false
+    submitting: false,
   });
 
-  const [purgeModal, setPurgeModal] = useState({
+  const [deleteModal, setDeleteModal] = useState({
     isOpen: false,
     itemId: null,
     itemName: '',
-    submitting: false
+    submitting: false,
   });
 
-  // TC-SUP-003: Insufficient stock warning modal & floating status toast
   const [inventoryToast, setInventoryToast] = useState(null);
   const toastTimerRef = useRef(null);
   const [insufficientStockModal, setInsufficientStockModal] = useState({
     isOpen: false,
     item: null,
     requestedQty: 0,
-    currentStock: 0
+    currentStock: 0,
   });
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const anyOpen = deductionModal.isOpen || deleteModal.isOpen || insufficientStockModal.isOpen;
+    if (!anyOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key !== 'Escape') return;
+      if (insufficientStockModal.isOpen) {
+        setInsufficientStockModal({ isOpen: false, item: null, requestedQty: 0, currentStock: 0 });
+      } else if (deductionModal.isOpen && !deductionModal.submitting) {
+        setDeductionModal({ isOpen: false, item: null, qtyDelta: 0, reason: '', supplier_donor: '', submitting: false });
+      } else if (deleteModal.isOpen && !deleteModal.submitting) {
+        setDeleteModal({ isOpen: false, itemId: null, itemName: '', submitting: false });
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [deductionModal, deleteModal, insufficientStockModal]);
 
   const showToast = (type, msg) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -82,32 +128,34 @@ export default function InventoryControl({
   const triggerErrorToast = (msg) => showToast('error', msg);
   const triggerSuccessToast = (msg) => showToast('success', msg);
 
-  // --- SUMMARY METRICS ---
   const totalItemsCount = inventoryItems.length;
-  const lowStockItems = inventoryItems.filter(item => (item.quantity ?? 0) <= (item.min_threshold ?? 10));
-  const totalFoodItems = inventoryItems.filter(item => item.category === 'Food');
-  const totalMedicalItems = inventoryItems.filter(item => item.category === 'Medical');
+  const lowStockItems = inventoryItems.filter((item) => (item.quantity ?? 0) <= (item.min_threshold ?? 10));
+  const totalFoodItems = inventoryItems.filter((item) => item.category === 'Food');
+  const totalMedicalItems = inventoryItems.filter((item) => item.category === 'Medical');
 
-  // Filtered inventory list
-  const filteredItems = inventoryItems.filter(item => {
+  const filteredItems = inventoryItems.filter((item) => {
     const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter;
-    const matchesSearch = !searchQuery || item.item_name?.toLowerCase().includes(searchQuery.toLowerCase()) || item.supplier_donor?.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      item.item_name?.toLowerCase().includes(q) ||
+      item.supplier_donor?.toLowerCase().includes(q);
     return matchesCategory && matchesSearch;
   });
 
   const handleCategoryChange = (e) => {
     const nextCat = e.target.value;
     const defaultUnit = CATEGORY_UNITS[nextCat]?.[0]?.value || 'pcs';
-    setNewInventoryForm(prev => ({
+    setNewInventoryForm((prev) => ({
       ...prev,
       category: nextCat,
-      unit: defaultUnit
+      unit: defaultUnit,
     }));
   };
 
-  // --- CRUD: CREATE WITH FIXED TYPE CASTING ---
   const handleInventoryCreate = async (e) => {
     e.preventDefault();
+    if (submittingCreate) return;
     setFormMessage({ type: '', text: '' });
 
     let finalizedName = newInventoryForm.item_name.trim();
@@ -128,39 +176,46 @@ export default function InventoryControl({
       unit: newInventoryForm.unit,
       min_threshold: Number.isNaN(parsedMin) ? 10 : Math.max(0, parsedMin),
       supplier_donor: newInventoryForm.supplier_donor.trim() || null,
-      expiration_date: newInventoryForm.expiration_date || null
+      expiration_date: newInventoryForm.expiration_date || null,
     };
 
+    setSubmittingCreate(true);
     try {
-      const res = await fetch('https://taskforcebruno.onrender.com/api/inventory/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sanitizedPayload)
-      });
+      const res = await apiPost('/inventory/', sanitizedPayload);
       if (res.ok) {
-        setFormMessage({ type: 'success', text: `Supply item "${sanitizedPayload.item_name}" registered in logistics hub!` });
-        setNewInventoryForm({ item_name: '', category: 'Food', food_type: 'Cat Food', quantity: '', unit: 'kg', min_threshold: '10', supplier_donor: '', expiration_date: '' });
-        onRefresh();
+        triggerSuccessToast(`Added "${sanitizedPayload.item_name}" to inventory.`);
+        setNewInventoryForm({
+          item_name: '',
+          category: 'Food',
+          food_type: 'Cat Food',
+          quantity: '',
+          unit: 'kg',
+          min_threshold: '10',
+          supplier_donor: '',
+          expiration_date: '',
+        });
+        if (onRefresh) onRefresh();
         setInventorySubTab('stock-list');
       } else {
-        const errData = await res.json().catch(() => ({}));
-        setFormMessage({ type: 'error', text: errData.unit?.[0] || errData.quantity?.[0] || errData.error || 'Failed to catalog item.' });
+        setFormMessage({
+          type: 'error',
+          text: res.data?.unit?.[0] || res.data?.quantity?.[0] || res.error || 'Failed to add inventory item.',
+        });
       }
-    } catch {
-      setFormMessage({ type: 'error', text: 'Network connection failure with inventory database.' });
+    } finally {
+      setSubmittingCreate(false);
     }
   };
 
-  // --- CRUD: UPDATE THROUGH TRANSACTIONS WITH CONFIRMATION ON DEDUCTION ---
   const handleTransactionSubmit = (e, targetItem) => {
     e.preventDefault();
+    if (submittingTx) return;
     const qtyDelta = parseInt(actionForm.quantity_changed, 10);
-    if (isNaN(qtyDelta) || qtyDelta <= 0) {
-      triggerErrorToast('Please specify a valid positive quantity amount.');
+    if (Number.isNaN(qtyDelta) || qtyDelta <= 0) {
+      triggerErrorToast('Please enter a positive whole number.');
       return;
     }
 
-    // If removing stocks (OUT), validate boundary condition (TC-SUP-003) & trigger confirmation modal
     if (actionForm.transaction_type === 'OUT') {
       const currentStock = targetItem.quantity ?? 0;
       if (qtyDelta > currentStock) {
@@ -170,7 +225,7 @@ export default function InventoryControl({
           isOpen: true,
           item: targetItem,
           requestedQty: qtyDelta,
-          currentStock: currentStock
+          currentStock,
         });
         return;
       }
@@ -178,51 +233,52 @@ export default function InventoryControl({
       setDeductionModal({
         isOpen: true,
         item: targetItem,
-        qtyDelta: qtyDelta,
+        qtyDelta,
         reason: actionForm.reason.trim() || 'Dispensation / Patrol feeding refill',
         supplier_donor: actionForm.supplier_donor.trim(),
-        submitting: false
+        submitting: false,
       });
       return;
     }
 
-    // Direct inflow transaction execution
     executeTransactionApi(targetItem.item_id, 'IN', qtyDelta, actionForm.reason, actionForm.supplier_donor);
   };
 
   const executeTransactionApi = async (itemId, type, qtyDelta, reason, supplier) => {
+    setSubmittingTx(true);
     try {
-      const res = await fetch('https://taskforcebruno.onrender.com/api/inventory/transactions/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          item_id: itemId, 
-          transaction_type: type,
-          quantity_changed: qtyDelta,
-          reason: reason,
-          supplier_donor: supplier || null
-        })
+      const res = await apiPost('/inventory/transactions/', {
+        item_id: itemId,
+        transaction_type: type,
+        quantity_changed: qtyDelta,
+        reason,
+        supplier_donor: supplier || null,
       });
       if (res.ok) {
         setSelectedActionItemId(null);
-        setActionForm({ transaction_type: 'IN', quantity_changed: '', reason: 'Bulk Purchase / Donation', supplier_donor: '', expiration_date: '' });
+        setActionForm({
+          transaction_type: 'IN',
+          quantity_changed: '',
+          reason: 'Bulk Purchase / Donation',
+          supplier_donor: '',
+          expiration_date: '',
+        });
         setDeductionModal({ isOpen: false, item: null, qtyDelta: 0, reason: '', supplier_donor: '', submitting: false });
-        onRefresh();
+        triggerSuccessToast(
+          type === 'IN' ? `Logged +${qtyDelta} stock inflow.` : `Logged -${qtyDelta} stock disbursement.`
+        );
+        if (onRefresh) onRefresh();
       } else {
-        const errorJson = await res.json().catch(() => ({}));
-        const errText = errorJson.error || (errorJson.unit ? errorJson.unit[0] : null) || 'Server rejected transaction logging request.';
-        setDeductionModal(prev => ({ ...prev, submitting: false }));
-        triggerErrorToast(errText);
+        setDeductionModal((prev) => ({ ...prev, submitting: false }));
+        triggerErrorToast(res.error || 'Could not record stock movement.');
       }
-    } catch (err) {
-      console.error(err);
-      setDeductionModal(prev => ({ ...prev, submitting: false }));
-      triggerErrorToast('Network failure connecting to inventory ledger.');
+    } finally {
+      setSubmittingTx(false);
     }
   };
 
   const handleConfirmDeduction = async () => {
-    if (!deductionModal.item) return;
+    if (!deductionModal.item || deductionModal.submitting) return;
     const currentStock = deductionModal.item.quantity ?? 0;
     if (deductionModal.qtyDelta > currentStock) {
       const errorMsg = `Disbursement quantity exceeds available balance (${currentStock} on-hand)`;
@@ -231,13 +287,13 @@ export default function InventoryControl({
         isOpen: true,
         item: deductionModal.item,
         requestedQty: deductionModal.qtyDelta,
-        currentStock: currentStock
+        currentStock,
       });
       setDeductionModal({ isOpen: false, item: null, qtyDelta: 0, reason: '', supplier_donor: '', submitting: false });
       return;
     }
 
-    setDeductionModal(prev => ({ ...prev, submitting: true }));
+    setDeductionModal((prev) => ({ ...prev, submitting: true }));
     await executeTransactionApi(
       deductionModal.item.item_id,
       'OUT',
@@ -251,454 +307,589 @@ export default function InventoryControl({
     e.preventDefault();
     const parsedThreshold = parseInt(thresholdDraft, 10);
     if (Number.isNaN(parsedThreshold) || parsedThreshold < 0) {
-      triggerErrorToast('Please enter a valid non-negative threshold level.');
+      triggerErrorToast('Please enter a valid non-negative threshold.');
       return;
     }
 
     setSavingThreshold(true);
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/inventory/${encodeURIComponent(targetItem.item_id)}/`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ min_threshold: parsedThreshold })
+      const res = await apiPut(`/inventory/${encodeURIComponent(targetItem.item_id)}/`, {
+        min_threshold: parsedThreshold,
       });
       if (res.ok) {
         triggerSuccessToast(`Alert threshold for "${targetItem.item_name}" set to ≤${parsedThreshold} ${targetItem.unit}.`);
-        onRefresh();
+        if (onRefresh) onRefresh();
       } else {
-        const errJson = await res.json().catch(() => ({}));
-        const errText = errJson.min_threshold?.[0] || errJson.error || 'Server rejected threshold update.';
-        triggerErrorToast(errText);
+        triggerErrorToast(res.data?.min_threshold?.[0] || res.error || 'Failed to update threshold.');
       }
-    } catch (err) {
-      console.error(err);
-      triggerErrorToast('Network failure updating stock threshold.');
     } finally {
       setSavingThreshold(false);
     }
   };
 
-  const openPurgeModal = (item) => {
-    setPurgeModal({
+  const openDeleteModal = (item) => {
+    setDeleteModal({
       isOpen: true,
       itemId: item.item_id,
       itemName: item.item_name,
-      submitting: false
+      submitting: false,
     });
   };
 
-  const executeInventoryItemPurge = async () => {
-    if (!purgeModal.itemId) return;
-    setPurgeModal(prev => ({ ...prev, submitting: true }));
+  const executeDeleteItem = async () => {
+    if (!deleteModal.itemId || deleteModal.submitting) return;
+    setDeleteModal((prev) => ({ ...prev, submitting: true }));
     try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/inventory/${encodeURIComponent(purgeModal.itemId)}/`, { method: 'DELETE' });
+      const res = await apiDelete(`/inventory/${encodeURIComponent(deleteModal.itemId)}/`);
       if (res.ok) {
-        setPurgeModal({ isOpen: false, itemId: null, itemName: '', submitting: false });
-        onRefresh();
+        const removedName = deleteModal.itemName;
+        setDeleteModal({ isOpen: false, itemId: null, itemName: '', submitting: false });
+        if (selectedActionItemId === deleteModal.itemId) setSelectedActionItemId(null);
+        triggerSuccessToast(`Removed "${removedName}" from inventory.`);
+        if (onRefresh) onRefresh();
       } else {
-        setPurgeModal(prev => ({ ...prev, submitting: false }));
-        triggerErrorToast('Server rejected item removal request.');
+        setDeleteModal((prev) => ({ ...prev, submitting: false }));
+        triggerErrorToast(res.error || 'Failed to remove inventory item.');
       }
-    } catch (err) {
-      console.error(err);
-      setPurgeModal(prev => ({ ...prev, submitting: false }));
-      triggerErrorToast('Network error connecting to inventory registers.');
+    } catch {
+      setDeleteModal((prev) => ({ ...prev, submitting: false }));
+      triggerErrorToast('Unable to remove inventory item.');
     }
   };
 
+  const openStockDrawer = (item, defaultType) => {
+    if (selectedActionItemId === item.item_id && defaultType === actionForm.transaction_type) {
+      setSelectedActionItemId(null);
+      return;
+    }
+    setSelectedActionItemId(item.item_id);
+    setThresholdDraft(String(item.min_threshold ?? 10));
+    setActionForm({
+      transaction_type: defaultType,
+      quantity_changed: '',
+      reason: defaultType === 'OUT' ? 'Dispensation / Patrol feeding refill' : 'Bulk Purchase / Donation',
+      supplier_donor: '',
+      expiration_date: '',
+    });
+  };
+
+  const renderAdjustmentDrawer = (item) => (
+    <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-inner space-y-4">
+      <form onSubmit={(e) => handleTransactionSubmit(e, item)} className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+          <span className="font-bold text-slate-900 text-xs">
+            Log Stock Movement — {item.item_name}
+          </span>
+          <span className="text-[10px] font-mono text-slate-500">
+            Balance: {item.quantity} {item.unit} &bull; Alert: &le;{item.min_threshold ?? 10} {item.unit}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+          <div>
+            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Direction</label>
+            <select
+              value={actionForm.transaction_type}
+              onChange={(e) => setActionForm({ ...actionForm, transaction_type: e.target.value })}
+              className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 text-base sm:text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
+            >
+              <option value="IN">Stock In (+ Inflow)</option>
+              <option value="OUT">Log Disbursement (OUTFLOW)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+              Quantity ({item.unit})
+            </label>
+            <input
+              type="number"
+              required
+              min="1"
+              placeholder="Amount"
+              value={actionForm.quantity_changed}
+              onChange={(e) => setActionForm({ ...actionForm, quantity_changed: e.target.value })}
+              className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-base sm:text-xs font-mono text-slate-800"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Reason</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Feeding station refill"
+              value={actionForm.reason}
+              onChange={(e) => setActionForm({ ...actionForm, reason: e.target.value })}
+              className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-base sm:text-xs text-slate-800"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Source / Recipient</label>
+            <input
+              type="text"
+              placeholder="Optional notes"
+              value={actionForm.supplier_donor}
+              onChange={(e) => setActionForm({ ...actionForm, supplier_donor: e.target.value })}
+              className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-base sm:text-xs text-slate-800"
+            />
+          </div>
+
+          <div className="flex flex-col justify-end">
+            <button
+              type="submit"
+              disabled={submittingTx}
+              className={`w-full py-2.5 sm:py-2 text-white font-bold rounded-xl text-xs uppercase tracking-wide border-b-2 shadow-sm transition-all disabled:opacity-50 ${
+                actionForm.transaction_type === 'OUT'
+                  ? 'bg-rose-700 hover:bg-rose-800 border-rose-900'
+                  : 'bg-[#5C0612] hover:bg-[#42040B] border-[#D4AF37]'
+              }`}
+            >
+              {actionForm.transaction_type === 'OUT' ? 'Log Disbursement (OUTFLOW)' : 'Record Inflow'}
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <form
+        onSubmit={(e) => handleThresholdUpdate(e, item)}
+        className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+      >
+        <div>
+          <span className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+            Low-Stock Alert Threshold
+          </span>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Flags a low-stock warning whenever balance is at or below this quantity.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 focus-within:bg-white focus-within:border-slate-400 overflow-hidden">
+            <input
+              type="number"
+              min="0"
+              required
+              aria-label={`Minimum alert threshold for ${item.item_name}`}
+              value={thresholdDraft}
+              onChange={(e) => setThresholdDraft(e.target.value)}
+              className="w-20 p-2 bg-transparent focus:outline-none text-base sm:text-xs font-mono font-bold text-slate-900"
+            />
+            <span className="px-2.5 py-2 bg-slate-100 border-l border-slate-200 text-[10px] font-mono text-slate-500 select-none">
+              {item.unit}
+            </span>
+          </div>
+          <button
+            type="submit"
+            disabled={savingThreshold}
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-[11px] uppercase tracking-wide shadow-sm transition-all disabled:opacity-50 whitespace-nowrap"
+          >
+            {savingThreshold ? 'Saving...' : 'Update Threshold'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 text-xs text-slate-700 animate-fade-in pb-12 text-left font-sans">
-      
-      {/* Top Banner with Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 select-none">
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm text-left">
+    <div className="w-full max-w-7xl mx-auto space-y-5 sm:space-y-6 text-xs text-slate-700 animate-fade-in pb-8 text-left font-sans">
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 select-none">
+        <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm text-left">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-500">Total Catalog Items</span>
-            <span className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
+            <span className="text-[11px] font-semibold text-slate-500">Total Items</span>
+            <span className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
               <Package className="w-4 h-4" />
             </span>
           </div>
-          <div className="text-2xl font-bold text-slate-900 mt-2 tabular-nums">{totalItemsCount} Items</div>
-          <p className="text-[11px] text-slate-400 mt-0.5">Active tracked provisions</p>
+          <div className="text-xl sm:text-2xl font-bold text-slate-900 mt-2 tabular-nums">
+            {totalItemsCount}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5">Tracked supplies</p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm text-left">
+        <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm text-left">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-500">Low Stock Warnings</span>
-            <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-              lowStockItems.length > 0 ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-            }`}>
+            <span className="text-[11px] font-semibold text-slate-500">Low Stock</span>
+            <span
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center ${
+                lowStockItems.length > 0
+                  ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                  : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+              }`}
+            >
               <AlertTriangle className="w-4 h-4" />
             </span>
           </div>
-          <div className="text-2xl font-bold text-slate-900 mt-2 tabular-nums">{lowStockItems.length} Items</div>
-          <p className="text-[11px] text-slate-400 mt-0.5">Below alert threshold</p>
+          <div className="text-xl sm:text-2xl font-bold text-slate-900 mt-2 tabular-nums">
+            {lowStockItems.length}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5">At or below alert limit</p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm text-left">
+        <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm text-left">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500">Food &amp; Rations</span>
-            <span className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 border border-amber-200/70 flex items-center justify-center">
+            <span className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-50 text-amber-600 border border-amber-200/70 flex items-center justify-center">
               <Utensils className="w-4 h-4" />
             </span>
           </div>
-          <div className="text-2xl font-bold text-slate-900 mt-2 tabular-nums">{totalFoodItems.length} Brands</div>
-          <p className="text-[11px] text-slate-400 mt-0.5">Campus feeding inventory</p>
+          <div className="text-xl sm:text-2xl font-bold text-slate-900 mt-2 tabular-nums">
+            {totalFoodItems.length}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5">Feeding stock</p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm text-left">
+        <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm text-left">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-500">Medical &amp; Clinical</span>
-            <span className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 border border-blue-200/70 flex items-center justify-center">
+            <span className="text-[11px] font-semibold text-slate-500">Medical Supplies</span>
+            <span className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-blue-600 border border-blue-200/70 flex items-center justify-center">
               <Stethoscope className="w-4 h-4" />
             </span>
           </div>
-          <div className="text-2xl font-bold text-slate-900 mt-2 tabular-nums">{totalMedicalItems.length} Supplies</div>
-          <p className="text-[11px] text-slate-400 mt-0.5">Vaccines, cages, &amp; first aid</p>
+          <div className="text-xl sm:text-2xl font-bold text-slate-900 mt-2 tabular-nums">
+            {totalMedicalItems.length}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5">Vaccines &amp; first aid</p>
         </div>
       </div>
 
-      {/* Main Subtab Switcher Header */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 text-left">
-        <div className="flex bg-slate-100 p-1 rounded-2xl font-mono text-[10px] font-bold uppercase select-none overflow-x-auto">
-          <button 
-            onClick={() => setInventorySubTab('stock-list')} 
-            className={`px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
-              inventorySubTab === 'stock-list' ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-900'
+      {/* Subtab & Filter Header */}
+      <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 shadow-sm flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 text-left">
+        <div className="flex bg-slate-100 p-1 rounded-xl font-mono text-[10px] font-bold uppercase select-none overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setInventorySubTab('stock-list')}
+            className={`px-3.5 py-2 rounded-lg transition-all whitespace-nowrap ${
+              inventorySubTab === 'stock-list'
+                ? 'bg-white text-[#5C0612] shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            Active Supply Catalog ({inventoryItems.length})
+            Active Catalog ({inventoryItems.length})
           </button>
-          <button 
-            onClick={() => setInventorySubTab('add-item')} 
-            className={`px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
-              inventorySubTab === 'add-item' ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-900'
+          <button
+            type="button"
+            onClick={() => setInventorySubTab('add-item')}
+            className={`px-3.5 py-2 rounded-lg transition-all whitespace-nowrap ${
+              inventorySubTab === 'add-item'
+                ? 'bg-white text-[#5C0612] shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            + Catalog New Item
+            + Add Item
           </button>
-          <button 
-            onClick={() => setInventorySubTab('history')} 
-            className={`px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
-              inventorySubTab === 'history' ? 'bg-white text-[#5C0612] shadow-sm' : 'text-slate-500 hover:text-slate-900'
+          <button
+            type="button"
+            onClick={() => setInventorySubTab('history')}
+            className={`px-3.5 py-2 rounded-lg transition-all whitespace-nowrap ${
+              inventorySubTab === 'history'
+                ? 'bg-white text-[#5C0612] shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            Stock History Log ({transactionLedger.length})
+            Stock History ({transactionLedger.length})
           </button>
         </div>
 
         {inventorySubTab === 'stock-list' && (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="Search catalog..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-xs text-slate-800"
-            />
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none"
-            >
-              <option value="All">All Categories</option>
-              <option value="Food">Food / Rations</option>
-              <option value="Medical">Medical Supplies</option>
-              <option value="Supplies">Physical Assets</option>
-            </select>
-            <button
-              onClick={onRefresh}
-              className="p-1.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-colors"
-              title="Refresh"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-              </svg>
-            </button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="relative flex-1 sm:w-52">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search catalog..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none text-base sm:text-xs text-slate-800"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="flex-1 sm:flex-initial px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-semibold text-slate-700 focus:outline-none"
+              >
+                <option value="All">All Categories</option>
+                <option value="Food">Food / Rations</option>
+                <option value="Medical">Medical Supplies</option>
+                <option value="Supplies">Equipment &amp; Gear</option>
+              </select>
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-colors shrink-0"
+                title="Refresh inventory"
+                aria-label="Refresh inventory"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* VIEW PANEL 1: Stock Master Grid Table */}
+      {/* PANEL 1: Stock List (Mobile Cards + Desktop Table) */}
       {inventorySubTab === 'stock-list' && (
-        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-left">
+        <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-sm overflow-hidden text-left">
           {loadingInventory ? (
-            <div className="p-16 text-center text-slate-400 font-mono text-xs">
-              Synchronizing warehouse inventory records...
+            <div className="p-14 text-center text-slate-400 font-mono text-xs flex flex-col items-center gap-2">
+              <div className="w-6 h-6 border-2 border-slate-200 border-t-[#5C0612] rounded-full animate-spin" />
+              <span>Loading inventory records...</span>
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="p-16 text-center text-slate-400 italic">
-              No matching inventory items found.
-            </div>
+            <div className="p-14 text-center text-slate-400">No matching inventory items found.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 uppercase tracking-wider font-semibold text-[10px]">
-                    <th className="p-4 w-1/3">Item Catalog Description</th>
-                    <th className="p-4">Category</th>
-                    <th className="p-4">Stock Level</th>
-                    <th className="p-4">Supplier / Donor Mapping</th>
-                    <th className="p-4">Expiration Tracking</th>
-                    <th className="p-4 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {filteredItems.map((item) => {
-                    const isLow = (item.quantity ?? 0) <= (item.min_threshold ?? 10);
-                    return (
-                      <React.Fragment key={item.item_id}>
-                        <tr className="hover:bg-slate-50/50 font-medium text-xs transition-colors">
-                          <td className="p-4">
-                            <div className="font-bold text-slate-900 text-sm">{item.item_name}</div>
+            <>
+              {/* Mobile Card View */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {filteredItems.map((item) => {
+                  const isLow = (item.quantity ?? 0) <= (item.min_threshold ?? 10);
+                  const isOpen = selectedActionItemId === item.item_id;
+                  return (
+                    <div key={item.item_id} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-900 text-sm">{item.item_name}</div>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <span className="text-[10px] font-mono text-slate-400">SKU #{item.item_id}</span>
-                          </td>
-                          <td className="p-4">
-                            <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold font-mono border ${
-                              item.category === 'Food' ? 'bg-amber-50 text-amber-800 border-amber-200' :
-                              item.category === 'Medical' ? 'bg-blue-50 text-blue-800 border-blue-200' :
-                              'bg-slate-100 text-slate-700 border-slate-200'
-                            }`}>
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold font-mono border ${
+                                item.category === 'Food'
+                                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                  : item.category === 'Medical'
+                                  ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                  : 'bg-slate-100 text-slate-700 border-slate-200'
+                              }`}
+                            >
                               {item.category}
                             </span>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold text-slate-900 text-sm">
-                                {item.quantity}
+                            {isLow && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-rose-50 text-rose-700 border border-rose-200">
+                                LOW STOCK (&le;{item.min_threshold ?? 10})
                               </span>
-                              <span className="text-[11px] text-slate-400 font-light font-sans">{item.unit}</span>
-                              {isLow && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-rose-50 text-rose-700 border border-rose-200">
-                                  LOW STOCK (&le;{item.min_threshold ?? 10})
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
-                              Threshold: &le;{item.min_threshold ?? 10} {item.unit}
-                            </span>
-                          </td>
-                          <td className="p-4 text-slate-600 text-xs">
-                            {item.supplier_donor || 'Campus General Fund'}
-                          </td>
-                          <td className="p-4 font-mono text-slate-500 text-[11px]">
-                            {item.expiration_date || 'Non-perishable'}
-                          </td>
-                          <td className="p-4">
-                            <div className="flex gap-2 justify-center items-center">
-                              <button 
-                                type="button"
-                                onClick={() => {
-                                  setSelectedActionItemId(item.item_id);
-                                  setThresholdDraft(String(item.min_threshold ?? 10));
-                                  setActionForm({ transaction_type: 'OUT', quantity_changed: '', reason: 'Dispensation / Patrol feeding refill', supplier_donor: '', expiration_date: '' });
-                                }} 
-                                className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-xl text-[10px] shadow-sm whitespace-nowrap transition-colors"
-                              >
-                                Log Disbursement (OUTFLOW)
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  if (selectedActionItemId === item.item_id) {
-                                    setSelectedActionItemId(null);
-                                  } else {
-                                    setSelectedActionItemId(item.item_id);
-                                    setThresholdDraft(String(item.min_threshold ?? 10));
-                                    setActionForm({ transaction_type: 'IN', quantity_changed: '', reason: 'Bulk Purchase / Donation', supplier_donor: '', expiration_date: '' });
-                                  }
-                                }} 
-                                className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 font-bold rounded-xl text-[11px] text-slate-700 shadow-sm whitespace-nowrap transition-colors"
-                              >
-                                {selectedActionItemId === item.item_id ? 'Close' : 'Adjust Stock'}
-                              </button>
-                              <button 
-                                onClick={() => openPurgeModal(item)} 
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                title="Remove Item"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                                </svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                        
-                        {/* Inline Stock Adjustment & Threshold Drawer */}
-                        {selectedActionItemId === item.item_id && (
-                          <tr className="bg-slate-50/80">
-                            <td colSpan={6} className="p-5 border-y border-slate-200">
-                              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-inner space-y-4">
-                                <form onSubmit={(e) => handleTransactionSubmit(e, item)} className="space-y-3">
-                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                                    <span className="font-bold text-slate-900 text-xs">
-                                      Log Stock Movement for {item.item_name}
-                                    </span>
-                                    <span className="text-[10px] font-mono text-slate-400">
-                                      Current Balance: {item.quantity} {item.unit} &bull; Alert Threshold: &le;{item.min_threshold ?? 10} {item.unit}
-                                    </span>
-                                  </div>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-                                    <div>
-                                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Direction</label>
-                                      <select 
-                                        value={actionForm.transaction_type} 
-                                        onChange={(e) => setActionForm({ ...actionForm, transaction_type: e.target.value })} 
-                                        className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
-                                      >
-                                        <option value="IN">Stock In (+ Inflow)</option>
-                                        <option value="OUT">Log Disbursement (OUTFLOW)</option>
-                                      </select>
-                                    </div>
-                                    <div>
-                                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Quantity Delta ({item.unit})</label>
-                                      <input 
-                                        type="number" 
-                                        required 
-                                        min="1"
-                                        placeholder="Amount" 
-                                        value={actionForm.quantity_changed} 
-                                        onChange={(e) => setActionForm({ ...actionForm, quantity_changed: e.target.value })} 
-                                        className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-xs font-mono text-slate-800" 
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Audit Reason</label>
-                                      <input 
-                                        type="text" 
-                                        required 
-                                        placeholder="e.g. Daily feeding station replenishment" 
-                                        value={actionForm.reason} 
-                                        onChange={(e) => setActionForm({ ...actionForm, reason: e.target.value })} 
-                                        className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-xs text-slate-800" 
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Source / Recipient</label>
-                                      <input 
-                                        type="text" 
-                                        placeholder="Optional notes" 
-                                        value={actionForm.supplier_donor} 
-                                        onChange={(e) => setActionForm({ ...actionForm, supplier_donor: e.target.value })} 
-                                        className="w-full p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none text-xs text-slate-800" 
-                                      />
-                                    </div>
-                                    <div className="flex flex-col justify-end">
-                                      <button 
-                                        type="submit" 
-                                        className={`w-full py-2 text-white font-bold rounded-xl text-xs uppercase tracking-wide border-b-2 shadow-sm transition-all ${
-                                          actionForm.transaction_type === 'OUT'
-                                            ? 'bg-rose-700 hover:bg-rose-800 border-rose-900'
-                                            : 'bg-[#5C0612] hover:bg-[#42040B] border-[#D4AF37]'
-                                        }`}
-                                      >
-                                        {actionForm.transaction_type === 'OUT' ? 'Log Disbursement (OUTFLOW)' : 'Record Inflow'}
-                                      </button>
-                                    </div>
-                                  </div>
-                                </form>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="font-mono font-black text-slate-900 text-base">
+                            {item.quantity} <span className="text-[11px] font-normal text-slate-500">{item.unit}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            Min &le;{item.min_threshold ?? 10}
+                          </span>
+                        </div>
+                      </div>
 
-                                {/* Low-Stock Threshold Configuration Bar */}
-                                <form
-                                  onSubmit={(e) => handleThresholdUpdate(e, item)}
-                                  className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                        <span>Source: {item.supplier_donor || 'Campus General Fund'}</span>
+                        <span>Exp: {item.expiration_date || 'Non-perishable'}</span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => openStockDrawer(item, 'OUT')}
+                          className="flex-1 px-3 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-xl text-[11px] transition-colors"
+                        >
+                          Log Disbursement (OUTFLOW)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openStockDrawer(item, 'IN')}
+                          className="px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 font-bold rounded-xl text-[11px] text-slate-700 transition-colors"
+                        >
+                          {isOpen ? 'Close' : 'Adjust'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openDeleteModal(item)}
+                          aria-label={`Remove ${item.item_name}`}
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-xl transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {isOpen && <div className="pt-2">{renderAdjustmentDrawer(item)}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 uppercase tracking-wider font-semibold text-[10px]">
+                      <th className="p-4 w-1/3">Item</th>
+                      <th className="p-4">Category</th>
+                      <th className="p-4">Stock Level</th>
+                      <th className="p-4">Supplier / Donor</th>
+                      <th className="p-4">Expiration</th>
+                      <th className="p-4 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {filteredItems.map((item) => {
+                      const isLow = (item.quantity ?? 0) <= (item.min_threshold ?? 10);
+                      return (
+                        <React.Fragment key={item.item_id}>
+                          <tr className="hover:bg-slate-50/50 font-medium text-xs transition-colors">
+                            <td className="p-4">
+                              <div className="font-bold text-slate-900 text-sm">{item.item_name}</div>
+                              <span className="text-[10px] font-mono text-slate-400">SKU #{item.item_id}</span>
+                            </td>
+                            <td className="p-4">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold font-mono border ${
+                                  item.category === 'Food'
+                                    ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                    : item.category === 'Medical'
+                                    ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                                }`}
+                              >
+                                {item.category}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-slate-900 text-sm">{item.quantity}</span>
+                                <span className="text-[11px] text-slate-400 font-sans">{item.unit}</span>
+                                {isLow && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-rose-50 text-rose-700 border border-rose-200">
+                                    LOW STOCK (&le;{item.min_threshold ?? 10})
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
+                                Threshold: &le;{item.min_threshold ?? 10} {item.unit}
+                              </span>
+                            </td>
+                            <td className="p-4 text-slate-600 text-xs">
+                              {item.supplier_donor || 'Campus General Fund'}
+                            </td>
+                            <td className="p-4 font-mono text-slate-500 text-[11px]">
+                              {item.expiration_date || 'Non-perishable'}
+                            </td>
+                            <td className="p-4">
+                              <div className="flex gap-2 justify-center items-center">
+                                <button
+                                  type="button"
+                                  onClick={() => openStockDrawer(item, 'OUT')}
+                                  className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-xl text-[10px] shadow-sm whitespace-nowrap transition-colors"
                                 >
-                                  <div>
-                                    <span className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider">
-                                      Low-Stock Alert Threshold Level
-                                    </span>
-                                    <p className="text-[11px] text-slate-400 mt-0.5">
-                                      Triggers a low-stock warning whenever balance is at or below this quantity.
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 focus-within:bg-white focus-within:border-slate-400 overflow-hidden">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        required
-                                        aria-label={`Minimum alert threshold for ${item.item_name}`}
-                                        value={thresholdDraft}
-                                        onChange={(e) => setThresholdDraft(e.target.value)}
-                                        className="w-20 p-2 bg-transparent focus:outline-none text-xs font-mono font-bold text-slate-900"
-                                      />
-                                      <span className="px-2.5 py-2 bg-slate-100 border-l border-slate-200 text-[10px] font-mono text-slate-500 select-none">
-                                        {item.unit}
-                                      </span>
-                                    </div>
-                                    <button
-                                      type="submit"
-                                      disabled={savingThreshold}
-                                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-[11px] uppercase tracking-wide shadow-sm transition-all disabled:opacity-50 whitespace-nowrap"
-                                    >
-                                      {savingThreshold ? 'Saving...' : 'Update Threshold'}
-                                    </button>
-                                  </div>
-                                </form>
+                                  Log Disbursement (OUTFLOW)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openStockDrawer(item, 'IN')}
+                                  className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 font-bold rounded-xl text-[11px] text-slate-700 shadow-sm whitespace-nowrap transition-colors"
+                                >
+                                  {selectedActionItemId === item.item_id ? 'Close' : 'Adjust Stock'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openDeleteModal(item)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                  title="Remove item"
+                                  aria-label={`Remove ${item.item_name}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </div>
                             </td>
                           </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+
+                          {selectedActionItemId === item.item_id && (
+                            <tr className="bg-slate-50/80">
+                              <td colSpan={6} className="p-5 border-y border-slate-200">
+                                {renderAdjustmentDrawer(item)}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
 
-      {/* VIEW PANEL 2: Catalog New Asset Creation Form */}
+      {/* PANEL 2: Add Item Form */}
       {inventorySubTab === 'add-item' && (
-        <div className="w-full bg-white border border-slate-200 rounded-3xl p-6 shadow-sm animate-fade-in text-left">
+        <div className="w-full bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm animate-fade-in text-left">
           <div className="border-b border-slate-100 pb-3 mb-5">
-            <h3 className="text-base font-black text-slate-900 tracking-tight">Catalog New Provision or Logistics Asset</h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">Define category attributes, critical restocking thresholds, and initial unit stocks.</p>
+            <h3 className="text-base font-black text-slate-900 tracking-tight">Add New Inventory Item</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Define item details, category, low-stock threshold, and opening balance.
+            </p>
           </div>
 
           {formMessage.text && (
-            <div className={`p-4 border text-xs font-medium rounded-2xl mb-5 ${
-              formMessage.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'
-            }`}>
+            <div
+              className={`p-3.5 border text-xs font-medium rounded-2xl mb-5 ${
+                formMessage.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-rose-50 text-rose-800 border-rose-200'
+              }`}
+            >
               {formMessage.text}
             </div>
           )}
 
           <form onSubmit={handleInventoryCreate} className="space-y-4">
             <div>
-              <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">Item Catalog Name *</label>
-              <input 
-                type="text" 
-                required 
-                placeholder={newInventoryForm.category === 'Food' ? 'e.g. Dry Adult Kibble 20kg Bag, Salmon Wet Pouch' : 'e.g. Anti-Rabies Vaccine Vials, Metal Recovery Cage'} 
-                value={newInventoryForm.item_name} 
-                onChange={(e) => setNewInventoryForm({ ...newInventoryForm, item_name: e.target.value })} 
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-medium text-slate-900 text-xs" 
+              <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">Item Name *</label>
+              <input
+                type="text"
+                required
+                placeholder={
+                  newInventoryForm.category === 'Food'
+                    ? 'e.g. Dry Adult Kibble 20kg Bag, Salmon Wet Pouch'
+                    : 'e.g. Anti-Rabies Vaccine Vials, Metal Recovery Cage'
+                }
+                value={newInventoryForm.item_name}
+                onChange={(e) => setNewInventoryForm({ ...newInventoryForm, item_name: e.target.value })}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-medium text-slate-900 text-base sm:text-xs"
               />
             </div>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-              <div className={newInventoryForm.category === 'Food' ? "sm:col-span-1" : "sm:col-span-2"}>
+              <div className={newInventoryForm.category === 'Food' ? 'sm:col-span-1' : 'sm:col-span-2'}>
                 <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">Category *</label>
-                <select 
-                  value={newInventoryForm.category} 
-                  onChange={handleCategoryChange} 
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-medium text-xs text-slate-800"
+                <select
+                  value={newInventoryForm.category}
+                  onChange={handleCategoryChange}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-medium text-base sm:text-xs text-slate-800"
                 >
                   <option value="Food">Food / Rations</option>
                   <option value="Medical">Medical Supplies</option>
-                  <option value="Supplies">Physical Assets / Gear</option>
+                  <option value="Supplies">Equipment &amp; Gear</option>
                 </select>
               </div>
 
               {newInventoryForm.category === 'Food' && (
                 <div className="sm:col-span-1">
                   <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">Ration Type</label>
-                  <select 
-                    value={newInventoryForm.food_type} 
-                    onChange={(e) => setNewInventoryForm({ ...newInventoryForm, food_type: e.target.value })} 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 text-slate-800 font-medium rounded-xl focus:bg-white focus:outline-none text-xs"
+                  <select
+                    value={newInventoryForm.food_type}
+                    onChange={(e) => setNewInventoryForm({ ...newInventoryForm, food_type: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 text-slate-800 font-medium rounded-xl focus:bg-white focus:outline-none text-base sm:text-xs"
                   >
                     <option value="Cat Food">Cat Food</option>
                     <option value="Dog Food">Dog Food</option>
@@ -708,26 +899,28 @@ export default function InventoryControl({
 
               <div>
                 <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">Initial Quantity *</label>
-                <input 
-                  type="number" 
-                  required 
+                <input
+                  type="number"
+                  required
                   min="0"
-                  placeholder="0" 
-                  value={newInventoryForm.quantity} 
-                  onChange={(e) => setNewInventoryForm({ ...newInventoryForm, quantity: e.target.value })} 
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:bg-white focus:outline-none text-xs" 
+                  placeholder="0"
+                  value={newInventoryForm.quantity}
+                  onChange={(e) => setNewInventoryForm({ ...newInventoryForm, quantity: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:bg-white focus:outline-none text-base sm:text-xs"
                 />
               </div>
-              
+
               <div>
                 <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">Unit of Measure</label>
-                <select 
-                  value={newInventoryForm.unit} 
-                  onChange={(e) => setNewInventoryForm({ ...newInventoryForm, unit: e.target.value })} 
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-medium text-xs text-slate-800"
+                <select
+                  value={newInventoryForm.unit}
+                  onChange={(e) => setNewInventoryForm({ ...newInventoryForm, unit: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-medium text-base sm:text-xs text-slate-800"
                 >
-                  {(CATEGORY_UNITS[newInventoryForm.category] || CATEGORY_UNITS.Food).map(u => (
-                    <option key={u.value} value={u.value}>{u.label}</option>
+                  {(CATEGORY_UNITS[newInventoryForm.category] || CATEGORY_UNITS.Food).map((u) => (
+                    <option key={u.value} value={u.value}>
+                      {u.label}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -735,145 +928,224 @@ export default function InventoryControl({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">Minimum Alert Threshold</label>
-                <input 
-                  type="number" 
-                  required 
+                <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">
+                  Minimum Alert Threshold
+                </label>
+                <input
+                  type="number"
+                  required
                   min="0"
-                  placeholder="10" 
-                  value={newInventoryForm.min_threshold} 
-                  onChange={(e) => setNewInventoryForm({ ...newInventoryForm, min_threshold: e.target.value })} 
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:bg-white focus:outline-none text-xs" 
+                  placeholder="10"
+                  value={newInventoryForm.min_threshold}
+                  onChange={(e) => setNewInventoryForm({ ...newInventoryForm, min_threshold: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:bg-white focus:outline-none text-base sm:text-xs"
                 />
               </div>
               <div>
-                <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">Expiration Date (Optional)</label>
-                <input 
-                  type="date" 
-                  value={newInventoryForm.expiration_date} 
-                  onChange={(e) => setNewInventoryForm({ ...newInventoryForm, expiration_date: e.target.value })} 
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:bg-white focus:outline-none text-xs" 
+                <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">
+                  Expiration Date (Optional)
+                </label>
+                <input
+                  type="date"
+                  value={newInventoryForm.expiration_date}
+                  onChange={(e) => setNewInventoryForm({ ...newInventoryForm, expiration_date: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:bg-white focus:outline-none text-base sm:text-xs"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">Supplier or Donor Organization</label>
-              <input 
-                type="text" 
-                placeholder="e.g. CIT-U Alumni Association, Wildcat Pet Care Fund" 
-                value={newInventoryForm.supplier_donor} 
-                onChange={(e) => setNewInventoryForm({ ...newInventoryForm, supplier_donor: e.target.value })} 
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-medium text-slate-900 text-xs" 
+              <label className="block font-bold text-slate-500 uppercase text-[10px] mb-1">
+                Supplier or Donor
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. CIT-U Alumni Association, Wildcat Pet Care Fund"
+                value={newInventoryForm.supplier_donor}
+                onChange={(e) => setNewInventoryForm({ ...newInventoryForm, supplier_donor: e.target.value })}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none font-medium text-slate-900 text-base sm:text-xs"
               />
             </div>
 
-            <button 
-              type="submit" 
-              className="w-full py-3 bg-[#5C0612] text-white border-b-4 border-[#D4AF37] rounded-xl font-bold tracking-wider hover:bg-[#42040B] transition-all uppercase shadow-md text-xs"
+            <button
+              type="submit"
+              disabled={submittingCreate}
+              className="w-full py-3 bg-[#5C0612] text-white border-b-4 border-[#D4AF37] rounded-xl font-bold tracking-wider hover:bg-[#42040B] disabled:opacity-50 transition-all uppercase shadow-md text-xs"
             >
-              Add Item to Inventory Catalog
+              {submittingCreate ? 'Saving Item...' : 'Add Item to Inventory'}
             </button>
           </form>
         </div>
       )}
 
-      {/* VIEW PANEL 3: Audit Trail Ledger List */}
+      {/* PANEL 3: Stock History Log (Mobile Cards + Desktop Table) */}
       {inventorySubTab === 'history' && (
-        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-left animate-fade-in">
-          <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-            <div>
-              <h4 className="font-bold text-slate-900 text-sm">Stock Movement & Activity Log</h4>
-              <p className="text-[11px] text-slate-400 mt-0.5">Complete history of all incoming supplies, stock used, and inventory adjustments.</p>
-            </div>
+        <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-sm overflow-hidden text-left animate-fade-in">
+          <div className="p-4 border-b border-slate-100">
+            <h4 className="font-bold text-slate-900 text-sm">Stock Movement History</h4>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Audit trail of incoming supplies, disbursements, and stock updates.
+            </p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 uppercase tracking-wider font-semibold text-[10px]">
-                  <th className="p-4">Date & Time</th>
-                  <th className="p-4 w-1/3">Item Name</th>
-                  <th className="p-4 text-center">Action</th>
-                  <th className="p-4">Quantity (+ / -)</th>
-                  <th className="p-4">Reason & Source / Donor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-mono text-[11px] text-slate-600">
+
+          {transactionLedger.length === 0 ? (
+            <div className="p-12 text-center text-slate-400">No stock movements logged yet.</div>
+          ) : (
+            <>
+              {/* Mobile Cards */}
+              <div className="md:hidden divide-y divide-slate-100">
                 {transactionLedger.map((tx) => (
-                  <tr key={tx.transaction_id} className="hover:bg-slate-50/50">
-                    <td className="p-4 text-slate-400 text-[10px] whitespace-nowrap">{tx.logged_at && !Number.isNaN(new Date(tx.logged_at).getTime()) ? new Date(tx.logged_at).toLocaleString() : 'N/A'}</td>
-                    <td className="p-4 font-sans font-bold text-slate-900 text-xs whitespace-normal break-words">{tx.inventory?.item_name || 'Archived Item'}</td>
-                    <td className="p-4 text-center whitespace-nowrap">
-                      <span className={`inline-block px-2.5 py-1 text-[9px] font-bold rounded-lg ${
-                        tx.transaction_type === 'IN' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
-                      }`}>
-                        {tx.transaction_type === 'IN' ? '+ Stock In' : '- Stock Out'}
+                  <div key={tx.transaction_id} className="p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-bold text-slate-900 text-xs">
+                        {tx.inventory?.item_name || 'Archived Item'}
                       </span>
-                    </td>
-                    <td className="p-4 font-bold text-slate-900 whitespace-nowrap">
-                      {tx.transaction_type === 'IN' ? '+' : '-'}{tx.quantity_changed} <span className="text-[9px] text-slate-400 font-light font-sans">{tx.inventory?.unit}</span>
-                    </td>
-                    <td className="p-4 font-sans text-slate-700 leading-tight whitespace-normal min-w-[200px] break-words">
-                      {tx.reason}
-                      {tx.supplier_donor && <span className="text-[10px] font-mono text-slate-400 block mt-0.5">Source: {tx.supplier_donor}</span>}
-                    </td>
-                  </tr>
+                      <span
+                        className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded-lg shrink-0 ${
+                          tx.transaction_type === 'IN'
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                            : 'bg-rose-50 text-rose-800 border border-rose-200'
+                        }`}
+                      >
+                        {tx.transaction_type === 'IN' ? '+' : '-'}
+                        {tx.quantity_changed} {tx.inventory?.unit || ''}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-700">{tx.reason}</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-slate-400">
+                      <span>{tx.supplier_donor ? `Source: ${tx.supplier_donor}` : 'Clinic Ledger'}</span>
+                      <span>
+                        {tx.logged_at && !Number.isNaN(new Date(tx.logged_at).getTime())
+                          ? new Date(tx.logged_at).toLocaleString()
+                          : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 uppercase tracking-wider font-semibold text-[10px]">
+                      <th className="p-4">Date &amp; Time</th>
+                      <th className="p-4 w-1/3">Item Name</th>
+                      <th className="p-4 text-center">Action</th>
+                      <th className="p-4">Quantity</th>
+                      <th className="p-4">Reason &amp; Source</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-mono text-[11px] text-slate-600">
+                    {transactionLedger.map((tx) => (
+                      <tr key={tx.transaction_id} className="hover:bg-slate-50/50">
+                        <td className="p-4 text-slate-400 text-[10px] whitespace-nowrap">
+                          {tx.logged_at && !Number.isNaN(new Date(tx.logged_at).getTime())
+                            ? new Date(tx.logged_at).toLocaleString()
+                            : 'N/A'}
+                        </td>
+                        <td className="p-4 font-sans font-bold text-slate-900 text-xs whitespace-normal break-words">
+                          {tx.inventory?.item_name || 'Archived Item'}
+                        </td>
+                        <td className="p-4 text-center whitespace-nowrap">
+                          <span
+                            className={`inline-block px-2.5 py-1 text-[9px] font-bold rounded-lg ${
+                              tx.transaction_type === 'IN'
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : 'bg-rose-50 text-rose-800 border border-rose-200'
+                            }`}
+                          >
+                            {tx.transaction_type === 'IN' ? '+ Stock In' : '- Stock Out'}
+                          </span>
+                        </td>
+                        <td className="p-4 font-bold text-slate-900 whitespace-nowrap">
+                          {tx.transaction_type === 'IN' ? '+' : '-'}
+                          {tx.quantity_changed}{' '}
+                          <span className="text-[9px] text-slate-400 font-normal font-sans">
+                            {tx.inventory?.unit}
+                          </span>
+                        </td>
+                        <td className="p-4 font-sans text-slate-700 leading-tight whitespace-normal min-w-[200px] break-words">
+                          {tx.reason}
+                          {tx.supplier_donor && (
+                            <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
+                              Source: {tx.supplier_donor}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
 
-      {/* CONFIRMATION MODAL: STOCK DEDUCTION / REMOVAL */}
+      {/* Confirmation Modal: Stock Deduction */}
       {deductionModal.isOpen && deductionModal.item && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
+        >
           <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 text-center space-y-4 animate-scale-up">
             <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 text-rose-600">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-              </svg>
+              <MinusCircle className="w-6 h-6" />
             </div>
-            
-            <h3 className="text-base font-black text-slate-900">
-              Confirm Stock Deduction
-            </h3>
-            
+
+            <h3 className="text-base font-black text-slate-900">Confirm Stock Deduction</h3>
+
             <p className="text-xs text-slate-500 leading-relaxed">
-              Are you sure you want to deduct <strong className="text-rose-700 font-mono text-sm">-{deductionModal.qtyDelta} {deductionModal.item.unit}</strong> from{' '}
-              <strong className="text-slate-900">{deductionModal.item.item_name}</strong>?
+              Deduct{' '}
+              <strong className="text-rose-700 font-mono text-sm">
+                -{deductionModal.qtyDelta} {deductionModal.item.unit}
+              </strong>{' '}
+              from <strong className="text-slate-900">{deductionModal.item.item_name}</strong>?
             </p>
 
             <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 text-[11px] text-left space-y-1">
               <div className="flex justify-between">
                 <span className="text-slate-400 font-mono">Current Stock:</span>
-                <span className="font-bold text-slate-800">{deductionModal.item.quantity} {deductionModal.item.unit}</span>
+                <span className="font-bold text-slate-800">
+                  {deductionModal.item.quantity} {deductionModal.item.unit}
+                </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400 font-mono">Stock Balance After:</span>
+                <span className="text-slate-400 font-mono">Balance After:</span>
                 <span className="font-bold text-rose-700 font-mono">
                   {deductionModal.item.quantity - deductionModal.qtyDelta} {deductionModal.item.unit}
                 </span>
               </div>
               <div className="flex justify-between border-t border-slate-200/60 pt-1 mt-1">
-                <span className="text-slate-400 font-mono">Audit Reason:</span>
-                <span className="text-slate-700 italic truncate max-w-[200px]">{deductionModal.reason}</span>
+                <span className="text-slate-400 font-mono">Reason:</span>
+                <span className="text-slate-700 truncate max-w-[200px]">{deductionModal.reason}</span>
               </div>
             </div>
 
             <div className="flex gap-2.5 pt-2">
-              <button 
+              <button
                 type="button"
                 disabled={deductionModal.submitting}
-                onClick={() => setDeductionModal({ isOpen: false, item: null, qtyDelta: 0, reason: '', supplier_donor: '', submitting: false })} 
+                onClick={() =>
+                  setDeductionModal({
+                    isOpen: false,
+                    item: null,
+                    qtyDelta: 0,
+                    reason: '',
+                    supplier_donor: '',
+                    submitting: false,
+                  })
+                }
                 className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs uppercase tracking-wide transition-colors"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 type="button"
                 disabled={deductionModal.submitting}
-                onClick={handleConfirmDeduction} 
+                onClick={handleConfirmDeduction}
                 className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs uppercase tracking-wide shadow-md transition-all disabled:opacity-50"
               >
                 {deductionModal.submitting ? 'Deducting...' : 'Confirm Deduction'}
@@ -883,117 +1155,122 @@ export default function InventoryControl({
         </div>
       )}
 
-      {/* CONFIRMATION MODAL: DELETE / PURGE ITEM */}
-      {purgeModal.isOpen && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+      {/* Confirmation Modal: Delete Item */}
+      {deleteModal.isOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
+        >
           <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 text-center space-y-4 animate-scale-up">
             <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 text-rose-600">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-              </svg>
+              <Trash2 className="w-6 h-6" />
             </div>
-            
-            <h3 className="text-base font-black text-slate-900">
-              Remove Inventory Item
-            </h3>
-            
+
+            <h3 className="text-base font-black text-slate-900">Remove Inventory Item</h3>
+
             <p className="text-xs text-slate-500 leading-relaxed">
-              Are you sure you want to remove <strong className="text-slate-900">"{purgeModal.itemName}"</strong> from active inventory records?
+              Remove <strong className="text-slate-900">&ldquo;{deleteModal.itemName}&rdquo;</strong> from active
+              inventory records?
             </p>
 
             <div className="flex gap-2.5 pt-2">
-              <button 
+              <button
                 type="button"
-                disabled={purgeModal.submitting}
-                onClick={() => setPurgeModal({ isOpen: false, itemId: null, itemName: '', submitting: false })} 
+                disabled={deleteModal.submitting}
+                onClick={() => setDeleteModal({ isOpen: false, itemId: null, itemName: '', submitting: false })}
                 className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs uppercase tracking-wide transition-colors"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 type="button"
-                disabled={purgeModal.submitting}
-                onClick={executeInventoryItemPurge} 
+                disabled={deleteModal.submitting}
+                onClick={executeDeleteItem}
                 className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs uppercase tracking-wide shadow-md transition-all disabled:opacity-50"
               >
-                {purgeModal.submitting ? 'Removing...' : 'Delete Item'}
+                {deleteModal.submitting ? 'Removing...' : 'Delete Item'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* TC-SUP-003: FLOATING STATUS TOAST */}
+      {/* Floating Status Toast */}
       {inventoryToast && (
-        <div className="fixed top-6 right-6 z-[120] animate-fade-in">
-          <div className={`text-white px-5 py-3.5 rounded-2xl shadow-2xl border flex items-center gap-3 text-xs font-bold tracking-wide ${
-            inventoryToast.type === 'success'
-              ? 'bg-emerald-900 border-emerald-500/50'
-              : 'bg-rose-900 border-rose-500/50'
-          }`}>
+        <div className="fixed top-4 right-4 left-4 sm:left-auto z-[120] animate-fade-in">
+          <div
+            className={`text-white px-4 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 text-xs font-bold ${
+              inventoryToast.type === 'success'
+                ? 'bg-emerald-900 border-emerald-500/50'
+                : 'bg-rose-900 border-rose-500/50'
+            }`}
+          >
             {inventoryToast.type === 'success' ? (
-              <svg className="w-5 h-5 text-emerald-300 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-              </svg>
+              <CheckCircle2 className="w-5 h-5 text-emerald-300 shrink-0" />
             ) : (
-              <svg className="w-5 h-5 text-rose-300 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 7.5h.008v.008H12v-.008Z" />
-              </svg>
+              <AlertCircle className="w-5 h-5 text-rose-300 shrink-0" />
             )}
             <span>{inventoryToast.text}</span>
           </div>
         </div>
       )}
 
-      {/* TC-SUP-003: INSUFFICIENT STOCK WARNING MODAL */}
+      {/* Insufficient Stock Modal */}
       {insufficientStockModal.isOpen && (
-        <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
+        >
           <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-rose-200 text-center space-y-4 animate-scale-up">
             <div className="w-12 h-12 bg-rose-100 rounded-2xl flex items-center justify-center mx-auto border border-rose-300 text-rose-700">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-              </svg>
+              <AlertTriangle className="w-6 h-6" />
             </div>
-            
-            <h3 className="text-base font-black text-slate-900">
-              Insufficient Available Stock
-            </h3>
-            
+
+            <h3 className="text-base font-black text-slate-900">Insufficient Available Stock</h3>
+
             <p className="text-xs text-rose-700 font-bold bg-rose-50 p-3 rounded-2xl border border-rose-200 leading-relaxed">
               Disbursement quantity exceeds available balance ({insufficientStockModal.currentStock} on-hand)
             </p>
 
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-[11px] text-left space-y-2">
               <div className="flex justify-between">
-                <span className="text-slate-500 font-mono">Target Item:</span>
-                <span className="font-bold text-slate-900">{insufficientStockModal.item?.item_name || 'Stock Item'}</span>
+                <span className="text-slate-500 font-mono">Item:</span>
+                <span className="font-bold text-slate-900">
+                  {insufficientStockModal.item?.item_name || 'Stock Item'}
+                </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500 font-mono">Current On-Hand Balance:</span>
-                <span className="font-bold text-emerald-700 font-mono">{insufficientStockModal.currentStock} {insufficientStockModal.item?.unit || 'units'}</span>
+                <span className="text-slate-500 font-mono">On-Hand Balance:</span>
+                <span className="font-bold text-emerald-700 font-mono">
+                  {insufficientStockModal.currentStock} {insufficientStockModal.item?.unit || 'units'}
+                </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500 font-mono">Requested Disbursement:</span>
-                <span className="font-bold text-rose-700 font-mono">{insufficientStockModal.requestedQty} {insufficientStockModal.item?.unit || 'units'}</span>
+                <span className="text-slate-500 font-mono">Requested:</span>
+                <span className="font-bold text-rose-700 font-mono">
+                  {insufficientStockModal.requestedQty} {insufficientStockModal.item?.unit || 'units'}
+                </span>
               </div>
-              <p className="text-[10px] text-slate-500 italic pt-1 border-t border-slate-200">
-                Institutional inventory controls strictly forbid negative stock adjustments. The ledger remains unchanged at {insufficientStockModal.currentStock} {insufficientStockModal.item?.unit || 'units'}.
+              <p className="text-[10px] text-slate-500 pt-1 border-t border-slate-200">
+                Stock balances cannot go below zero. Current balance remains{' '}
+                {insufficientStockModal.currentStock} {insufficientStockModal.item?.unit || 'units'}.
               </p>
             </div>
 
-            <div className="pt-2">
-              <button 
-                type="button"
-                onClick={() => setInsufficientStockModal({ isOpen: false, item: null, requestedQty: 0, currentStock: 0 })} 
-                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs uppercase tracking-wide transition-colors"
-              >
-                Dismiss Warning
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setInsufficientStockModal({ isOpen: false, item: null, requestedQty: 0, currentStock: 0 })
+              }
+              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs uppercase tracking-wide transition-colors"
+            >
+              Dismiss
+            </button>
           </div>
         </div>
       )}
-
     </div>
   );
 }

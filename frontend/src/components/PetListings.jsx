@@ -1,75 +1,78 @@
-import React, { useState } from 'react';
-import QRCode from 'qrcode';
+import React, { useState, useEffect } from 'react';
+import {
+  AlertTriangle,
+  ChevronRight,
+  Download,
+  Edit3,
+  Printer,
+  QrCode,
+  RotateCw,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { PUBLIC_APP_URL, apiDelete, apiGet, apiPut } from '../lib/api';
+import {
+  CAMPUS_LOCATIONS,
+  DEFAULT_PET_IMAGE,
+  calculateSizeCategory,
+  getCanonicalClassification,
+  getVaccinationBadgeStyles,
+  isCampusPet,
+  isPetQuarantined,
+  isStrayPet,
+  normalizeCampusLocation,
+  safeImageUrl,
+} from '../lib/pets';
+import { renderBrandedCollarTagPng } from '../lib/qr';
 
-const ALLOWED_LOCATIONS = [
-  "Wildcat Innovation Labs",
-  "NGE Building 1st Floor",
-  "GLE Building 1st Floor",
-  "Espacio",
-  "CIT-U Basketball Court",
-  "CIT-U Canteen",
-  "SAL Building",
-  "CIT-U Gymnasium",
-  "Elementary Building"
-];
-
-export default function PetListings({ pets = [], loadingPets = false, onRefresh, readOnly = false }) {
+export default function PetListings({
+  pets = [],
+  loadingPets = false,
+  loadError = '',
+  onRefresh,
+  readOnly = false,
+}) {
   const [expandedPetId, setExpandedPetId] = useState(null);
   const [expandedPetData, setExpandedPetData] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [isEditingId, setIsEditingId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
+  const [savingEdit, setSavingEdit] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
-  const [petIdToPurge, setPetIdToPurge] = useState(null);
+  const [petIdToDelete, setPetIdToDelete] = useState(null);
+  const [deletingPet, setDeletingPet] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLocationsExpanded, setIsLocationsExpanded] = useState(false);
-  const [qrTagModal, setQrTagModal] = useState({ isOpen: false, pet: null, qrDataUrl: '', targetUrl: '' });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [speciesFilter, setSpeciesFilter] = useState('All');
+  const [qrTagModal, setQrTagModal] = useState({
+    isOpen: false,
+    pet: null,
+    qrDataUrl: '',
+    badgeDataUrl: '',
+    targetUrl: '',
+  });
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (!deletingPet) setPetIdToDelete(null);
+        setQrTagModal({ isOpen: false, pet: null, qrDataUrl: '', badgeDataUrl: '', targetUrl: '' });
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [deletingPet]);
 
   const handleGenerateQrTag = async (pet) => {
     try {
-      const targetUrl = `https://taskforcebruno.vercel.app/?pet=${encodeURIComponent(pet.pet_id)}`;
-      const dataUrl = await QRCode.toDataURL(targetUrl, {
-        width: 1200,
-        margin: 2,
-        color: {
-          dark: '#5C0612',
-          light: '#FFFFFF'
-        }
-      });
-      setQrTagModal({ isOpen: true, pet, qrDataUrl: dataUrl, targetUrl });
-    } catch (err) {
-      console.error('QR code generation failed:', err);
+      const targetUrl = `${PUBLIC_APP_URL}/?pet=${encodeURIComponent(pet.pet_id)}`;
+      const { qrDataUrl, badgeDataUrl } = await renderBrandedCollarTagPng(pet, targetUrl);
+      setQrTagModal({ isOpen: true, pet, qrDataUrl, badgeDataUrl, targetUrl });
+    } catch {
+      setErrorMessage('Could not generate the collar QR tag. Please try again.');
     }
-  };
-
-  const getNormalizedLocation = (locStr, petId) => {
-    if (!locStr) return ALLOWED_LOCATIONS[0];
-    const s = locStr.toLowerCase().trim();
-    
-    if (s.includes("lab") || s.includes("wildcat") || s.includes("innovation")) return "Wildcat Innovation Labs";
-    if (s.includes("nge")) return "NGE Building 1st Floor";
-    if (s.includes("gle")) return "GLE Building 1st Floor";
-    if (s.includes("espacio")) return "Espacio";
-    if (s.includes("court") || s.includes("basketball")) return "CIT-U Basketball Court";
-    if (s.includes("canteen") || s.includes("cafeteria") || s.includes("eat")) return "CIT-U Canteen";
-    if (s.includes("sal")) return "SAL Building";
-    if (s.includes("gym") || s.includes("gymnasium")) return "CIT-U Gymnasium";
-    if (s.includes("elementary") || s.includes("high school")) return "Elementary Building";
-    
-    let hash = 0;
-    const trackingKey = petId || locStr;
-    for (let i = 0; i < trackingKey.length; i++) {
-      hash = trackingKey.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const targetIndex = Math.abs(hash) % ALLOWED_LOCATIONS.length;
-    return ALLOWED_LOCATIONS[targetIndex];
-  };
-
-  const getVaccinationBadgeStyles = (statusStr) => {
-    const s = (statusStr || '').toLowerCase();
-    if (s.includes('fully')) return 'bg-green-50 text-green-800 border-green-200';
-    if (s.includes('core') || s.includes('partial')) return 'bg-amber-50 text-amber-800 border-amber-200';
-    return 'bg-red-50 text-red-800 border-red-200';
   };
 
   const handleRowClick = async (petId) => {
@@ -82,44 +85,11 @@ export default function PetListings({ pets = [], loadingPets = false, onRefresh,
     setExpandedPetId(petId);
     setExpandedPetData(null);
     setLoadingDetails(true);
-    try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(petId)}/`);
-      if (res.ok) setExpandedPetData(await res.json());
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoadingDetails(false);
+    const res = await apiGet(`/pets/${encodeURIComponent(petId)}/`);
+    if (res.ok && res.data) {
+      setExpandedPetData(res.data);
     }
-  };
-
-  const calculateSizeCategory = (weightVal) => {
-    const num = parseFloat(weightVal);
-    if (isNaN(num) || num <= 0) return 'Small';
-    if (num < 10) return 'Small';
-    if (num <= 25) return 'Medium';
-    return 'Large';
-  };
-
-  const isCampusPet = (type) => {
-    if (!type) return false;
-    const str = type.toLowerCase();
-    return str.includes('campus') || str.includes('resident') || str === 'not for adoption';
-  };
-
-  const isStrayPet = (petOrType) => {
-    if (!petOrType) return false;
-    if (typeof petOrType === 'string') return petOrType.toLowerCase().includes('stray');
-    return (
-      (petOrType.pet_type || '').toLowerCase().includes('stray') ||
-      (petOrType.adoption_status || '').toLowerCase() === 'stray' ||
-      (petOrType.pet_id || '').toUpperCase().startsWith('STRAY-')
-    );
-  };
-
-  const getCanonicalClassification = (pet) => {
-    if (isStrayPet(pet)) return 'Stray';
-    if (isCampusPet(pet?.pet_type) || isCampusPet(pet?.adoption_status)) return 'Campus Pet';
-    return 'Pet for Adoption';
+    setLoadingDetails(false);
   };
 
   const startEditing = (pet) => {
@@ -134,13 +104,14 @@ export default function PetListings({ pets = [], loadingPets = false, onRefresh,
         : canonicalType === 'Campus Pet'
         ? 'Campus Pet'
         : 'Available';
-    setEditFormData({ 
-      ...pet, 
+    setEditFormData({
+      ...pet,
       pet_type: canonicalType,
       adoption_status: derivedStatus,
       weight: numericWeight,
       size: initialSize,
-      behavior_notes: pet.behavior_notes || 'Friendly'
+      found_near: normalizeCampusLocation(pet.found_near, pet.pet_id),
+      behavior_notes: pet.behavior_notes || 'Friendly',
     });
   };
 
@@ -149,30 +120,28 @@ export default function PetListings({ pets = [], loadingPets = false, onRefresh,
     const updatedValue = type === 'checkbox' ? checked : value;
 
     if (name === 'weight') {
-      const calculatedSize = calculateSizeCategory(updatedValue);
-      setEditFormData(prev => ({
+      setEditFormData((prev) => ({
         ...prev,
         weight: updatedValue,
-        size: calculatedSize
+        size: calculateSizeCategory(updatedValue),
       }));
     } else if (name === 'pet_type') {
       const nextStatus = updatedValue === 'Campus Pet' ? 'Campus Pet' : 'Available';
-      setEditFormData(prev => ({
+      setEditFormData((prev) => ({
         ...prev,
         pet_type: updatedValue,
-        adoption_status: prev.adoption_status === 'Adopted' ? 'Adopted' : nextStatus
+        adoption_status: prev.adoption_status === 'Adopted' ? 'Adopted' : nextStatus,
       }));
     } else {
-      setEditFormData(prev => ({ ...prev, [name]: updatedValue }));
+      setEditFormData((prev) => ({ ...prev, [name]: updatedValue }));
     }
   };
 
   const submitUpdatePatch = async (e) => {
     e.preventDefault();
-    if (readOnly) return;
+    if (readOnly || savingEdit) return;
     setErrorMessage('');
 
-    // Strip virtual / clinical-log-derived / read-only fields
     const {
       is_quarantined: _q,
       quarantine_until: _qu,
@@ -183,7 +152,13 @@ export default function PetListings({ pets = [], loadingPets = false, onRefresh,
       spayed_neutered: _sn,
       ...cleanFormFields
     } = editFormData;
-    void _q; void _qu; void _qe; void _ca; void _pid; void _vs; void _sn;
+    void _q;
+    void _qu;
+    void _qe;
+    void _ca;
+    void _pid;
+    void _vs;
+    void _sn;
 
     const canonicalType = editFormData.pet_type || 'Campus Pet';
     const derivedStatus =
@@ -197,65 +172,49 @@ export default function PetListings({ pets = [], loadingPets = false, onRefresh,
       ...cleanFormFields,
       pet_type: canonicalType,
       adoption_status: derivedStatus,
-      weight: editFormData.weight ? `${editFormData.weight.toString().trim()} kg` : 'N/A'
+      weight: editFormData.weight ? `${editFormData.weight.toString().trim()} kg` : 'N/A',
     };
 
-    try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(isEditingId)}/`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(finalizedPayload)
-      });
-      if (res.ok) {
-        const updatedRecord = await res.json().catch(() => null);
-        if (updatedRecord && expandedPetId === isEditingId) {
-          setExpandedPetData(prev => ({ ...prev, ...updatedRecord }));
-        }
-        setIsEditingId(null);
-        onRefresh();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setErrorMessage(data.error || "Failed to update record context.");
+    setSavingEdit(true);
+    const res = await apiPut(`/pets/${encodeURIComponent(isEditingId)}/`, finalizedPayload);
+    if (res.ok) {
+      if (res.data && expandedPetId === isEditingId) {
+        setExpandedPetData((prev) => ({ ...prev, ...res.data }));
       }
-    } catch (err) {
-      console.error(err);
-      setErrorMessage("Network interface timeout communication failure.");
+      setIsEditingId(null);
+      if (onRefresh) onRefresh();
+    } else {
+      setErrorMessage(res.error || 'Failed to save changes.');
     }
+    setSavingEdit(false);
   };
 
-  const handleExecutePurgeSequence = async () => {
-    if (readOnly || !petIdToPurge) return;
+  const handleDeletePet = async () => {
+    if (readOnly || !petIdToDelete || deletingPet) return;
     setErrorMessage('');
-    
-    try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(petIdToPurge)}/`, { 
-        method: 'DELETE' 
-      });
-      if (res.ok) {
-        setPetIdToPurge(null);
-        setExpandedPetId(null);
-        onRefresh();
-      } else {
-        const data = await res.json();
-        setErrorMessage(data.error || "Database rejected system purge track sequence.");
-      }
-    } catch (err) {
-      console.error(err);
-      setErrorMessage("Network error connecting to administration registers.");
+    setDeletingPet(true);
+
+    const res = await apiDelete(`/pets/${encodeURIComponent(petIdToDelete)}/`);
+    if (res.ok) {
+      setPetIdToDelete(null);
+      setExpandedPetId(null);
+      if (onRefresh) onRefresh();
+    } else {
+      setErrorMessage(res.error || 'Failed to delete animal profile.');
     }
+    setDeletingPet(false);
   };
 
   const requestSortAction = (columnKey) => {
-    let direction = 'asc';
-    if (sortConfig.key === columnKey && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key: columnKey, direction });
+    setSortConfig((prev) => ({
+      key: columnKey,
+      direction: prev.key === columnKey && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
   };
 
-  const applySortingMatrix = (targetArray) => {
-    if (!sortConfig.key) return targetArray;
-    return [...targetArray].sort((a, b) => {
+  const applySort = (items) => {
+    if (!sortConfig.key) return items;
+    return [...items].sort((a, b) => {
       let aVal = a[sortConfig.key] || '';
       let bVal = b[sortConfig.key] || '';
 
@@ -275,29 +234,55 @@ export default function PetListings({ pets = [], loadingPets = false, onRefresh,
 
   const renderSortArrow = (columnKey) => {
     if (sortConfig.key !== columnKey) return <span className="text-slate-300 ml-1">↕</span>;
-    return sortConfig.direction === 'asc' ? <span className="text-[#5C0612] ml-1">▲</span> : <span className="text-[#5C0612] ml-1">▼</span>;
+    return sortConfig.direction === 'asc' ? (
+      <span className="text-[#5C0612] ml-1">▲</span>
+    ) : (
+      <span className="text-[#5C0612] ml-1">▼</span>
+    );
   };
 
-  const adoptedAlumniPets = pets.filter(p => p.adoption_status === 'Adopted');
-  const strayPetsCollection = pets.filter(p => p.adoption_status !== 'Adopted' && isStrayPet(p));
-  const activeUnadoptedPets = pets.filter(p => p.adoption_status !== 'Adopted' && !isStrayPet(p));
+  const filteredPets = pets.filter((pet) => {
+    if (speciesFilter !== 'All' && (pet.species || '').toLowerCase() !== speciesFilter.toLowerCase()) {
+      return false;
+    }
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (pet.name || '').toLowerCase().includes(q) ||
+      (pet.pet_id || '').toLowerCase().includes(q) ||
+      (pet.breed || '').toLowerCase().includes(q) ||
+      (pet.found_near || '').toLowerCase().includes(q)
+    );
+  });
 
-  const sortedActiveCollection = applySortingMatrix(activeUnadoptedPets);
-  const sortedAdoptedCollection = applySortingMatrix(adoptedAlumniPets);
-  const sortedStrayCollection = applySortingMatrix(strayPetsCollection);
+  const adoptedAlumniPets = filteredPets.filter((p) => p.adoption_status === 'Adopted');
+  const strayPetsCollection = filteredPets.filter(
+    (p) => p.adoption_status !== 'Adopted' && isStrayPet(p)
+  );
+  const activeUnadoptedPets = filteredPets.filter(
+    (p) => p.adoption_status !== 'Adopted' && !isStrayPet(p)
+  );
 
-  const activePets = pets.filter(p => p.adoption_status !== 'Adopted');
+  const sortedActiveCollection = applySort(activeUnadoptedPets);
+  const sortedAdoptedCollection = applySort(adoptedAlumniPets);
+  const sortedStrayCollection = applySort(strayPetsCollection);
+
+  // Metrics calculated from all active campus animals
+  const activePets = pets.filter((p) => p.adoption_status !== 'Adopted');
   const totalPetsCount = activePets.length;
-  const totalCatsCount = activePets.filter(p => p.species?.toLowerCase() === 'cat').length;
-  const totalDogsCount = activePets.filter(p => p.species?.toLowerCase() === 'dog').length;
-  const totalNeuteredCount = activePets.filter(p => p.spayed_neutered === true || String(p.spayed_neutered).toLowerCase() === 'true').length;
-  
-  const totalFullyVaccinatedCount = activePets.filter(p => (p.vaccination_status || '').toLowerCase().includes('fully')).length;
-  const totalCoreOnlyCount = activePets.filter(p => {
+  const totalCatsCount = activePets.filter((p) => p.species?.toLowerCase() === 'cat').length;
+  const totalDogsCount = activePets.filter((p) => p.species?.toLowerCase() === 'dog').length;
+  const totalNeuteredCount = activePets.filter(
+    (p) => p.spayed_neutered === true || String(p.spayed_neutered).toLowerCase() === 'true'
+  ).length;
+  const totalFullyVaccinatedCount = activePets.filter((p) =>
+    (p.vaccination_status || '').toLowerCase().includes('fully')
+  ).length;
+  const totalCoreOnlyCount = activePets.filter((p) => {
     const s = (p.vaccination_status || '').toLowerCase();
     return s.includes('core') || s.includes('partial');
   }).length;
-  const totalUnprotectedCount = activePets.filter(p => {
+  const totalUnprotectedCount = activePets.filter((p) => {
     const s = (p.vaccination_status || '').toLowerCase();
     return !s.includes('fully') && !s.includes('core') && !s.includes('partial');
   }).length;
@@ -305,522 +290,939 @@ export default function PetListings({ pets = [], loadingPets = false, onRefresh,
   const catPercentage = totalPetsCount > 0 ? (totalCatsCount / totalPetsCount) * 100 : 0;
   const dogPercentage = totalPetsCount > 0 ? (totalDogsCount / totalPetsCount) * 100 : 0;
   const neuteredPercentage = totalPetsCount > 0 ? (totalNeuteredCount / totalPetsCount) * 100 : 0;
-  
-  const fullyVaccinatedPercentage = totalPetsCount > 0 ? (totalFullyVaccinatedCount / totalPetsCount) * 100 : 0;
+  const fullyVaccinatedPercentage =
+    totalPetsCount > 0 ? (totalFullyVaccinatedCount / totalPetsCount) * 100 : 0;
   const coreOnlyPercentage = totalPetsCount > 0 ? (totalCoreOnlyCount / totalPetsCount) * 100 : 0;
-  const unprotectedPercentage = totalPetsCount > 0 ? (totalUnprotectedCount / totalPetsCount) * 100 : 0;
+  const unprotectedPercentage =
+    totalPetsCount > 0 ? (totalUnprotectedCount / totalPetsCount) * 100 : 0;
 
-  const locationCounts = ALLOWED_LOCATIONS.reduce((acc, loc) => {
+  const locationCounts = CAMPUS_LOCATIONS.reduce((acc, loc) => {
     acc[loc] = 0;
     return acc;
   }, {});
 
-  activePets.forEach(pet => {
-    const normLoc = getNormalizedLocation(pet.found_near, pet.pet_id);
+  activePets.forEach((pet) => {
+    const normLoc = normalizeCampusLocation(pet.found_near, pet.pet_id);
     if (locationCounts[normLoc] !== undefined) {
-      locationCounts[normLoc]++;
+      locationCounts[normLoc] += 1;
     }
   });
 
   const maxZoneCount = Math.max(...Object.values(locationCounts), 1);
-  const densestZoneNode = Object.keys(locationCounts).reduce((a, b) => 
-    locationCounts[a] >= locationCounts[b] ? a : b, 
-    ALLOWED_LOCATIONS[0]
+  const densestZone = Object.keys(locationCounts).reduce(
+    (a, b) => (locationCounts[a] >= locationCounts[b] ? a : b),
+    CAMPUS_LOCATIONS[0]
   );
 
-  const sortedLocationsData = ALLOWED_LOCATIONS.map(loc => ({
+  const sortedLocationsData = CAMPUS_LOCATIONS.map((loc) => ({
     name: loc,
-    count: locationCounts[loc] || 0
+    count: locationCounts[loc] || 0,
   })).sort((a, b) => b.count - a.count);
 
-  const displayedLocations = isLocationsExpanded ? sortedLocationsData : sortedLocationsData.slice(0, 4);
+  const displayedLocations = isLocationsExpanded
+    ? sortedLocationsData
+    : sortedLocationsData.slice(0, 4);
 
-  const generateRenderedTableBlock = (titleBlockLabel, collectionDataStream) => (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden text-xs text-slate-700">
-      <div className="bg-slate-100/60 px-5 py-3 border-b border-slate-200 text-left">
-        <h4 className="font-bold text-[#5C0612] font-mono tracking-wide uppercase text-[11px]">{titleBlockLabel} ({collectionDataStream.length})</h4>
-      </div>
-      {collectionDataStream.length === 0 ? (
-        <div className="p-8 text-center text-slate-400 italic font-sans bg-white">No synchronized entries found categorized inside this subsystem node.</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 uppercase tracking-wider font-semibold text-[10px] select-none">
-                <th className="p-4 w-28 cursor-pointer hover:bg-slate-100" onClick={() => requestSortAction('pet_id')}>Pet ID {renderSortArrow('pet_id')}</th>
-                <th className="p-4 cursor-pointer hover:bg-slate-100" onClick={() => requestSortAction('name')}>Name {renderSortArrow('name')}</th>
-                <th className="p-4 cursor-pointer hover:bg-slate-100" onClick={() => requestSortAction('pet_type')}>Classification {renderSortArrow('pet_type')}</th>
-                <th className="p-4 cursor-pointer hover:bg-slate-100" onClick={() => requestSortAction('species')}>Species / Breed {renderSortArrow('species')}</th>
-                <th className="p-4 cursor-pointer hover:bg-slate-100" onClick={() => requestSortAction('weight')}>Scale Metric {renderSortArrow('weight')}</th>
-                <th className="p-4 cursor-pointer hover:bg-slate-100" onClick={() => requestSortAction('found_near')}>Location Zone {renderSortArrow('found_near')}</th>
-                <th className="p-4 text-center">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-light">
-              {collectionDataStream.map((pet) => (
-                <React.Fragment key={pet.pet_id}>
-                  <tr onClick={() => handleRowClick(pet.pet_id)} className={`transition-colors cursor-pointer select-none ${expandedPetId === pet.pet_id ? 'bg-slate-50 font-medium' : 'hover:bg-slate-50/60'}`}>
-                    <td className="p-4 font-mono font-bold text-[#5C0612] flex items-center gap-2">
-                      <svg className={`w-3 h-3 text-slate-400 transition-transform transform ${expandedPetId === pet.pet_id ? 'rotate-90 text-[#5C0612]' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg>
-                      <span>{pet.pet_id}</span>
-                    </td>
-                    <td className="p-4 font-semibold text-slate-950 text-sm">{pet.name}</td>
-                    <td className="p-4 font-mono">
-                      <span className={`px-2 py-0.5 rounded font-bold text-[9px] border ${
-                        pet.adoption_status === 'Adopted'
-                          ? 'bg-slate-100 text-slate-700 border-slate-300 shadow-sm'
-                          : isStrayPet(pet)
-                          ? 'bg-orange-50 text-orange-800 border-orange-200'
-                          : isCampusPet(pet.pet_type) || isCampusPet(pet.adoption_status)
-                          ? 'bg-purple-50 text-purple-800 border-purple-200'
-                          : 'bg-amber-50 text-amber-800 border-amber-200'
-                      }`}>
-                        {pet.adoption_status === 'Adopted' 
-                          ? 'Adopted' 
-                          : getCanonicalClassification(pet)}
-                      </span>
-                    </td>
-                    <td className="p-4 text-slate-600">{pet.species} &bull; {pet.breed || 'Mix'}</td>
-                    <td className="p-4 font-mono text-slate-500">{pet.weight || 'N/A'}</td>
-                    <td className="p-4 text-slate-600 truncate max-w-[140px]">{getNormalizedLocation(pet.found_near, pet.pet_id)}</td>
-                    <td className="p-4 text-center">
-                      {(pet.is_quarantined || pet.status?.includes('Quarantine') || pet.current_conditions?.includes('Observation') || pet.current_conditions?.includes('Quarantine')) ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 animate-pulse">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
-                          Quarantine (RA 9482)
-                        </span>
-                      ) : (
-                        <span className={`inline-block px-2.5 py-0.5 rounded-md text-[10px] font-semibold border ${getVaccinationBadgeStyles(pet.vaccination_status)}`}>
-                          {pet.vaccination_status}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                  
-                  {expandedPetId === pet.pet_id && (
-                    <tr className="bg-slate-50/50 animate-fade-in">
-                      <td colSpan={7} className="p-6 border-b border-slate-200 bg-white/40">
-                        {!readOnly && isEditingId === pet.pet_id ? (
-                          <form onSubmit={submitUpdatePatch} className="space-y-4 w-full bg-white p-5 border border-slate-200 rounded-xl shadow-inner text-left">
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                              <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Name</label><input type="text" name="name" value={editFormData.name || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none" /></div>
-                              <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Species</label><select name="species" value={editFormData.species || 'Cat'} onChange={handleEditChange} className="w-full p-2 border rounded-lg"><option value="Cat">Cat</option><option value="Dog">Dog</option></select></div>
-                              <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Classification Status</label>
-                                <select 
-                                  name="pet_type" 
-                                  value={editFormData.pet_type || 'Campus Pet'} 
-                                  onChange={handleEditChange} 
-                                  className="w-full p-2 border rounded-lg font-medium"
-                                >
-                                  <option value="Campus Pet">Campus Pet</option>
-                                  <option value="Pet for Adoption">Pet for Adoption</option>
-                                  <option value="Stray">Stray</option>
-                                </select>
-                              </div>
-                              <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Breed</label><input type="text" name="breed" value={editFormData.breed || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none" /></div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                              <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Gender</label><select name="gender" value={editFormData.gender || 'Male'} onChange={handleEditChange} className="w-full p-2 border rounded-lg"><option value="Male">Male</option><option value="Female">Female</option></select></div>
-                              <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Age</label><input type="text" name="age" value={editFormData.age || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none" /></div>
-                              <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">
-                                  Size Scale
-                                </label>
-                                <select name="size" value={editFormData.size || 'Small'} disabled className="w-full p-2 border bg-slate-100 text-slate-600 rounded-lg cursor-not-allowed opacity-90 select-none">
-                                  <option value="Small">Small (&lt; 10 kg)</option>
-                                  <option value="Medium">Medium (10 - 25 kg)</option>
-                                  <option value="Large">Large (&gt; 25 kg)</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Weight (in kg) *</label>
-                                <div className="relative flex items-center">
-                                  <input type="number" step="0.01" name="weight" placeholder="Ex: 4.5" value={editFormData.weight || ''} onChange={handleEditChange} className="w-full p-2 pr-8 border rounded-lg focus:outline-none font-mono" required />
-                                  <span className="absolute right-3 text-slate-400 font-mono font-bold text-[10px]">kg</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-mono text-[10px] font-bold uppercase text-slate-400">Clinical Status (Auto-Derived):</span>
-                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getVaccinationBadgeStyles(editFormData.vaccination_status)}`}>
-                                  {editFormData.vaccination_status || 'Not Vaccinated'}
-                                </span>
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                                  {editFormData.spayed_neutered ? 'TNR Sterilized' : 'Intact (No Spay/Neuter Log)'}
-                                </span>
-                              </div>
-                              <span className="text-[10px] text-slate-400 italic">
-                                Updated automatically via Medical &amp; Vaccination Logs
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Rescue Colony Zone *</label>
-                                <select name="found_near" value={editFormData.found_near || ALLOWED_LOCATIONS[0]} onChange={handleEditChange} className="w-full p-2 border bg-white rounded-lg focus:outline-none text-xs font-sans font-medium text-slate-800">
-                                  {ALLOWED_LOCATIONS.map(loc => (
-                                    <option key={loc} value={loc}>{loc}</option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Rescue Date</label><input type="date" name="rescue_date" value={editFormData.rescue_date || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg font-mono focus:outline-none" /></div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Clinical / Medical Conditions</label><input type="text" name="current_conditions" value={editFormData.current_conditions || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none" /></div>
-                              <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Behavioral Assessment Notes</label>
-                                <select name="behavior_notes" value={editFormData.behavior_notes || 'Friendly'} onChange={handleEditChange} className="w-full p-2 border rounded-lg focus:outline-none text-xs font-medium">
-                                  <option value="Friendly">Friendly</option>
-                                  <option value="Not Friendly">Not Friendly</option>
-                                  <option value="Friendly but be cautious">Friendly but be cautious</option>
-                                </select>
-                              </div>
-                            </div>
-
-                            <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Profile Photo Asset URL</label><input type="url" name="primary_image" value={editFormData.primary_image || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg font-mono text-[11px] focus:outline-none" /></div>
-                            
-                            {/* Two-Column split layout for biography summary and physical search description updates */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <div><label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Narrative biography Summary</label><textarea name="about_text" rows="2" value={editFormData.about_text || ''} onChange={handleEditChange} className="w-full p-2 border rounded-lg text-slate-800 leading-relaxed focus:outline-none resize-none"></textarea></div>
-                              <div><label className="block text-[9px] font-bold text-[#5C0612] uppercase mb-0.5">Physical Search Description (AI Match Key) *</label><textarea name="description" rows="2" value={editFormData.description || ''} onChange={handleEditChange} placeholder="Input clear trait tokens (e.g. gray stripes, cropped tail, red collar)..." className="w-full p-2 border rounded-lg text-slate-800 leading-relaxed focus:outline-none resize-none" required></textarea></div>
-                            </div>
-
-                            <div className="flex gap-2 justify-end pt-2 text-[10px] font-mono font-bold uppercase">
-                              <button type="button" onClick={() => setIsEditingId(null)} className="px-3 py-1.5 bg-slate-100 rounded-lg text-slate-600">Abort</button>
-                              <button type="submit" className="px-4 py-1.5 bg-[#5C0612] text-white font-semibold rounded-lg shadow-sm tracking-wider">Commit System Updates</button>
-                            </div>
-                          </form>
-                        ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-700 animate-fade-in text-left">
-                            <div className="w-full bg-slate-100 rounded-xl aspect-[4/3] max-w-[240px] overflow-hidden shadow border border-slate-200">
-                              {loadingDetails ? (
-                                <div className="w-full h-full flex items-center justify-center text-slate-400 font-mono text-[10px] animate-pulse">LOADING METADATA...</div>
-                              ) : (
-                                <img src={expandedPetData?.primary_image || 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba'} alt="Campus Profile Portrait" className="w-full h-full object-cover select-none" referrerPolicy="no-referrer" />
-                              )}
-                            </div>
-                            
-                            <div className="md:col-span-2 flex flex-col justify-between space-y-4">
-                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 bg-white p-4 border rounded-xl shadow-inner font-sans text-[11px]">
-                                <div>Gender: <strong className="text-slate-900 font-medium">{expandedPetData?.gender}</strong></div>
-                                <div>Age Metric: <strong className="text-slate-900 font-medium">{expandedPetData?.age || 'N/A'}</strong></div>
-                                <div>Weight Mass: <strong className="text-slate-900 font-mono font-medium">{expandedPetData?.weight || 'N/A'}</strong></div>
-                                <div>Size Tier: <strong className="text-slate-900 font-medium">{expandedPetData?.size || 'Medium'}</strong></div>
-                                <div>Sterilized: <strong className="text-slate-900 font-medium">{expandedPetData?.spayed_neutered ? 'Yes (TNR Certified)' : 'No'}</strong></div>
-                                <div>Classification: <strong className="text-slate-900 font-medium">{getCanonicalClassification(expandedPetData)}</strong></div>
-                                <div>Status: <strong className="text-slate-900 font-medium">
-                                  {(expandedPetData?.is_quarantined || expandedPetData?.status?.includes('Quarantine') || expandedPetData?.current_conditions?.includes('Observation')) ? (
-                                    <span className="text-rose-700 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                                      Quarantine / Rabies Observation
-                                    </span>
-                                  ) : (
-                                    expandedPetData?.adoption_status === 'Adopted'
-                                      ? 'Adopted'
-                                      : isStrayPet(expandedPetData)
-                                      ? 'Available for Adoption (Stray)'
-                                      : isCampusPet(expandedPetData?.pet_type) || isCampusPet(expandedPetData?.adoption_status)
-                                      ? 'Campus Pet'
-                                      : 'Available for Adoption'
-                                  )}
-                                </strong></div>
-                                <div className="col-span-2">Rescue Colony: <strong className="text-slate-900 font-medium">{getNormalizedLocation(expandedPetData?.found_near, expandedPetData?.pet_id)}</strong></div>
-                                <div>Rescue Date: <strong className="text-slate-900 font-mono font-medium">{expandedPetData?.rescue_date}</strong></div>
-                                {(expandedPetData?.is_quarantined || expandedPetData?.status?.includes('Quarantine') || expandedPetData?.current_conditions?.includes('Observation')) && (
-                                  <div className="col-span-3 p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-pulse">
-                                    <div className="flex items-center gap-2">
-                                      <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping"></span>
-                                      <span className="font-bold text-[11px] font-mono uppercase tracking-wider">Campus Rabies Observation Protocol (RA 9482)</span>
-                                    </div>
-                                    <span className="font-mono text-[10px] font-bold px-2 py-0.5 bg-rose-200 rounded text-rose-900 w-fit">
-                                      Release Date: {expandedPetData?.quarantine_until || '14-Day Observation'}
-                                    </span>
-                                  </div>
-                                )}
-                                <div className="col-span-3 border-t pt-1.5 mt-1 text-rose-800">Clinical Conditions: <span className="text-slate-700 font-mono font-medium">{expandedPetData?.current_conditions || 'None'}</span></div>
-                                <div className="col-span-3 text-blue-900">Behavior Evaluation: <span className="text-slate-700 font-medium">{expandedPetData?.behavior_notes || 'Stable baseline.'}</span></div>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
-                                <div className="bg-slate-50 p-3 rounded-xl border leading-relaxed">
-                                  <span className="block text-[9px] font-mono font-bold uppercase text-slate-400 mb-1">Biography Summary:</span>
-                                  <p className="italic text-slate-600 text-[11px] font-normal">"{expandedPetData?.about_text || 'No narrative biography logged inside active archives.'}"</p>
-                                </div>
-                                {/* Reads explicit physical search descriptions natively from columns inside read-only grids */}
-                                <div className="bg-amber-50/20 p-3 rounded-xl border border-amber-200 leading-relaxed">
-                                  <span className="block text-[9px] font-mono font-bold uppercase text-amber-700 mb-1">AI Search Target Markers:</span>
-                                  <p className="text-slate-700 text-[11px] font-normal">"{expandedPetData?.description || 'No specialized trait tags indexed for descriptive loops yet.'}"</p>
-                                </div>
-                              </div>
-                              
-                              {!readOnly && (
-                                <div className="flex flex-wrap gap-2 justify-end mt-2 text-[10px] font-mono font-bold uppercase">
-                                  <button 
-                                    onClick={() => handleGenerateQrTag(pet)} 
-                                    className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
-                                  >
-                                    <svg className="w-3.5 h-3.5 text-[#5C0612]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h3.75v3.75H13.5v-3.75Z" />
-                                    </svg>
-                                    Generate Collar Tag QR
-                                  </button>
-                                  <button onClick={() => startEditing(pet)} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-semibold shadow-sm transition-all">Modify Record</button>
-                                  <button onClick={() => setPetIdToPurge(pet.pet_id)} className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold">Wipe Record</button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+  const renderClassificationBadge = (pet) => (
+    <span
+      className={`px-2 py-0.5 rounded-md font-semibold text-[10px] border ${
+        pet.adoption_status === 'Adopted'
+          ? 'bg-slate-100 text-slate-700 border-slate-300'
+          : isStrayPet(pet)
+          ? 'bg-orange-50 text-orange-800 border-orange-200'
+          : isCampusPet(pet.pet_type) || isCampusPet(pet.adoption_status)
+          ? 'bg-purple-50 text-purple-800 border-purple-200'
+          : 'bg-amber-50 text-amber-800 border-amber-200'
+      }`}
+    >
+      {pet.adoption_status === 'Adopted' ? 'Adopted' : getCanonicalClassification(pet)}
+    </span>
   );
 
-  return (
-    <div className="w-full space-y-6">
-      
-      {errorMessage && (
-        <div className="w-full p-3.5 bg-rose-50 border border-rose-200 text-rose-900 font-medium text-center rounded-xl animate-fade-in relative flex items-center justify-between text-xs font-sans">
-          <span className="flex-1 truncate">{errorMessage}</span>
-          <button onClick={() => setErrorMessage('')} className="text-rose-400 hover:text-rose-700 font-mono font-bold text-xs ml-2 px-1">✕</button>
-        </div>
-      )}
+  const renderStatusBadge = (pet) =>
+    isPetQuarantined(pet) ? (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+        Quarantine (RA 9482)
+      </span>
+    ) : (
+      <span
+        className={`inline-block px-2.5 py-0.5 rounded-md text-[10px] font-semibold border ${getVaccinationBadgeStyles(
+          pet.vaccination_status
+        )}`}
+      >
+        {pet.vaccination_status || 'Not Vaccinated'}
+      </span>
+    );
 
-      {!loadingPets && totalPetsCount > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in select-none">
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between text-left">
+  const renderExpandedDetails = (pet) => {
+    const detail = expandedPetData?.pet_id === pet.pet_id ? expandedPetData : pet;
+
+    if (!readOnly && isEditingId === pet.pet_id) {
+      return (
+        <form
+          onSubmit={submitUpdatePatch}
+          className="space-y-4 w-full bg-white p-4 sm:p-5 border border-slate-200 rounded-xl shadow-inner text-left"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
-              <h5 className="font-bold text-slate-900 tracking-tight font-sans text-xs">Ecosystem Species Density Breakdown</h5>
-              <p className="text-[10px] text-slate-400 mt-0.5">Ratio distribution across registered campus animals.</p>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">Name</label>
+              <input
+                type="text"
+                name="name"
+                required
+                value={editFormData.name || ''}
+                onChange={handleEditChange}
+                className="w-full p-2 border border-slate-200 rounded-lg text-sm sm:text-xs"
+              />
             </div>
-            
-            <div className="my-4 space-y-2">
-              <div className="flex items-center justify-between text-[11px] font-medium font-sans">
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-amber-500 block"></span>Cats ({totalCatsCount})</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-indigo-600 block"></span>Dogs ({totalDogsCount})</span>
-              </div>
-              
-              <div className="w-full h-4.5 bg-slate-100 rounded-lg flex overflow-hidden border border-slate-200/40">
-                <div style={{ width: `${catPercentage}%` }} className="h-full bg-amber-500 transition-all duration-500 ease-out shadow-inner" />
-                <div style={{ width: `${dogPercentage}%` }} className="h-full bg-indigo-600 transition-all duration-500 ease-out shadow-inner" />
-              </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">Species</label>
+              <select
+                name="species"
+                value={editFormData.species || 'Cat'}
+                onChange={handleEditChange}
+                className="w-full p-2 border border-slate-200 rounded-lg text-sm sm:text-xs bg-white"
+              >
+                <option value="Cat">Cat</option>
+                <option value="Dog">Dog</option>
+              </select>
             </div>
-
-            <div className="text-[9px] font-mono text-slate-400 border-t pt-2 mt-1">
-              Macro Metric Total Size: <span className="font-sans font-bold text-slate-700">{totalPetsCount} Individuals</span>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">
+                Classification
+              </label>
+              <select
+                name="pet_type"
+                value={editFormData.pet_type || 'Campus Pet'}
+                onChange={handleEditChange}
+                className="w-full p-2 border border-slate-200 rounded-lg text-sm sm:text-xs bg-white"
+              >
+                <option value="Campus Pet">Campus Pet</option>
+                <option value="Pet for Adoption">Pet for Adoption</option>
+                <option value="Stray">Stray</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">Breed</label>
+              <input
+                type="text"
+                name="breed"
+                value={editFormData.breed || ''}
+                onChange={handleEditChange}
+                className="w-full p-2 border border-slate-200 rounded-lg text-sm sm:text-xs"
+              />
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between text-left">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
-              <h5 className="font-bold text-slate-900 tracking-tight font-sans text-xs">Colony Zone Occupancy Density</h5>
-              <p className="text-[10px] text-slate-400 mt-0.5">Active population concentration metrics mapped across campus hot spots from highest to lowest.</p>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">Gender</label>
+              <select
+                name="gender"
+                value={editFormData.gender || 'Male'}
+                onChange={handleEditChange}
+                className="w-full p-2 border border-slate-200 rounded-lg text-sm sm:text-xs bg-white"
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">Age</label>
+              <input
+                type="text"
+                name="age"
+                value={editFormData.age || ''}
+                onChange={handleEditChange}
+                className="w-full p-2 border border-slate-200 rounded-lg text-sm sm:text-xs"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">Size (Auto)</label>
+              <select
+                name="size"
+                value={editFormData.size || 'Small'}
+                disabled
+                className="w-full p-2 border border-slate-200 bg-slate-100 text-slate-600 rounded-lg cursor-not-allowed text-sm sm:text-xs"
+              >
+                <option value="Small">Small (&lt; 10 kg)</option>
+                <option value="Medium">Medium (10 - 25 kg)</option>
+                <option value="Large">Large (&gt; 25 kg)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">Weight (kg) *</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                name="weight"
+                placeholder="e.g. 4.5"
+                value={editFormData.weight || ''}
+                onChange={handleEditChange}
+                required
+                className="w-full p-2 border border-slate-200 rounded-lg font-mono text-sm sm:text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold text-slate-500">Clinical Status:</span>
+              <span
+                className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${getVaccinationBadgeStyles(
+                  editFormData.vaccination_status
+                )}`}
+              >
+                {editFormData.vaccination_status || 'Not Vaccinated'}
+              </span>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-50 text-purple-800 border border-purple-200">
+                {editFormData.spayed_neutered ? 'TNR Sterilized' : 'Intact'}
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-500">
+              Updated automatically from Medical &amp; Vaccination Logs
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">Campus Zone *</label>
+              <select
+                name="found_near"
+                value={editFormData.found_near || CAMPUS_LOCATIONS[0]}
+                onChange={handleEditChange}
+                className="w-full p-2 border border-slate-200 bg-white rounded-lg text-sm sm:text-xs"
+              >
+                {CAMPUS_LOCATIONS.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">Rescue Date</label>
+              <input
+                type="date"
+                name="rescue_date"
+                value={editFormData.rescue_date || ''}
+                onChange={handleEditChange}
+                className="w-full p-2 border border-slate-200 rounded-lg font-mono text-sm sm:text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">
+                Medical Conditions
+              </label>
+              <input
+                type="text"
+                name="current_conditions"
+                value={editFormData.current_conditions || ''}
+                onChange={handleEditChange}
+                className="w-full p-2 border border-slate-200 rounded-lg text-sm sm:text-xs"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">Temperament</label>
+              <select
+                name="behavior_notes"
+                value={editFormData.behavior_notes || 'Friendly'}
+                onChange={handleEditChange}
+                className="w-full p-2 border border-slate-200 rounded-lg text-sm sm:text-xs bg-white"
+              >
+                <option value="Friendly">Friendly</option>
+                <option value="Not Friendly">Not Friendly</option>
+                <option value="Friendly but be cautious">Friendly but be cautious</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Photo URL</label>
+            <input
+              type="url"
+              name="primary_image"
+              value={editFormData.primary_image || ''}
+              onChange={handleEditChange}
+              className="w-full p-2 border border-slate-200 rounded-lg font-mono text-sm sm:text-xs"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">Biography</label>
+              <textarea
+                name="about_text"
+                rows="2"
+                value={editFormData.about_text || ''}
+                onChange={handleEditChange}
+                className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 text-sm sm:text-xs resize-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-[#5C0612] mb-1">
+                Visual Traits (for Search Matching) *
+              </label>
+              <textarea
+                name="description"
+                rows="2"
+                required
+                value={editFormData.description || ''}
+                onChange={handleEditChange}
+                placeholder="e.g. orange tabby, white paws, red collar"
+                className="w-full p-2 border border-slate-200 rounded-lg text-slate-800 text-sm sm:text-xs resize-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-2">
+            <button
+              type="button"
+              disabled={savingEdit}
+              onClick={() => setIsEditingId(null)}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700 text-xs font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={savingEdit}
+              className="px-5 py-2 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-50 text-white font-semibold rounded-xl shadow-sm text-xs"
+            >
+              {savingEdit ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs text-slate-700 animate-fade-in text-left">
+        <div className="w-full bg-slate-100 rounded-xl aspect-[4/3] max-w-[260px] overflow-hidden shadow-xs border border-slate-200">
+          {loadingDetails ? (
+            <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs">
+              Loading photo...
+            </div>
+          ) : (
+            <img
+              src={safeImageUrl(detail?.primary_image, DEFAULT_PET_IMAGE)}
+              alt={detail?.name || 'Campus companion'}
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          )}
+        </div>
+
+        <div className="md:col-span-2 flex flex-col justify-between space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2.5 bg-white p-4 border border-slate-200 rounded-xl text-xs">
+            <div>
+              <span className="text-slate-500 block text-[10px]">Gender</span>
+              <strong className="text-slate-900 font-semibold">{detail?.gender || 'Unknown'}</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[10px]">Age</span>
+              <strong className="text-slate-900 font-semibold">{detail?.age || 'N/A'}</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[10px]">Weight</span>
+              <strong className="text-slate-900 font-mono font-semibold">{detail?.weight || 'N/A'}</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[10px]">Size</span>
+              <strong className="text-slate-900 font-semibold">{detail?.size || 'Medium'}</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[10px]">Sterilized</span>
+              <strong className="text-slate-900 font-semibold">
+                {detail?.spayed_neutered ? 'Yes (TNR Certified)' : 'No'}
+              </strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[10px]">Classification</span>
+              <strong className="text-slate-900 font-semibold">{getCanonicalClassification(detail)}</strong>
+            </div>
+            <div className="col-span-2">
+              <span className="text-slate-500 block text-[10px]">Campus Zone</span>
+              <strong className="text-slate-900 font-semibold">
+                {normalizeCampusLocation(detail?.found_near, detail?.pet_id)}
+              </strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[10px]">Rescue Date</span>
+              <strong className="text-slate-900 font-mono font-semibold">{detail?.rescue_date || 'N/A'}</strong>
             </div>
 
-            <div className="my-3 space-y-2.5 pr-1">
-              {displayedLocations.map(locObj => {
-                const zoneCount = locObj.count;
-                const progressWidth = (zoneCount / maxZoneCount) * 100;
-                return (
-                  <div key={locObj.name} className="space-y-0.5">
-                    <div className="flex justify-between items-center text-[10px] font-sans font-medium text-slate-600">
-                      <span className="truncate pr-2">{locObj.name}</span>
-                      <span className="font-mono font-bold text-slate-900 shrink-0">{zoneCount}</span>
+            {isPetQuarantined(detail) && (
+              <div className="col-span-2 sm:col-span-3 p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <span className="font-bold text-xs">Campus Rabies Observation (RA 9482)</span>
+                <span className="font-mono text-[11px] font-bold px-2 py-0.5 bg-rose-200 rounded text-rose-950 w-fit">
+                  Release: {detail?.quarantine_until || '14-Day Observation'}
+                </span>
+              </div>
+            )}
+
+            <div className="col-span-2 sm:col-span-3 border-t border-slate-100 pt-2">
+              <span className="text-rose-700 font-semibold">Medical Conditions: </span>
+              <span className="text-slate-700">{detail?.current_conditions || 'None'}</span>
+            </div>
+            <div className="col-span-2 sm:col-span-3">
+              <span className="text-slate-600 font-semibold">Temperament: </span>
+              <span className="text-slate-800">{detail?.behavior_notes || 'Friendly'}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+              <span className="block text-[10px] font-semibold uppercase text-slate-500 mb-1">
+                Biography
+              </span>
+              <p className="text-slate-600 text-xs leading-relaxed">
+                {detail?.about_text || 'No biography added yet.'}
+              </p>
+            </div>
+            <div className="bg-amber-50/40 p-3 rounded-xl border border-amber-200/80">
+              <span className="block text-[10px] font-semibold uppercase text-amber-800 mb-1">
+                Visual Traits
+              </span>
+              <p className="text-slate-700 text-xs leading-relaxed">
+                {detail?.description || 'No visual traits recorded yet.'}
+              </p>
+            </div>
+          </div>
+
+          {!readOnly && (
+            <div className="flex flex-wrap gap-2 justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => handleGenerateQrTag(pet)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-200 rounded-xl font-semibold text-xs transition-colors"
+              >
+                <QrCode className="w-3.5 h-3.5 text-[#5C0612]" />
+                <span>Generate Collar Tag QR</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => startEditing(pet)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-semibold text-xs transition-colors"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPetIdToDelete(pet.pet_id)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-semibold text-xs transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderPetSection = (sectionTitle, collection) => (
+    <section className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden text-xs text-slate-700">
+      <div className="bg-slate-50 px-4 sm:px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
+        <h4 className="font-bold text-[#5C0612] tracking-tight text-xs sm:text-sm">
+          {sectionTitle}
+        </h4>
+        <span className="font-mono text-[11px] font-bold bg-white border border-slate-200 text-slate-600 px-2.5 py-0.5 rounded-lg">
+          {collection.length}
+        </span>
+      </div>
+
+      {collection.length === 0 ? (
+        <div className="p-8 text-center text-slate-400 text-xs">No animals in this category yet.</div>
+      ) : (
+        <>
+          {/* Mobile Card List */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {collection.map((pet) => {
+              const isExpanded = expandedPetId === pet.pet_id;
+              return (
+                <div key={pet.pet_id} className="p-4 space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => handleRowClick(pet.pet_id)}
+                    className="w-full text-left flex items-start justify-between gap-3"
+                  >
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <img
+                        src={safeImageUrl(pet.primary_image, DEFAULT_PET_IMAGE)}
+                        alt={pet.name}
+                        className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0 bg-slate-100"
+                        loading="lazy"
+                      />
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-slate-900 text-sm truncate">{pet.name}</span>
+                          <span className="font-mono text-[10px] font-bold text-[#5C0612] bg-[#5C0612]/5 px-1.5 py-0.5 rounded">
+                            {pet.pet_id}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 truncate">
+                          {pet.species} &bull; {pet.breed || 'Mix'} &bull;{' '}
+                          {normalizeCampusLocation(pet.found_near, pet.pet_id)}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {renderClassificationBadge(pet)}
+                          {renderStatusBadge(pet)}
+                        </div>
+                      </div>
                     </div>
-                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200/20">
-                      <div style={{ width: `${progressWidth}%` }} className="h-full bg-indigo-500 transition-all duration-500" />
-                    </div>
+                    <ChevronRight
+                      className={`w-4 h-4 text-slate-400 shrink-0 mt-1 transition-transform ${
+                        isExpanded ? 'rotate-90 text-[#5C0612]' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {isExpanded && (
+                    <div className="pt-3 border-t border-slate-100">{renderExpandedDetails(pet)}</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop Sortable Table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/70 text-slate-500 border-b border-slate-200 uppercase tracking-wider font-semibold text-[10px] select-none">
+                  <th
+                    className="p-3.5 w-32 cursor-pointer hover:bg-slate-100"
+                    onClick={() => requestSortAction('pet_id')}
+                  >
+                    Pet ID {renderSortArrow('pet_id')}
+                  </th>
+                  <th
+                    className="p-3.5 cursor-pointer hover:bg-slate-100"
+                    onClick={() => requestSortAction('name')}
+                  >
+                    Name {renderSortArrow('name')}
+                  </th>
+                  <th
+                    className="p-3.5 cursor-pointer hover:bg-slate-100"
+                    onClick={() => requestSortAction('pet_type')}
+                  >
+                    Classification {renderSortArrow('pet_type')}
+                  </th>
+                  <th
+                    className="p-3.5 cursor-pointer hover:bg-slate-100"
+                    onClick={() => requestSortAction('species')}
+                  >
+                    Species / Breed {renderSortArrow('species')}
+                  </th>
+                  <th
+                    className="p-3.5 cursor-pointer hover:bg-slate-100"
+                    onClick={() => requestSortAction('weight')}
+                  >
+                    Weight {renderSortArrow('weight')}
+                  </th>
+                  <th
+                    className="p-3.5 cursor-pointer hover:bg-slate-100"
+                    onClick={() => requestSortAction('found_near')}
+                  >
+                    Campus Zone {renderSortArrow('found_near')}
+                  </th>
+                  <th className="p-3.5 text-center">Health Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {collection.map((pet) => (
+                  <React.Fragment key={pet.pet_id}>
+                    <tr
+                      onClick={() => handleRowClick(pet.pet_id)}
+                      className={`transition-colors cursor-pointer ${
+                        expandedPetId === pet.pet_id ? 'bg-slate-50' : 'hover:bg-slate-50/70'
+                      }`}
+                    >
+                      <td className="p-3.5 font-mono font-bold text-[#5C0612] whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5">
+                          <ChevronRight
+                            className={`w-3.5 h-3.5 text-slate-400 transition-transform ${
+                              expandedPetId === pet.pet_id ? 'rotate-90 text-[#5C0612]' : ''
+                            }`}
+                          />
+                          {pet.pet_id}
+                        </span>
+                      </td>
+                      <td className="p-3.5 font-semibold text-slate-900 text-sm">{pet.name}</td>
+                      <td className="p-3.5">{renderClassificationBadge(pet)}</td>
+                      <td className="p-3.5 text-slate-600">
+                        {pet.species} &bull; {pet.breed || 'Mix'}
+                      </td>
+                      <td className="p-3.5 font-mono text-slate-600">{pet.weight || 'N/A'}</td>
+                      <td className="p-3.5 text-slate-600 truncate max-w-[160px]">
+                        {normalizeCampusLocation(pet.found_near, pet.pet_id)}
+                      </td>
+                      <td className="p-3.5 text-center">{renderStatusBadge(pet)}</td>
+                    </tr>
+
+                    {expandedPetId === pet.pet_id && (
+                      <tr className="bg-slate-50/60">
+                        <td colSpan={7} className="p-5 border-b border-slate-200">
+                          {renderExpandedDetails(pet)}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
+  );
+
+  return (
+    <div className="w-full space-y-5 pb-6">
+      {(errorMessage || loadError) && (
+        <div
+          role="alert"
+          className="w-full p-3.5 bg-rose-50 border border-rose-200 text-rose-900 font-medium rounded-xl flex items-center justify-between gap-2 text-xs"
+        >
+          <span>{errorMessage || loadError}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {loadError && onRefresh && (
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-rose-200 rounded-lg text-rose-800 font-semibold"
+              >
+                <RotateCw className="w-3 h-3" />
+                Retry
+              </button>
+            )}
+            {errorMessage && (
+              <button
+                type="button"
+                onClick={() => setErrorMessage('')}
+                aria-label="Dismiss error"
+                className="p-1 text-rose-500 hover:text-rose-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Search & Filter Toolbar */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+          <Search className="w-4 h-4 text-slate-400 shrink-0" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by pet name, tag ID, breed, or campus zone..."
+            className="w-full bg-transparent text-base sm:text-xs text-slate-800 focus:outline-none placeholder-slate-400"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 justify-between sm:justify-end">
+          <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+            {['All', 'Cat', 'Dog'].map((sp) => (
+              <button
+                key={sp}
+                type="button"
+                onClick={() => setSpeciesFilter(sp)}
+                className={`px-3 py-1 rounded-lg transition-colors ${
+                  speciesFilter === sp
+                    ? 'bg-[#5C0612] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {sp === 'All' ? 'All' : `${sp}s`}
+              </button>
+            ))}
+          </div>
+
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Summary Analytics Cards */}
+      {!loadingPets && totalPetsCount > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col justify-between text-left">
+            <div>
+              <h5 className="font-bold text-slate-900 text-xs">Species Breakdown</h5>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Active cats and dogs registered on campus.
+              </p>
+            </div>
+            <div className="my-4 space-y-2">
+              <div className="flex items-center justify-between text-xs font-medium">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded bg-amber-500" />
+                  Cats ({totalCatsCount})
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded bg-indigo-600" />
+                  Dogs ({totalDogsCount})
+                </span>
+              </div>
+              <div className="w-full h-3.5 bg-slate-100 rounded-full flex overflow-hidden">
+                <div style={{ width: `${catPercentage}%` }} className="h-full bg-amber-500" />
+                <div style={{ width: `${dogPercentage}%` }} className="h-full bg-indigo-600" />
+              </div>
+            </div>
+            <div className="text-[11px] text-slate-500 border-t border-slate-100 pt-2">
+              Total active animals:{' '}
+              <strong className="text-slate-800">{totalPetsCount}</strong>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col justify-between text-left">
+            <div>
+              <h5 className="font-bold text-slate-900 text-xs">Campus Zone Distribution</h5>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Active animal count by campus landmark.
+              </p>
+            </div>
+
+            <div className="my-3 space-y-2">
+              {displayedLocations.map((locObj) => (
+                <div key={locObj.name} className="space-y-0.5">
+                  <div className="flex justify-between items-center text-[11px] font-medium text-slate-600">
+                    <span className="truncate pr-2">{locObj.name}</span>
+                    <span className="font-mono font-bold text-slate-900 shrink-0">{locObj.count}</span>
                   </div>
-                );
-              })}
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      style={{ width: `${(locObj.count / maxZoneCount) * 100}%` }}
+                      className="h-full bg-[#5C0612] rounded-full"
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
 
             {sortedLocationsData.length > 4 && (
               <button
                 type="button"
-                onClick={() => setIsLocationsExpanded(!isLocationsExpanded)}
-                className="text-[10px] font-mono font-bold uppercase text-indigo-600 hover:text-indigo-800 transition-colors mb-2 text-right block w-full focus:outline-none"
+                onClick={() => setIsLocationsExpanded((prev) => !prev)}
+                className="text-[11px] font-semibold text-[#5C0612] hover:underline mb-2 text-right block w-full"
               >
-                {isLocationsExpanded ? "Show Less ▲" : "Expand All Zones ▼"}
+                {isLocationsExpanded ? 'Show fewer zones' : 'Show all zones'}
               </button>
             )}
 
-            <div className="text-[9px] font-mono text-slate-400 border-t pt-2 mt-1 truncate">
-              Highest Density Zone: <span className="font-sans font-bold text-indigo-600">{densestZoneNode}</span>
+            <div className="text-[11px] text-slate-500 border-t border-slate-100 pt-2 truncate">
+              Most active zone: <strong className="text-slate-800">{densestZone}</strong>
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between text-left md:col-span-2 lg:col-span-1">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col justify-between text-left md:col-span-2 lg:col-span-1">
             <div>
-              <h5 className="font-bold text-slate-900 tracking-tight font-sans text-xs">Population Control Performance</h5>
-              <p className="text-[10px] text-slate-400 mt-0.5">Active monitoring metrics for medical clinical stabilization goals.</p>
+              <h5 className="font-bold text-slate-900 text-xs">Health &amp; Sterilization Progress</h5>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                TNR sterilization and vaccination coverage.
+              </p>
             </div>
 
-            <div className="my-3 space-y-3">
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
-                  <span>Sterilization Rate (TNR)</span>
-                  <span className="text-purple-700">{totalNeuteredCount}/{totalPetsCount} ({Math.round(neuteredPercentage)}%)</span>
+            <div className="my-3 space-y-2.5">
+              {[
+                {
+                  label: 'Sterilized (TNR)',
+                  count: totalNeuteredCount,
+                  pct: neuteredPercentage,
+                  bar: 'bg-purple-600',
+                  text: 'text-purple-700',
+                },
+                {
+                  label: 'Fully Vaccinated',
+                  count: totalFullyVaccinatedCount,
+                  pct: fullyVaccinatedPercentage,
+                  bar: 'bg-emerald-600',
+                  text: 'text-emerald-700',
+                },
+                {
+                  label: 'Core Only (No Rabies)',
+                  count: totalCoreOnlyCount,
+                  pct: coreOnlyPercentage,
+                  bar: 'bg-amber-500',
+                  text: 'text-amber-700',
+                },
+                {
+                  label: 'Unvaccinated / Overdue',
+                  count: totalUnprotectedCount,
+                  pct: unprotectedPercentage,
+                  bar: 'bg-rose-600',
+                  text: 'text-rose-700',
+                },
+              ].map((row) => (
+                <div key={row.label} className="space-y-1">
+                  <div className="flex justify-between text-[11px] font-medium text-slate-600">
+                    <span>{row.label}</span>
+                    <span className={`font-mono font-bold ${row.text}`}>
+                      {row.count}/{totalPetsCount} ({Math.round(row.pct)}%)
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div style={{ width: `${row.pct}%` }} className={`h-full rounded-full ${row.bar}`} />
+                  </div>
                 </div>
-                <div className="w-full h-2.5 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
-                  <div style={{ width: `${neuteredPercentage}%` }} className="h-full bg-purple-600 transition-all duration-500 ease-out" />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
-                  <span>Fully Vaccinated</span>
-                  <span className="text-green-700">{totalFullyVaccinatedCount}/{totalPetsCount} ({Math.round(fullyVaccinatedPercentage)}%)</span>
-                </div>
-                <div className="w-full h-2.5 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
-                  <div style={{ width: `${fullyVaccinatedPercentage}%` }} className="h-full bg-green-600 transition-all duration-500 ease-out" />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
-                  <span>Core Only (No Anti-Rabies)</span>
-                  <span className="text-amber-700">{totalCoreOnlyCount}/{totalPetsCount} ({Math.round(coreOnlyPercentage)}%)</span>
-                </div>
-                <div className="w-full h-2.5 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
-                  <div style={{ width: `${coreOnlyPercentage}%` }} className="h-full bg-amber-500 transition-all duration-500 ease-out" />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
-                  <span>Not Vaccinated / Overdue</span>
-                  <span className="text-red-700">{totalUnprotectedCount}/{totalPetsCount} ({Math.round(unprotectedPercentage)}%)</span>
-                </div>
-                <div className="w-full h-2.5 bg-slate-100 rounded-md overflow-hidden border border-slate-200/40">
-                  <div style={{ width: `${unprotectedPercentage}%` }} className="h-full bg-red-600 transition-all duration-500 ease-out" />
-                </div>
-              </div>
+              ))}
             </div>
 
-            <div className="text-[9px] font-mono text-slate-400 border-t pt-2 mt-1">
-              Target Stability Level: <span className="font-sans font-bold text-purple-700">100% Non-Breeding Goal</span>
+            <div className="text-[11px] text-slate-500 border-t border-slate-100 pt-2">
+              Goal: <strong className="text-purple-700">100% TNR &amp; anti-rabies coverage</strong>
             </div>
           </div>
         </div>
       )}
 
-      {/* Tables Mapping Sequence Block */}
+      {/* Registry Sections */}
       {loadingPets ? (
-        <div className="p-12 text-center text-slate-400 font-mono animate-pulse">COMPILING DATA GRIDS...</div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center space-y-2.5">
+          <div className="w-7 h-7 border-3 border-slate-200 border-t-[#5C0612] rounded-full animate-spin mx-auto" />
+          <p className="text-xs text-slate-500 font-medium">Loading animal directory...</p>
+        </div>
       ) : (
-        <>
-          {generateRenderedTableBlock("Active Campus & Adoption Companions", sortedActiveCollection)}
-          {generateRenderedTableBlock("Stray Animals Available for Adoption", sortedStrayCollection)}
-          {generateRenderedTableBlock("Adopted Alumni Companions Registry", sortedAdoptedCollection)}
-        </>
+        <div className="space-y-5">
+          {renderPetSection('Campus & Adoption Companions', sortedActiveCollection)}
+          {renderPetSection('Strays Available for Adoption', sortedStrayCollection)}
+          {renderPetSection('Adopted Alumni', sortedAdoptedCollection)}
+        </div>
       )}
 
-      {/* Printable Collar Tag QR Code Modal */}
+      {/* Printable 300 DPI Collar Tag QR Modal */}
       {qrTagModal.isOpen && qrTagModal.pet && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in font-sans">
-          <div className="bg-white border border-slate-200 shadow-2xl rounded-3xl max-w-sm w-full p-6 text-center space-y-4 animate-scale-up">
-            
-            {/* Tag Badge Frame */}
-            <div className="border-4 border-[#5C0612] rounded-2xl p-4 bg-gradient-to-b from-slate-50 to-white shadow-inner relative space-y-3">
-              <div className="flex items-center justify-between border-b border-[#5C0612]/20 pb-2">
-                <div className="flex items-center gap-2">
-                  <img
-                    src="/logo.png"
-                    alt="Wildcat Welfare Portal"
-                    className="w-7 h-7 object-contain shrink-0"
-                  />
-                  <span className="text-[10px] font-bold font-mono tracking-wider text-[#5C0612] uppercase">
-                    CIT-U Task Force Bruno
-                  </span>
-                </div>
-                <span className="text-[9px] font-mono font-black px-2 py-0.5 rounded bg-[#D4AF37]/20 text-[#5C0612] border border-[#D4AF37]">
-                  {qrTagModal.pet.pet_type === 'Campus Pet' ? 'RESIDENT' : 'TAG'}
-                </span>
-              </div>
-
-              {/* QR Code Container */}
-              <div className="w-52 h-52 mx-auto bg-white p-2 rounded-xl border border-slate-200 shadow-sm flex items-center justify-center">
-                <img src={qrTagModal.qrDataUrl} alt="Collar QR Code" className="w-full h-full object-contain" />
-              </div>
-
-              <div>
-                <h3 className="text-lg font-black text-slate-900 tracking-tight leading-none">{qrTagModal.pet.name}</h3>
-                <span className="text-[11px] font-mono font-bold text-slate-500 block mt-1">Collar Tag ID: {qrTagModal.pet.pet_id}</span>
-                <span className="text-[10px] text-slate-400 block">{qrTagModal.pet.species} &bull; {qrTagModal.pet.found_near}</span>
-              </div>
-
-              <div className="text-[9px] font-mono text-slate-500 border-t border-slate-200/60 pt-2 leading-tight">
-                Emergency Hotline: (032) 261-7741 / loc. 144
-              </div>
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() =>
+            setQrTagModal({ isOpen: false, pet: null, qrDataUrl: '', badgeDataUrl: '', targetUrl: '' })
+          }
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-slate-200 shadow-2xl rounded-3xl max-w-sm w-full max-h-[92dvh] overflow-y-auto p-5 sm:p-6 text-center space-y-4 animate-scale-up"
+          >
+            <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white">
+              <img
+                src={qrTagModal.badgeDataUrl || qrTagModal.qrDataUrl}
+                alt={`Collar QR tag for ${qrTagModal.pet.name}`}
+                className="w-full h-auto object-contain"
+              />
             </div>
 
-            <p className="text-[11px] text-slate-400 font-normal leading-relaxed">
-              Print and laminate this collar tag for physical attachment to the animal's collar. Anyone scanning this tag will immediately access their public passport and emergency contacts.
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Download this 300 DPI collar tag PNG to print and laminate. Scanning it opens{' '}
+              <strong>{qrTagModal.pet.name}&apos;s</strong> public passport and emergency hotline.
             </p>
 
-            <div className="flex gap-2">
-              <a 
-                href={qrTagModal.qrDataUrl} 
-                download={`${qrTagModal.pet.pet_id}_collar_tag.png`}
-                className="flex-1 py-2.5 bg-[#5C0612] hover:bg-[#42040B] text-white font-bold rounded-xl text-xs uppercase tracking-wider shadow-sm transition-all block text-center"
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={qrTagModal.badgeDataUrl || qrTagModal.qrDataUrl}
+                download={`${qrTagModal.pet.name.replace(/\s+/g, '_')}_CollarTag_300DPI.png`}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 bg-[#5C0612] hover:bg-[#42040B] text-white font-semibold rounded-xl text-xs shadow-sm transition-colors"
               >
-                Download PNG
+                <Download className="w-3.5 h-3.5" />
+                <span>Download PNG</span>
               </a>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => window.print()}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-colors"
               >
-                Print
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print</span>
               </button>
-              <button 
-                type="button" 
-                onClick={() => setQrTagModal({ isOpen: false, pet: null, qrDataUrl: '', targetUrl: '' })} 
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors"
+              <button
+                type="button"
+                onClick={() =>
+                  setQrTagModal({
+                    isOpen: false,
+                    pet: null,
+                    qrDataUrl: '',
+                    badgeDataUrl: '',
+                    targetUrl: '',
+                  })
+                }
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold rounded-xl text-xs transition-colors"
               >
                 Close
               </button>
             </div>
-
           </div>
         </div>
       )}
 
-      {/* Confirmation Purge Dialog Overlay Modal */}
-      {petIdToPurge && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in font-sans">
-          <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-6 text-center animate-scale-up">
-            <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg select-none">
-              <svg className="w-6 h-6 text-rose-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-              </svg>
+      {/* Delete Pet Confirmation Modal */}
+      {petIdToDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !deletingPet && setPetIdToDelete(null)}
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-6 text-center animate-scale-up space-y-3"
+          >
+            <div className="w-12 h-12 bg-rose-50 border border-rose-200 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
             </div>
-            <h3 className="font-black text-slate-900 text-sm tracking-tight mb-1">Confirm Configuration Wipe</h3>
-            <p className="text-slate-500 text-[11px] leading-relaxed mb-5 font-normal">
-              Are you completely sure you want to permanently delete profile <strong className="text-slate-800 font-bold">#{petIdToPurge}</strong>? 
-              This will instantly trigger a cascading erase loop to clear all clinical history tracks, vaccine logs, application forms, and related social media assets out of the master files.
+            <h3 className="font-bold text-slate-900 text-base">Delete Animal Profile</h3>
+            <p className="text-slate-500 text-xs leading-relaxed">
+              Are you sure you want to permanently delete{' '}
+              <strong className="text-slate-800">#{petIdToDelete}</strong>? This will also remove its
+              medical records, vaccination logs, adoption applications, and feed interactions.
             </p>
-            <div className="flex gap-3 justify-center font-mono text-[10px] font-bold uppercase select-none">
-              <button type="button" onClick={() => setPetIdToPurge(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl tracking-wider">Abort</button>
-              <button type="button" onClick={handleExecutePurgeSequence} className="px-4 py-2 bg-[#5C0612] text-white rounded-xl shadow-sm tracking-wider">Execute Hard Purge</button>
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={deletingPet}
+                onClick={() => setPetIdToDelete(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingPet}
+                onClick={handleDeletePet}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-semibold rounded-xl text-xs shadow-sm"
+              >
+                {deletingPet ? 'Deleting...' : 'Delete Permanently'}
+              </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }

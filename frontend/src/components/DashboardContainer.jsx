@@ -1,290 +1,287 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import {
-  ShieldAlert,
-  BookOpen,
-  UserCheck,
-  Newspaper,
-  QrCode,
   AlertTriangle,
+  BookOpen,
+  Heart,
+  HeartHandshake,
+  LogOut,
+  Menu,
+  MoreHorizontal,
+  Newspaper,
+  Package,
   PawPrint,
-  HeartHandshake
+  QrCode,
+  ShieldAlert,
+  UserCheck,
+  X,
 } from 'lucide-react';
-import QRScannerView from './QRScannerView';
-import PetProfileView from './PetProfileView';
-import PetListings from './PetListings';
-import SupplyLogistics from './SupplyLogistics';
-import AdoptionGallery from './AdoptionGallery';
-import ReportSightingView from './ReportSightingView';
 import NewsfeedView from './NewsfeedView';
-import SupportAndVolunteers from './SupportAndVolunteers';
 import UserGuideModal from './UserGuideModal';
 import EmergencyProtocolModal from './EmergencyProtocolModal';
+import { apiGet } from '../lib/api';
+import { getUserDisplayName, getUserInitials } from '../lib/auth';
+
+const QRScannerView = lazy(() => import('./QRScannerView'));
+const PetProfileView = lazy(() => import('./PetProfileView'));
+const PetListings = lazy(() => import('./PetListings'));
+const SupplyLogistics = lazy(() => import('./SupplyLogistics'));
+const AdoptionGallery = lazy(() => import('./AdoptionGallery'));
+const ReportSightingView = lazy(() => import('./ReportSightingView'));
+const SupportAndVolunteers = lazy(() => import('./SupportAndVolunteers'));
+
+const NAV_ITEMS = [
+  { key: 'newsfeed', label: 'Community Newsfeed', shortLabel: 'Feed', Icon: Newspaper },
+  { key: 'pet-listings', label: 'Pet Directory', shortLabel: 'Pets', Icon: PawPrint },
+  { key: 'scanner', label: 'Collar QR Scanner', shortLabel: 'Scan', Icon: QrCode },
+  { key: 'adoption', label: 'Adoption Portal', shortLabel: 'Adopt', Icon: Heart },
+  { key: 'report', label: 'Report Sighting', shortLabel: 'Report', Icon: AlertTriangle },
+  { key: 'support', label: 'Support & Volunteers', shortLabel: 'Support', Icon: HeartHandshake },
+  { key: 'resources', label: 'Supply Logistics', shortLabel: 'Supplies', Icon: Package },
+];
+
+const VALID_TABS = new Set(NAV_ITEMS.map((i) => i.key));
+
+function TabSpinner() {
+  return (
+    <div className="w-full py-16 flex flex-col items-center justify-center text-slate-400">
+      <div className="w-7 h-7 border-3 border-slate-200 border-t-[#5C0612] rounded-full animate-spin mb-2.5" />
+      <span className="text-xs font-medium">Loading view...</span>
+    </div>
+  );
+}
 
 export default function DashboardContainer({ session, onLogout }) {
-  // Hydrate current tab position from disk parameters on bootup loop
   const [currentTab, setCurrentTab] = useState(() => {
-    return localStorage.getItem('tfb_user_tab') || 'newsfeed';
+    const saved = localStorage.getItem('tfb_user_tab');
+    return saved && VALID_TABS.has(saved) ? saved : 'newsfeed';
   });
 
   const [activePetId, setActivePetId] = useState(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(() => {
+    try {
+      return localStorage.getItem('tfb_onboarding_completed') !== 'true';
+    } catch {
+      return false;
+    }
+  });
   const [isEmergencyOpen, setIsEmergencyOpen] = useState(false);
   const [pets, setPets] = useState([]);
   const [loadingPets, setLoadingPets] = useState(false);
+  const [petsError, setPetsError] = useState('');
+
+  const displayName = getUserDisplayName(session, 'Community Member');
+  const initials = getUserInitials(session, 'CM');
+  const currentNav = NAV_ITEMS.find((i) => i.key === currentTab) || NAV_ITEMS[0];
+
+  const handleCloseGuide = () => {
+    setIsGuideOpen(false);
+    try {
+      localStorage.setItem('tfb_onboarding_completed', 'true');
+    } catch {
+      // Ignore storage errors
+    }
+  };
 
   const fetchAllPets = useCallback(async () => {
     setLoadingPets(true);
-    try {
-      const res = await fetch('https://taskforcebruno.onrender.com/api/pets/');
-      if (res.ok) {
-        const data = await res.json();
-        setPets(Array.isArray(data) ? data : []);
-      }
-    } catch (err) {
-      console.error('Pet listings fetch error:', err);
-    } finally {
-      setLoadingPets(false);
+    setPetsError('');
+    const res = await apiGet('/pets/');
+    if (res.ok && Array.isArray(res.data)) {
+      setPets(res.data);
+    } else if (!res.aborted) {
+      setPetsError(res.error || 'Unable to load the campus pet directory.');
     }
+    setLoadingPets(false);
   }, []);
 
-  // Save current tab layout configuration dynamically upon mutation
   useEffect(() => {
     localStorage.setItem('tfb_user_tab', currentTab);
   }, [currentTab]);
 
-  // Fetch pets whenever the Pet Listings tab is active
   useEffect(() => {
-    if (currentTab !== 'pet-listings') return;
-    let cancelled = false;
-    const loadPets = async () => {
+    if (currentTab !== 'pet-listings') return undefined;
+    const controller = new AbortController();
+    const run = async () => {
       setLoadingPets(true);
-      try {
-        const res = await fetch('https://taskforcebruno.onrender.com/api/pets/');
-        if (res.ok && !cancelled) {
-          const data = await res.json();
-          setPets(Array.isArray(data) ? data : []);
-        }
-      } catch (err) {
-        console.error('Pet listings fetch error:', err);
-      } finally {
-        if (!cancelled) setLoadingPets(false);
+      setPetsError('');
+      const res = await apiGet('/pets/', { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      if (res.ok && Array.isArray(res.data)) {
+        setPets(res.data);
+      } else {
+        setPetsError(res.error || 'Unable to load the campus pet directory.');
       }
+      setLoadingPets(false);
     };
-    loadPets();
-    return () => {
-      cancelled = true;
-    };
+    run();
+    return () => controller.abort();
   }, [currentTab]);
 
+  // Close mobile drawer on Escape
+  useEffect(() => {
+    if (!isMobileOpen) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setIsMobileOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isMobileOpen]);
+
+  const navigateTo = (tabKey) => {
+    setCurrentTab(tabKey);
+    setActivePetId(null);
+    setIsMobileOpen(false);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 flex text-slate-800 font-sans antialiased relative overflow-hidden">
+    <div className="h-dvh bg-slate-50 flex text-slate-800 font-sans antialiased relative overflow-hidden">
+      <UserGuideModal isOpen={isGuideOpen} onClose={handleCloseGuide} />
 
-      {/* USER INTERACTIVE SYSTEM GUIDE MODAL */}
-      <UserGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
-
-      {/* EMERGENCY FIRST-AID & BITE PROTOCOL MODAL (RA 9482) */}
-      <EmergencyProtocolModal 
-        isOpen={isEmergencyOpen} 
-        onClose={() => setIsEmergencyOpen(false)} 
-        onNavigateToReport={() => {
-          setCurrentTab('report');
-          setActivePetId(null);
-          setIsMobileOpen(false);
-        }}
+      <EmergencyProtocolModal
+        isOpen={isEmergencyOpen}
+        onClose={() => setIsEmergencyOpen(false)}
+        onNavigateToReport={() => navigateTo('report')}
       />
 
-      {/* MOBILE OVERLAY */}
+      {/* Mobile Drawer Backdrop */}
       {isMobileOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-30 md:hidden transition-opacity duration-300"
+          className="fixed inset-0 bg-slate-950/50 backdrop-blur-[2px] z-30 md:hidden animate-fade-in"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
 
-      {/* SIDEBAR */}
+      {/* Sidebar Navigation */}
       <aside
+        aria-label="Main navigation"
         className={`
-          w-72 bg-[#5C0612] text-white flex flex-col justify-between border-r-4 border-[#D4AF37] shrink-0
-          fixed md:sticky top-0 h-screen z-40 shadow-xl transition-transform duration-300 ease-in-out
+          w-72 max-w-[85vw] bg-[#5C0612] text-white flex flex-col justify-between border-r-4 border-[#D4AF37] shrink-0
+          fixed md:sticky top-0 h-dvh z-40 shadow-2xl md:shadow-none transition-transform duration-250 ease-out
           ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
       >
-        <div>
-          <div className="p-6 border-b border-white/10 flex items-center justify-between">
-            <div className="flex items-center gap-3">
+        <div className="flex flex-col min-h-0 flex-1">
+          <div className="p-5 border-b border-white/10 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
               <img
                 src="/logo.png"
                 alt="Wildcat Welfare Portal Logo"
-                className="w-11 h-11 object-contain drop-shadow-md shrink-0 select-none"
+                className="w-10 h-10 object-contain drop-shadow-md shrink-0 select-none"
               />
-
-              <div>
-                <h2 className="text-sm font-bold tracking-tight text-white leading-none">
+              <div className="min-w-0">
+                <h2 className="text-sm font-bold tracking-tight text-white leading-tight truncate">
                   Task Force Bruno
                 </h2>
-                <span className="text-[10px] text-[#D4AF37] tracking-widest uppercase font-semibold block mt-1">
+                <span className="text-[10px] text-[#D4AF37] tracking-widest uppercase font-semibold block mt-0.5 truncate">
                   Wildcat Welfare Portal
                 </span>
               </div>
             </div>
 
             <button
+              type="button"
               onClick={() => setIsMobileOpen(false)}
-              className="md:hidden p-1 text-stone-300 hover:text-white rounded-lg hover:bg-white/10"
+              aria-label="Close navigation menu"
+              className="md:hidden p-1.5 text-stone-300 hover:text-white rounded-xl hover:bg-white/10 transition-colors"
             >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="w-5 h-5" />
             </button>
           </div>
 
-          <nav className="p-4 space-y-1.5 overflow-y-auto max-h-[calc(100vh-220px)]">
-            <span className="text-[8px] font-mono font-bold tracking-widest uppercase text-white/40 block px-3 mb-1">
-              Community Node Workspace
+          <nav className="p-3.5 space-y-1 overflow-y-auto flex-1">
+            <span className="text-[10px] font-semibold tracking-wider uppercase text-white/45 block px-3 pb-1.5">
+              Community Portal
             </span>
 
-            <button
-              onClick={() => { setCurrentTab('newsfeed'); setActivePetId(null); setIsMobileOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                currentTab === 'newsfeed' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
-              }`}
-            >
-              Community Newsfeed
-            </button>
+            {NAV_ITEMS.map(({ key, label, Icon }) => {
+              const isActive = currentTab === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => navigateTo(key)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                    isActive
+                      ? 'bg-white text-[#5C0612] font-semibold shadow-sm'
+                      : 'text-stone-200 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  <Icon
+                    className={`w-4 h-4 shrink-0 ${
+                      isActive ? 'text-[#5C0612]' : 'text-[#D4AF37]/85'
+                    }`}
+                  />
+                  <span className="truncate">{label}</span>
+                </button>
+              );
+            })}
 
-            <button
-              onClick={() => { setCurrentTab('pet-listings'); setActivePetId(null); setIsMobileOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                currentTab === 'pet-listings' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
-              }`}
-            >
-              Pet Listings
-            </button>
-
-            <button
-              onClick={() => { setCurrentTab('scanner'); setActivePetId(null); setIsMobileOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                currentTab === 'scanner' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
-              }`}
-            >
-              Collar QR Scanner
-            </button>
-
-            <button
-              onClick={() => { setCurrentTab('adoption'); setActivePetId(null); setIsMobileOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                currentTab === 'adoption' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
-              }`}
-            >
-              Adoption Placement Portal
-            </button>
-
-            <button
-              onClick={() => { setCurrentTab('report'); setActivePetId(null); setIsMobileOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                currentTab === 'report' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
-              }`}
-            >
-              Report Animal Sighting
-            </button>
-
-            <button
-              onClick={() => { setCurrentTab('support'); setActivePetId(null); setIsMobileOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                currentTab === 'support' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
-              }`}
-            >
-              Support & Volunteers
-            </button>
-
-            <button
-              onClick={() => { setCurrentTab('resources'); setActivePetId(null); setIsMobileOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                currentTab === 'resources' ? 'bg-white text-[#5C0612] font-semibold shadow-md' : 'text-stone-200 hover:bg-white/5'
-              }`}
-            >
-              Supply Logistics Hub
-            </button>
-
-            <div className="pt-2 border-t border-white/10 mt-2 space-y-1.5">
+            <div className="pt-3 border-t border-white/10 mt-3 space-y-1.5">
               <button
-                onClick={() => { setIsEmergencyOpen(true); setIsMobileOpen(false); }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-200 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 transition-all text-left shadow-sm"
+                type="button"
+                onClick={() => {
+                  setIsEmergencyOpen(true);
+                  setIsMobileOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-100 hover:text-white bg-rose-950/50 hover:bg-rose-900/70 border border-rose-400/30 transition-colors text-left"
               >
-                <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                <ShieldAlert className="w-4 h-4 text-rose-300 shrink-0" />
                 <span>Bite &amp; Emergency Guide</span>
               </button>
 
               <button
-                onClick={() => { setIsGuideOpen(true); setIsMobileOpen(false); }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#D4AF37] hover:bg-white/10 transition-all text-left"
+                type="button"
+                onClick={() => {
+                  setIsGuideOpen(true);
+                  setIsMobileOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-[#D4AF37] hover:bg-white/10 transition-colors text-left"
               >
                 <BookOpen className="w-4 h-4 text-[#D4AF37] shrink-0" />
-                <span>System User Guide</span>
+                <span>Getting Started Guide</span>
               </button>
             </div>
           </nav>
         </div>
 
-        <div className="border-t border-white/10 pt-4 flex flex-col gap-3 p-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[#D4AF37] text-[#5C0612] font-bold flex items-center justify-center text-xs shrink-0">
-              CU
+        {/* User Profile Footer */}
+        <div className="border-t border-white/10 p-4 flex flex-col gap-3 shrink-0 bg-black/10">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-[#D4AF37] text-[#5C0612] font-bold flex items-center justify-center text-xs shrink-0">
+              {initials}
             </div>
-
             <div className="truncate flex-1">
-              <p className="text-xs font-semibold text-white leading-none truncate">
-                Campus User
-              </p>
-              <span className="text-[9px] text-stone-300 font-mono mt-1 block truncate">
-                {session?.email || 'Loading profile...'}
+              <p className="text-xs font-semibold text-white leading-tight truncate">{displayName}</p>
+              <span className="text-[11px] text-stone-300/80 block truncate mt-0.5">
+                {session?.email || ''}
               </span>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={onLogout}
-            className="w-full py-2 bg-white/5 text-stone-300 hover:bg-rose-950/40 rounded-xl text-[11px] font-medium border border-white/10 transition-all"
+            className="w-full py-2 bg-white/10 hover:bg-rose-950/60 text-stone-200 hover:text-white rounded-xl text-xs font-medium border border-white/10 transition-colors inline-flex items-center justify-center gap-2"
           >
-            Sign Out
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
 
-      {/* MAIN CONTAINER */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative min-w-0 pb-16 md:pb-0">
-
-        {/* HEADER */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0 z-10 shadow-sm">
-          <div className="flex items-center gap-3">
+      {/* Main Content Container */}
+      <main className="flex-1 flex flex-col h-dvh overflow-hidden relative min-w-0 pb-16 md:pb-0">
+        {/* Top Bar */}
+        <header className="h-15 sm:h-16 bg-white border-b border-slate-200 flex items-center justify-between px-3 sm:px-6 md:px-8 shrink-0 z-10">
+          <div className="flex items-center gap-2.5 min-w-0">
             <button
+              type="button"
               onClick={() => setIsMobileOpen(true)}
-              className="md:hidden p-2 text-slate-700 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-all focus:outline-none"
+              aria-label="Open navigation menu"
+              className="md:hidden p-2 text-slate-700 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shrink-0"
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
-                />
-              </svg>
+              <Menu className="w-4 h-4" />
             </button>
 
             <img
@@ -292,20 +289,21 @@ export default function DashboardContainer({ session, onLogout }) {
               alt="Task Force Bruno"
               className="w-7 h-7 object-contain md:hidden shrink-0 select-none"
             />
-            <span className="text-xs font-bold font-mono text-[#5C0612] uppercase tracking-wider">
-              {currentTab === 'support' ? 'Support & Action' : `${currentTab.replace('-', ' ')} Module`}
-            </span>
+            <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight truncate">
+              {currentNav.label}
+            </h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setIsEmergencyOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold transition-colors shadow-sm"
-              title="Immediate Bite/Injury Protocol (RA 9482)"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold transition-colors"
+              title="Immediate Bite & Injury Protocol (RA 9482)"
             >
               <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-              <span>Emergency Protocol</span>
+              <span className="hidden xs:inline sm:inline">Emergency</span>
+              <span className="hidden md:inline">Protocol</span>
             </button>
 
             <button
@@ -313,65 +311,44 @@ export default function DashboardContainer({ session, onLogout }) {
               onClick={() => setIsGuideOpen(true)}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[#5C0612] rounded-xl text-xs font-semibold transition-colors"
             >
-              <BookOpen className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span>System Guide</span>
+              <BookOpen className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <span>User Guide</span>
             </button>
 
-            <div className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700">
+            <div className="hidden lg:inline-flex items-center gap-1.5 text-xs font-medium bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700">
               <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span>Community Member</span>
             </div>
           </div>
         </header>
 
-        {/* CONTENT AREA */}
-        <div className="flex-1 relative min-h-0 bg-gradient-to-br from-slate-50 via-stone-50 to-slate-100 overflow-hidden">
-          <div className="absolute inset-0 z-0 pointer-events-none opacity-40">
-            <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern
-                  id="user-grid"
-                  width="40"
-                  height="40"
-                  patternUnits="userSpaceOnUse"
-                >
-                  <path
-                    d="M 40 0 L 0 0 0 40"
-                    fill="none"
-                    stroke="rgba(92, 6, 18, 0.05)"
-                    strokeWidth="1"
-                  />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#user-grid)" />
-            </svg>
-          </div>
-
-          {/* NEWSFEED */}
+        {/* Active View Surface */}
+        <div className="flex-1 relative min-h-0 bg-slate-50 overflow-y-auto">
           {currentTab === 'newsfeed' && (
-            <div className="relative z-10 w-full h-full min-h-0 p-4 md:p-8 overflow-hidden">
+            <div className="w-full lg:h-full p-3 sm:p-5 md:p-7">
               <NewsfeedView session={session} />
             </div>
           )}
 
-          {/* PET LISTINGS (VIEW-ONLY FOR COMMUNITY USERS) */}
           {currentTab === 'pet-listings' && (
-            <div className="relative z-10 w-full h-full overflow-y-auto p-4 md:p-8">
-              <div className="max-w-7xl mx-auto pb-8">
-                <PetListings
-                  pets={pets}
-                  loadingPets={loadingPets}
-                  onRefresh={fetchAllPets}
-                  readOnly
-                />
+            <div className="w-full p-3 sm:p-5 md:p-7">
+              <div className="max-w-7xl mx-auto pb-6">
+                <Suspense fallback={<TabSpinner />}>
+                  <PetListings
+                    pets={pets}
+                    loadingPets={loadingPets}
+                    loadError={petsError}
+                    onRefresh={fetchAllPets}
+                    readOnly
+                  />
+                </Suspense>
               </div>
             </div>
           )}
 
-          {/* SCANNER */}
           {currentTab === 'scanner' && (
-            <div className="relative z-10 w-full h-full overflow-y-auto">
-              <div className="min-h-full flex items-start justify-center p-3 sm:p-5 md:p-6 lg:p-8">
+            <div className="w-full p-3 sm:p-5 md:p-7">
+              <Suspense fallback={<TabSpinner />}>
                 {!activePetId ? (
                   <QRScannerView onProfileIdentified={(id) => setActivePetId(id)} />
                 ) : (
@@ -380,73 +357,86 @@ export default function DashboardContainer({ session, onLogout }) {
                     onBackToScanner={() => setActivePetId(null)}
                   />
                 )}
-              </div>
+              </Suspense>
             </div>
           )}
 
-          {/* REPORT */}
           {currentTab === 'report' && (
-            <div className="relative z-10 w-full h-full overflow-y-auto p-4 md:p-8">
-              <ReportSightingView session={session} />
+            <div className="w-full p-3 sm:p-5 md:p-7">
+              <Suspense fallback={<TabSpinner />}>
+                <ReportSightingView session={session} />
+              </Suspense>
             </div>
           )}
 
-          {/* ADOPTION */}
           {currentTab === 'adoption' && (
-            <div className="relative z-10 w-full h-full overflow-y-auto p-4 md:p-8">
-              <AdoptionGallery session={session} />
+            <div className="w-full p-3 sm:p-5 md:p-7">
+              <Suspense fallback={<TabSpinner />}>
+                <AdoptionGallery session={session} />
+              </Suspense>
             </div>
           )}
 
-          {/* SUPPORT & VOLUNTEERS */}
           {currentTab === 'support' && (
-            <div className="relative z-10 w-full h-full overflow-y-auto p-4 md:p-8">
-              <SupportAndVolunteers session={session} />
+            <div className="w-full p-3 sm:p-5 md:p-7">
+              <Suspense fallback={<TabSpinner />}>
+                <SupportAndVolunteers session={session} />
+              </Suspense>
             </div>
           )}
 
-          {/* RESOURCES */}
           {currentTab === 'resources' && (
-            <div className="relative z-10 w-full h-full overflow-y-auto p-4 md:p-8">
-              <SupplyLogistics />
+            <div className="w-full p-3 sm:p-5 md:p-7">
+              <Suspense fallback={<TabSpinner />}>
+                <SupplyLogistics />
+              </Suspense>
             </div>
           )}
         </div>
-
       </main>
 
-      {/* MODERN MOBILE BOTTOM NAVIGATION BAR */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-30 flex items-center justify-around h-16 px-1 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
-        {[
-          { key: 'newsfeed', label: 'Feed', Icon: Newspaper, activeColor: 'text-[#5C0612]' },
-          { key: 'scanner', label: 'Scan', Icon: QrCode, activeColor: 'text-[#5C0612]' },
-          { key: 'report', label: 'Report', Icon: AlertTriangle, activeColor: 'text-rose-600' },
-          { key: 'adoption', label: 'Adopt', Icon: PawPrint, activeColor: 'text-amber-700' },
-          { key: 'support', label: 'Support', Icon: HeartHandshake, activeColor: 'text-emerald-700' },
-        ].map((item) => {
-          const isActive = currentTab === item.key;
-          const NavIcon = item.Icon;
-          return (
-            <button
-              key={item.key}
-              onClick={() => {
-                setCurrentTab(item.key);
-                setActivePetId(null);
-              }}
-              className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all ${
-                isActive ? `${item.activeColor} font-bold` : 'text-slate-500 font-medium'
-              }`}
-            >
-              <NavIcon className="w-5 h-5" />
-              <span className="text-[10px] mt-1 tracking-tight">{item.label}</span>
-              {isActive && (
-                <span className="w-1.5 h-1.5 rounded-full bg-current mt-0.5" />
-              )}
-            </button>
-          );
-        })}
-      </nav>
+      {/* Mobile Bottom Navigation Bar */}
+      <nav
+        aria-label="Mobile quick navigation"
+        className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-30 pb-safe shadow-[0_-4px_16px_rgba(0,0,0,0.06)]"
+      >
+        <div className="flex items-center justify-around h-16 px-1">
+          {[
+            { key: 'newsfeed', label: 'Feed', Icon: Newspaper, activeColor: 'text-[#5C0612]' },
+            { key: 'scanner', label: 'Scan', Icon: QrCode, activeColor: 'text-[#5C0612]' },
+            { key: 'report', label: 'Report', Icon: AlertTriangle, activeColor: 'text-rose-600' },
+            { key: 'adoption', label: 'Adopt', Icon: Heart, activeColor: 'text-amber-700' },
+          ].map(({ key, label, Icon, activeColor }) => {
+            const isActive = currentTab === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => navigateTo(key)}
+                className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-colors ${
+                  isActive ? `${activeColor} font-bold` : 'text-slate-500 font-medium'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] mt-1 tracking-tight">{label}</span>
+              </button>
+            );
+          })}
 
+          <button
+            type="button"
+            onClick={() => setIsMobileOpen(true)}
+            className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-colors ${
+              ['pet-listings', 'support', 'resources'].includes(currentTab)
+                ? 'text-[#5C0612] font-bold'
+                : 'text-slate-500 font-medium'
+            }`}
+          >
+            <MoreHorizontal className="w-5 h-5" />
+            <span className="text-[10px] mt-1 tracking-tight">More</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
-}
+}

@@ -1,286 +1,337 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { AlertTriangle, PhoneCall, RotateCw, ShieldAlert, X } from 'lucide-react';
+import { apiGet } from '../lib/api';
+import { getVaccinationBadgeStyles, isPetQuarantined, safeImageUrl } from '../lib/pets';
 
-export default function PublicPetPassport({ petId, onClose, onGoLogin }) {
+export default function PublicPetPassport({ petId, isLoggedIn = false, onClose, onGoLogin }) {
   const [pet, setPet] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [nowMs, setNowMs] = useState(() => Date.now());
 
-  useEffect(() => {
+  const loadPassport = useCallback(async () => {
     if (!petId) return;
-    let cancelled = false;
+    setLoading(true);
+    setError('');
+    const res = await apiGet(`/pets/${encodeURIComponent(petId)}/`, { auth: false });
+    if (res.ok && res.data) {
+      setPet(res.data);
+      setNowMs(Date.now());
+    } else {
+      setPet(null);
+      setError(res.error || `Animal record for ID "${petId}" was not found.`);
+    }
+    setLoading(false);
+  }, [petId]);
 
-    const loadPassport = async () => {
-      try {
-        const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(petId)}/`);
-        if (!res.ok) throw new Error(`Animal record for ID "${petId}" was not found.`);
-        const data = await res.json();
-        if (!cancelled) {
-          setPet(data);
-          setError('');
-          setNowMs(Date.now());
-          setLoading(false);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setPet(null);
-          setError(err.message || 'Unable to connect to campus registry.');
-          setLoading(false);
-        }
+  useEffect(() => {
+    let active = true;
+    const run = async () => {
+      if (!petId) return;
+      setLoading(true);
+      setError('');
+      const res = await apiGet(`/pets/${encodeURIComponent(petId)}/`, { auth: false });
+      if (!active) return;
+      if (res.ok && res.data) {
+        setPet(res.data);
+        setNowMs(Date.now());
+      } else {
+        setPet(null);
+        setError(res.error || `Animal record for ID "${petId}" was not found.`);
       }
+      setLoading(false);
     };
-
-    loadPassport();
+    run();
     return () => {
-      cancelled = true;
+      active = false;
     };
   }, [petId]);
 
-  // Lock background page scroll while passport modal is open on mobile
+  // Lock background scroll & support Escape to close
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && onClose) onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
     return () => {
       document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
     };
-  }, []);
+  }, [onClose]);
 
   const expiryMs = pet?.quarantine_expiry_date ? new Date(pet.quarantine_expiry_date).getTime() : NaN;
   const hasValidExpiry = !Number.isNaN(expiryMs);
   const isFullyVaccinated = Boolean(pet?.vaccination_status && pet.vaccination_status.toLowerCase().includes('fully'));
-  const isCoreOnly = Boolean(
-    pet?.vaccination_status &&
-    (pet.vaccination_status.toLowerCase().includes('core') || pet.vaccination_status.toLowerCase().includes('partial'))
-  );
+  const quarantined = isPetQuarantined(pet);
+  const portraitUrl = safeImageUrl(pet?.primary_image);
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="public-passport-title"
       onClick={() => onClose && onClose()}
-      className="fixed inset-0 bg-slate-950/75 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-6 animate-fade-in"
+      className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 animate-fade-in"
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{ maxHeight: 'calc(100dvh - 1.5rem)' }}
-        className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full max-h-[92vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden text-slate-800 text-left animate-scale-up"
+        className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 flex flex-col overflow-hidden text-slate-800 text-left animate-scale-up"
       >
-          
-          {/* Pinned Institutional Top Header (Always visible on mobile & desktop) */}
-          <div className="bg-[#5C0612] text-white p-4 sm:p-5 flex items-center justify-between gap-2 border-b-4 border-[#D4AF37] shrink-0">
-            <div className="flex items-center gap-3 min-w-0">
-              <img
-                src="/logo.png"
-                alt="Wildcat Welfare Portal Logo"
-                className="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-md shrink-0 select-none"
-              />
-              <div className="min-w-0">
-                <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-widest text-[#D4AF37] block font-semibold truncate">
-                  Task Force Bruno &bull; CIT-U
-                </span>
-                <h2 className="text-sm sm:text-base font-black tracking-tight leading-tight truncate">
-                  Official Campus Animal Passport
-                </h2>
-              </div>
-            </div>
-
-            {onClose && (
-              <button 
-                type="button"
-                onClick={onClose}
-                aria-label="Close passport"
-                className="p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-colors shrink-0"
-                title="Close passport"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-
-          {/* Independently Scrollable Modal Body */}
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-
-        {loading ? (
-          <div className="p-12 text-center text-slate-400 font-mono text-xs animate-pulse">
-            Verifying collar security tag credentials...
-          </div>
-        ) : error ? (
-          <div className="p-8 text-center space-y-3">
-            <div className="w-12 h-12 rounded-full bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-              </svg>
-            </div>
-            <h3 className="text-sm font-bold text-slate-800">Unregistered Tag Scan</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">{error}</p>
-            {onClose && (
-              <button 
-                onClick={onClose}
-                className="px-5 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition-colors"
-              >
-                Return
-              </button>
-            )}
-          </div>
-        ) : pet && (
-          <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
-            
-            {/* Active Quarantine Caution Alert (If under observation) (TC-MED-002) */}
-            {(pet.is_quarantined || pet.status?.includes('Quarantine')) && (
-              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-300 text-rose-900 space-y-2 animate-pulse">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wider font-mono">
-                    <svg className="w-4 h-4 text-rose-700 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                    </svg>
-                    Campus Health Observation Notice (RA 9482)
-                  </div>
-                  {hasValidExpiry && (
-                    <span className="px-2 py-0.5 bg-rose-200 text-rose-900 rounded-full font-mono text-[10px] font-bold">
-                      {(() => {
-                        const diff = expiryMs - nowMs;
-                        if (diff <= 0) return 'Observation Completed';
-                        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                        return `${days} days, ${hours} hours remaining`;
-                      })()}
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] leading-relaxed text-rose-800 font-medium">
-                  This companion is currently under a routine 14-day observation protocol following a campus incident report. Please <strong>do not feed, touch, or handle</strong>. Report any irregular behavior to Campus Security or MDC.
-                </p>
-                {hasValidExpiry && (
-                  <div className="text-[10px] font-mono text-rose-700 bg-rose-100/60 px-2.5 py-1 rounded-lg">
-                    Quarantine Release Date: <strong>{new Date(expiryMs).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true })}</strong>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Profile Header Block */}
-            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3.5 sm:gap-4 pb-4 border-b border-slate-100 text-center sm:text-left">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border-2 border-slate-200 shadow-sm shrink-0 bg-slate-100">
-                {pet.primary_image ? (
-                  <img src={pet.primary_image} alt={pet.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-slate-300 font-mono text-[10px] uppercase font-bold">
-                    No Photo
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-1 flex-1 min-w-0">
-                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight">{pet.name}</h3>
-                  <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
-                    {pet.pet_id}
-                  </span>
-                </div>
-
-                <p className="text-xs text-slate-500 font-medium">
-                  {pet.species} &bull; {pet.breed || 'Domestic Companion'} &bull; {pet.gender || 'Unknown'}
-                </p>
-
-                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 pt-1">
-                  <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${
-                    pet.pet_type === 'Campus Pet' 
-                      ? 'bg-amber-50 text-amber-800 border-amber-200' 
-                      : (pet.pet_type || '').toLowerCase().includes('stray')
-                      ? 'bg-orange-50 text-orange-800 border-orange-200'
-                      : 'bg-indigo-50 text-indigo-800 border-indigo-200'
-                  }`}>
-                    {pet.pet_type === 'Campus Pet'
-                      ? 'Permanent Campus Resident'
-                      : (pet.pet_type || '').toLowerCase().includes('stray')
-                      ? 'Registered Campus Stray'
-                      : 'Rescue Animal (For Adoption)'}
-                  </span>
-
-                  <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${
-                    isFullyVaccinated
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : isCoreOnly
-                      ? 'bg-amber-50 text-amber-800 border-amber-200'
-                      : 'bg-rose-50 text-rose-700 border-rose-200'
-                  }`}>
-                    {isFullyVaccinated
-                      ? 'Fully Vaccinated - Rabies Valid'
-                      : pet.vaccination_status || 'Not Vaccinated'}
-                  </span>
-
-                  {pet.spayed_neutered && (
-                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                      TNR Sterilized
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Vitals, Campus Territory, and Feeding Details */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-3.5 sm:p-4 rounded-2xl border border-slate-100">
-              <div>
-                <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block">Usual Campus Hangout Zone</span>
-                <span className="font-bold text-slate-800">{pet.found_near || 'CIT-U Campus Grounds'}</span>
-              </div>
-              <div className="pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/50">
-                <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block">Usual Feeding Routine</span>
-                <span className="font-bold text-slate-800">{pet.feeding_area || 'Scheduled Campus Feeding Station'}</span>
-              </div>
-              <div className="sm:col-span-2 pt-2 border-t border-slate-200/50">
-                <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block mb-0.5">Temperament & Student Interaction Notes</span>
-                <p className="text-[11px] text-slate-700 bg-white p-2.5 rounded-xl border border-slate-200/70 leading-relaxed font-medium">
-                  {pet.behavior_notes || 'Friendly campus companion. Enjoys gentle head pats and company. Please do not feed harmful table scraps.'}
-                </p>
-              </div>
-              <div className="sm:col-span-2 pt-2 border-t border-slate-200/50">
-                <span className="text-[9px] font-bold text-slate-400 font-mono uppercase block mb-0.5">Physical Description & Background</span>
-                <p className="text-[11px] text-slate-600 italic leading-relaxed">
-                  "{pet.description || pet.about_text || 'Registered resident companion under Task Force Bruno campus protection.'}"
-                </p>
-              </div>
-            </div>
-
-            {/* Emergency Campus Contact Card */}
-            <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-bold font-mono text-amber-800 uppercase tracking-wider block">
-                  Campus Security & Pet Care Hotline
-                </span>
-                <p className="text-[11px] text-slate-700 font-medium leading-relaxed">
-                  If this animal is injured, lost outside campus, or in distress, contact MDC immediately:
-                </p>
-                <span className="font-mono font-bold text-slate-900 text-xs block pt-0.5 whitespace-nowrap">(032) 261-7741 / loc. 144</span>
-              </div>
-              <a 
-                href="tel:0322617741"
-                className="w-full sm:w-auto text-center px-4 py-2.5 sm:py-2 bg-[#5C0612] hover:bg-[#42040B] text-white font-bold rounded-xl text-[10px] uppercase tracking-wider shrink-0 shadow-sm transition-colors"
-              >
-                Call Office
-              </a>
-            </div>
-
-            {/* Platform Invitation Banner (Funneling unauthenticated students to log in) */}
-            <div className="p-4 bg-slate-900 text-white rounded-2xl space-y-2.5 text-center">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-[#D4AF37] block font-bold">
-                Student & Faculty Community Access
+        {/* Pinned Institutional Top Header */}
+        <div className="bg-[#5C0612] text-white p-4 sm:p-5 flex items-center justify-between gap-2 border-b-4 border-[#D4AF37] shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <img
+              src="/logo.png"
+              alt="Wildcat Welfare Portal Logo"
+              className="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-md shrink-0 select-none"
+            />
+            <div className="min-w-0">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-[#D4AF37] block truncate">
+                Task Force Bruno &bull; CIT-U
               </span>
-              <p className="text-[11px] text-slate-300 leading-relaxed max-w-sm mx-auto">
-                Sign in with your official <strong>@cit.edu</strong> institutional account to report animal sightings, apply for pet adoptions, or join community discussions.
-              </p>
-              <button
-                onClick={onGoLogin}
-                className="mt-1 w-full py-2.5 bg-[#D4AF37] hover:bg-[#c49f2e] text-[#5C0612] font-black rounded-xl text-xs uppercase tracking-wider transition-all shadow-md"
-              >
-                Sign In with CIT-U Account
-              </button>
+              <h2 id="public-passport-title" className="text-sm sm:text-base font-bold tracking-tight leading-tight truncate">
+                Official Campus Animal Passport
+              </h2>
             </div>
-
-          </div>
-        )}
           </div>
 
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close passport"
+              className="p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-colors shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
+        {/* Scrollable Modal Body */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          {loading ? (
+            <div className="p-12 text-center space-y-3">
+              <div className="w-8 h-8 border-3 border-slate-200 border-t-[#5C0612] rounded-full animate-spin mx-auto" />
+              <p className="text-xs text-slate-500 font-medium">Looking up collar tag #{petId}...</p>
+            </div>
+          ) : error ? (
+            <div className="p-8 text-center space-y-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900">Tag Not Found</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">{error}</p>
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={loadPassport}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#5C0612] hover:bg-[#42040B] text-white rounded-xl text-xs font-semibold transition-colors"
+                >
+                  <RotateCw className="w-3.5 h-3.5" />
+                  <span>Retry</span>
+                </button>
+                {onClose && (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition-colors"
+                  >
+                    Close
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            pet && (
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+                {/* Active Quarantine Caution Notice */}
+                {quarantined && (
+                  <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-950 space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wide text-rose-900">
+                        <ShieldAlert className="w-4 h-4 text-rose-700 shrink-0" />
+                        <span>14-Day Health Observation (RA 9482)</span>
+                      </div>
+                      {hasValidExpiry && (
+                        <span className="px-2.5 py-0.5 bg-rose-200 text-rose-950 rounded-full font-mono text-[10px] font-bold">
+                          {(() => {
+                            const diff = expiryMs - nowMs;
+                            if (diff <= 0) return 'Observation Completed';
+                            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                            return `${days}d ${hours}h remaining`;
+                          })()}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs leading-relaxed text-rose-900">
+                      This animal is under mandatory 14-day rabies observation following a campus incident report. Please{' '}
+                      <strong>do not feed, touch, or handle</strong>. Contact Campus Security or MDC if you notice unusual behavior.
+                    </p>
+                    {hasValidExpiry && (
+                      <div className="text-[11px] font-mono text-rose-800 bg-rose-100/80 px-2.5 py-1.5 rounded-lg">
+                        Release Date:{' '}
+                        <strong>
+                          {new Date(expiryMs).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          })}
+                        </strong>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Profile Header */}
+                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 pb-4 border-b border-slate-100 text-center sm:text-left">
+                  <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-slate-200 shadow-sm shrink-0 bg-slate-100">
+                    {portraitUrl ? (
+                      <img src={portraitUrl} alt={pet.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs font-semibold">
+                        No Photo
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                      <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">{pet.name}</h3>
+                      <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
+                        {pet.pet_id}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-500 font-medium">
+                      {pet.species} &bull; {pet.breed || 'Domestic Companion'} &bull; {pet.gender || 'Unknown'}
+                    </p>
+
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 pt-1">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold border ${
+                          pet.pet_type === 'Campus Pet'
+                            ? 'bg-amber-50 text-amber-900 border-amber-200'
+                            : (pet.pet_type || '').toLowerCase().includes('stray')
+                            ? 'bg-orange-50 text-orange-900 border-orange-200'
+                            : 'bg-indigo-50 text-indigo-900 border-indigo-200'
+                        }`}
+                      >
+                        {pet.pet_type === 'Campus Pet'
+                          ? 'Campus Resident'
+                          : (pet.pet_type || '').toLowerCase().includes('stray')
+                          ? 'Registered Stray'
+                          : 'Available for Adoption'}
+                      </span>
+
+                      <span
+                        className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold border ${getVaccinationBadgeStyles(
+                          pet.vaccination_status
+                        )}`}
+                      >
+                        {isFullyVaccinated
+                          ? 'Fully Vaccinated - Rabies Valid'
+                          : pet.vaccination_status || 'Not Vaccinated'}
+                      </span>
+
+                      {pet.spayed_neutered && (
+                        <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-purple-50 text-purple-800 border border-purple-200">
+                          TNR Sterilized
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Vitals & Territory */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200/70">
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
+                      Usual Campus Area
+                    </span>
+                    <span className="font-semibold text-slate-900 mt-0.5 block">
+                      {pet.found_near || 'CIT-U Campus Grounds'}
+                    </span>
+                  </div>
+                  <div className="pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/70">
+                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
+                      Feeding Station
+                    </span>
+                    <span className="font-semibold text-slate-900 mt-0.5 block">
+                      {pet.feeding_area || 'Scheduled Campus Feeding Station'}
+                    </span>
+                  </div>
+                  <div className="sm:col-span-2 pt-2.5 border-t border-slate-200/70">
+                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                      Temperament &amp; Interaction Tips
+                    </span>
+                    <p className="text-xs text-slate-700 bg-white p-3 rounded-xl border border-slate-200/80 leading-relaxed">
+                      {pet.behavior_notes ||
+                        'Friendly campus companion. Please do not feed harmful table scraps.'}
+                    </p>
+                  </div>
+                  <div className="sm:col-span-2 pt-2.5 border-t border-slate-200/70">
+                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                      Physical Description
+                    </span>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      {pet.description ||
+                        pet.about_text ||
+                        'Registered companion cared for under CIT-U Task Force Bruno.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Emergency Hotline */}
+                <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block">
+                      Campus Security &amp; Pet Care Hotline
+                    </span>
+                    <p className="text-xs text-slate-700 leading-relaxed">
+                      If this animal is injured, lost outside campus, or in distress, call MDC immediately:
+                    </p>
+                    <span className="font-mono font-bold text-slate-900 text-xs block pt-0.5">
+                      (032) 261-7741 / loc. 144
+                    </span>
+                  </div>
+                  <a
+                    href="tel:0322617741"
+                    className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 bg-[#5C0612] hover:bg-[#42040B] text-white font-semibold rounded-xl text-xs shrink-0 shadow-sm transition-colors"
+                  >
+                    <PhoneCall className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Call Office</span>
+                  </a>
+                </div>
+
+                {/* Sign-In Invitation (only when logged out) */}
+                {!isLoggedIn && onGoLogin && (
+                  <div className="p-4 bg-slate-900 text-white rounded-2xl space-y-2.5 text-center">
+                    <span className="text-[10px] uppercase tracking-widest text-[#D4AF37] block font-bold">
+                      CIT-U Community Portal
+                    </span>
+                    <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
+                      Sign in with your <strong className="text-white">@cit.edu</strong> account to report sightings, apply for adoption, or join campus discussions.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={onGoLogin}
+                      className="mt-1 w-full py-2.5 bg-[#D4AF37] hover:bg-[#c49f2e] text-[#5C0612] font-bold rounded-xl text-xs transition-colors shadow-md"
+                    >
+                      Sign In with CIT-U Account
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ShieldAlert,
   HeartPulse,
@@ -19,7 +19,21 @@ import {
 } from 'lucide-react';
 
 export default function EmergencyProtocolModal({ isOpen, onClose, onNavigateToReport }) {
-  const [activeTab, setActiveTab] = useState('first_aid'); // 'first_aid' | 'contacts' | 'quarantine' | 'faqs'
+  const [activeTab, setActiveTab] = useState('first_aid');
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -32,11 +46,14 @@ export default function EmergencyProtocolModal({ isOpen, onClose, onNavigateToRe
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="emergency-protocol-title"
       onClick={onClose}
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/65 backdrop-blur-sm animate-fade-in"
     >
       <div
-        className="bg-white w-full max-w-3xl rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] text-left animate-scale-up"
+        className="bg-white w-full max-w-3xl rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90dvh] text-left animate-scale-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Maroon Institutional Header */}

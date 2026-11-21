@@ -1,14 +1,32 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import jsQR from 'jsqr';
+import {
+  ArrowRight,
+  Camera,
+  Image as ImageIcon,
+  Info,
+  MapPin,
+  QrCode,
+  RotateCw,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+  Video,
+  X,
+} from 'lucide-react';
+import { apiGet, apiPost } from '../lib/api';
+import { DEFAULT_PET_IMAGE, isPetQuarantined, safeImageUrl } from '../lib/pets';
+import { extractPetIdFromQr } from '../lib/qr';
 
-/**
- * Task Force Bruno — Collar QR Scanner & AI Trait Search View
- * Dual-modality animal identification node:
- *   1. Hardware camera QR viewfinder + file upltoad + manual tag ID lookup
- *   2. Natural language AI trait keyword matching for untagged animals
- */
+const QUICK_PRESETS = [
+  'Calico cat near library',
+  'Orange tabby near canteen',
+  'Tan aspin dog with floppy ears',
+  'White stray cat near gym',
+];
+
 export default function QRScannerView({ onProfileIdentified }) {
-  // ── CARD 1: QR SCANNER & MANUAL LOOKUP STATES ──
   const [manualId, setManualId] = useState('');
   const [isQrProcessing, setIsQrProcessing] = useState(false);
   const [isActiveCamera, setIsActiveCamera] = useState(false);
@@ -17,7 +35,6 @@ export default function QRScannerView({ onProfileIdentified }) {
   const [card1PetData, setCard1PetData] = useState(null);
   const [loadingCard1Profile, setLoadingCard1Profile] = useState(false);
 
-  // ── CARD 2: AI DESCRIPTIVE SEARCH STATES ──
   const [petDescription, setPetDescription] = useState('');
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [aiStatusMessage, setAiStatusMessage] = useState('');
@@ -35,13 +52,12 @@ export default function QRScannerView({ onProfileIdentified }) {
   const stopCameraStream = useCallback(() => {
     setIsActiveCamera(false);
     setQrStatusMessage('');
-
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
     if (videoRef.current) {
@@ -57,86 +73,40 @@ export default function QRScannerView({ onProfileIdentified }) {
     };
   }, [stopCameraStream]);
 
-  // ── CARD 1 ACTION HANDLERS ──
-  const extractPetIdFromQr = (rawText) => {
-    if (!rawText) return '';
-    const trimmed = rawText.trim();
-
-    // 1. If full URL (e.g. https://taskforcebruno.vercel.app/?pet=ADOPT-01 or /passport/TF-BRUNO-01)
-    if (/^https?:\/\//i.test(trimmed)) {
-      try {
-        const url = new URL(trimmed);
-
-        for (const [key, val] of url.searchParams.entries()) {
-          if (['pet', 'id', 'pet_id', 'petid', 'animal_id', 'animalid', 'passport'].includes(key.toLowerCase()) && val) {
-            return decodeURIComponent(val).trim().toUpperCase();
-          }
-        }
-
-        const segments = url.pathname.split('/').filter(Boolean);
-        if (segments.length > 0) {
-          const lastSegment = decodeURIComponent(segments[segments.length - 1]).trim();
-          if (lastSegment && !['app', 'pet', 'passport', 'index.html'].includes(lastSegment.toLowerCase())) {
-            return lastSegment.toUpperCase();
-          }
-        }
-      } catch {
-        // Fallback to regex extraction below
-      }
-    }
-
-    // 2. Query param regex match without full scheme
-    const queryMatch = trimmed.match(/[?&](?:pet|id|pet_id|petid|animal_id)=([^&#\s]+)/i);
-    if (queryMatch) {
-      return decodeURIComponent(queryMatch[1]).trim().toUpperCase();
-    }
-
-    // 3. Look for standard identifier patterns
-    const match = trimmed.match(/(?:PET|STRAY|TF|CIT|ADOPT)[-_A-Z0-9]+/i);
-    if (match) return match[0].toUpperCase();
-
-    // 4. Clean fallback
-    return trimmed.replace(/^[#/]+/, '').trim().toUpperCase();
-  };
-
   const resolveCard1Profile = async (rawTarget) => {
     const targetId = extractPetIdFromQr(rawTarget);
     if (!targetId) return;
     setQrErrorMessage('');
     setLoadingCard1Profile(true);
-    try {
-      // First attempt direct ID query
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(targetId)}/`);
-      if (res.ok) {
-        const data = await res.json();
-        setCard1PetData(data);
+
+    const res = await apiGet(`/pets/${encodeURIComponent(targetId)}/`);
+    if (res.ok && res.data) {
+      setCard1PetData(res.data);
+      setLoadingCard1Profile(false);
+      return;
+    }
+
+    const listRes = await apiGet('/pets/');
+    if (listRes.ok && Array.isArray(listRes.data)) {
+      const cleanTarget = targetId.toLowerCase();
+      const matched = listRes.data.find(
+        (p) =>
+          (p.pet_id && p.pet_id.toLowerCase() === cleanTarget) ||
+          (p.name && p.name.toLowerCase() === cleanTarget)
+      );
+      if (matched) {
+        setCard1PetData(matched);
+        setLoadingCard1Profile(false);
         return;
       }
-
-      // Second attempt: Fallback search across all active pets (case-insensitive ID or Name match)
-      const listRes = await fetch('https://taskforcebruno.onrender.com/api/pets/');
-      if (listRes.ok) {
-        const allPets = await listRes.json();
-        if (Array.isArray(allPets)) {
-          const cleanTarget = targetId.toLowerCase();
-          const matched = allPets.find(p =>
-            (p.pet_id && p.pet_id.toLowerCase() === cleanTarget) ||
-            (p.name && p.name.toLowerCase() === cleanTarget)
-          );
-          if (matched) {
-            setCard1PetData(matched);
-            return;
-          }
-        }
-      }
-
-      setQrErrorMessage(`Animal ID "${targetId}" was not found in the campus registry.`);
-    } catch (err) {
-      console.error('QR resolve error:', err);
-      setQrErrorMessage('Unable to connect to server. Please check your network connection.');
-    } finally {
-      setLoadingCard1Profile(false);
     }
+
+    setQrErrorMessage(
+      res.status === 0
+        ? res.error
+        : `Animal ID "${targetId}" was not found in the campus registry.`
+    );
+    setLoadingCard1Profile(false);
   };
 
   const handleManualSubmit = (e) => {
@@ -148,13 +118,17 @@ export default function QRScannerView({ onProfileIdentified }) {
   const tickScanLoop = () => {
     if (!isMountedRef.current) return;
     const video = videoRef.current;
-    if (!video || video.readyState !== video.HAVE_ENOUGH_DATA || video.videoWidth === 0 || video.videoHeight === 0) {
+    if (
+      !video ||
+      video.readyState !== video.HAVE_ENOUGH_DATA ||
+      video.videoWidth === 0 ||
+      video.videoHeight === 0
+    ) {
       animationFrameRef.current = requestAnimationFrame(tickScanLoop);
       return;
     }
 
     let canvas = canvasRef.current;
-
     if (!canvas) {
       canvas = document.createElement('canvas');
       canvasRef.current = canvas;
@@ -163,10 +137,9 @@ export default function QRScannerView({ onProfileIdentified }) {
     const context = canvas.getContext('2d', { willReadFrequently: true });
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
 
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
     const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
       inversionAttempts: 'attemptBoth',
     });
@@ -183,11 +156,13 @@ export default function QRScannerView({ onProfileIdentified }) {
   const startCameraStream = async () => {
     setQrErrorMessage('');
     setIsQrProcessing(true);
-    setQrStatusMessage('Requesting camera permissions...');
+    setQrStatusMessage('Requesting camera permission...');
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setIsQrProcessing(false);
-      setQrErrorMessage('Live camera feed is not supported in this browser context (HTTPS required). Please use "Take Photo / Upload Tag Image" below.');
+      setQrErrorMessage(
+        'Live camera scanning requires HTTPS or camera support. Use "Take Photo" or "Upload QR Photo" below instead.'
+      );
       return;
     }
 
@@ -195,15 +170,14 @@ export default function QRScannerView({ onProfileIdentified }) {
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 640 } }
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 640 } },
         });
       } catch {
-        // Fallback to basic video stream if ideal dimensions or facingMode fails
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
       }
 
       if (!isMountedRef.current) {
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
         return;
       }
 
@@ -212,33 +186,29 @@ export default function QRScannerView({ onProfileIdentified }) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute('playsinline', 'true');
         videoRef.current.setAttribute('muted', 'true');
-        try {
-          await videoRef.current.play();
-        } catch (playErr) {
-          console.warn('Video autoplay play rejection handled:', playErr);
-        }
+        await videoRef.current.play().catch(() => {});
       }
 
       setIsActiveCamera(true);
       setIsQrProcessing(false);
-      setQrStatusMessage('Point camera at the collar QR tag...');
+      setQrStatusMessage('Point camera at the collar QR tag');
       animationFrameRef.current = requestAnimationFrame(tickScanLoop);
-    } catch (err) {
-      console.error('Camera access error:', err);
+    } catch {
       setIsQrProcessing(false);
-      setQrErrorMessage('Camera access was denied or hardware is busy. Please allow camera permissions in your browser or tap "Take Photo / Upload Tag" below.');
+      setQrErrorMessage(
+        'Camera access was blocked or busy. Enable camera permissions or use "Take Photo" / "Upload QR Photo" below.'
+      );
     }
   };
 
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
-    // Reset input value so uploading the same file again still triggers onChange
     e.target.value = '';
     if (!file) return;
 
     stopCameraStream();
     setIsQrProcessing(true);
-    setQrStatusMessage('Analyzing uploaded image...');
+    setQrStatusMessage('Reading QR code from image...');
     setQrErrorMessage('');
 
     const reader = new FileReader();
@@ -261,233 +231,196 @@ export default function QRScannerView({ onProfileIdentified }) {
           setQrStatusMessage('');
 
           if (qrCode) {
-            const rawDecodedText = qrCode.data.trim();
-            resolveCard1Profile(rawDecodedText);
+            resolveCard1Profile(qrCode.data.trim());
           } else {
-            setQrErrorMessage('No valid QR code detected. Please ensure the QR code is clear and in focus.');
+            setQrErrorMessage(
+              'No readable QR code was detected. Please make sure the tag is clear and well-lit.'
+            );
           }
         } catch {
           setIsQrProcessing(false);
-          setQrErrorMessage('Error processing image file. Please try another image.');
+          setQrErrorMessage('Error reading image file. Please try another photo.');
         }
       };
       image.onerror = () => {
         setIsQrProcessing(false);
-        setQrErrorMessage('Failed to read image file.');
+        setQrErrorMessage('Could not load the selected image.');
       };
       image.src = event.target.result;
     };
     reader.readAsDataURL(file);
   };
 
-  // ── CARD 2 ACTION HANDLERS ──
   const resolveCard2Profile = async (targetId) => {
     if (!targetId) return;
     setAiErrorMessage('');
     setLoadingCard2Profile(true);
-    try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/${encodeURIComponent(targetId)}/`);
-      if (res.ok) {
-        const data = await res.json();
-        setCard2PetData(data);
-      } else {
-        setAiErrorMessage('Could not load profile details for the selected candidate.');
-      }
-    } catch {
-      setAiErrorMessage('Network timeout loading candidate profile.');
-    } finally {
-      setLoadingCard2Profile(false);
+    const res = await apiGet(`/pets/${encodeURIComponent(targetId)}/`);
+    if (res.ok && res.data) {
+      setCard2PetData(res.data);
+    } else {
+      setAiErrorMessage(res.error || 'Could not load profile details for this match.');
     }
+    setLoadingCard2Profile(false);
   };
 
   const handleAISearchSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!petDescription.trim()) return;
+    if (!petDescription.trim() || isAiProcessing) return;
 
     stopCameraStream();
     setIsAiProcessing(true);
-    setAiStatusMessage('Matching visual traits against campus records...');
+    setAiStatusMessage('Searching campus animal profiles...');
     setAiErrorMessage('');
     setAiCandidates([]);
 
-    try {
-      const res = await fetch('https://taskforcebruno.onrender.com/api/pets/ai-search/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: petDescription.trim() })
-      });
+    const res = await apiPost('/pets/ai-search/', { description: petDescription.trim() });
+    setIsAiProcessing(false);
+    setAiStatusMessage('');
 
-      const data = await res.json();
-      setIsAiProcessing(false);
-      setAiStatusMessage('');
-
-      if (res.ok && Array.isArray(data) && data.length > 0) {
-        setAiCandidates(data);
-      } else if (Array.isArray(data) && data.length === 0) {
-        setAiErrorMessage('No matching animal profiles found. Try describing general coat colors or location.');
-      } else {
-        setAiErrorMessage(data.error || 'AI search service was unable to parse the query.');
-      }
-    } catch {
-      setIsAiProcessing(false);
-      setAiErrorMessage('Network error connecting to AI search service.');
+    if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
+      setAiCandidates(res.data);
+    } else if (res.ok && Array.isArray(res.data) && res.data.length === 0) {
+      setAiErrorMessage(
+        'No matching animals found. Try describing coat color, species, or a nearby campus landmark.'
+      );
+    } else {
+      setAiErrorMessage(res.error || 'Unable to run trait search right now.');
     }
   };
 
-  const handleApplyPreset = (presetText) => {
-    setPetDescription(presetText);
-  };
-
-  // ── REUSABLE PROFILE CARD RENDERING ──
-  const renderEmbeddedProfile = (petData, onDisconnect) => (
-    <div className="flex flex-col justify-between h-full w-full animate-fade-in text-left">
-      <div className="space-y-4 flex-1 overflow-y-auto pr-1">
-
-        {/* Media Frame & Status Badges */}
-        <div className="w-full h-44 sm:h-48 bg-slate-950 rounded-2xl overflow-hidden relative shadow-md shrink-0 border border-slate-700/60">
+  const renderEmbeddedProfile = (petData, onReset) => (
+    <div className="flex flex-col justify-between h-full w-full animate-fade-in text-left gap-4">
+      <div className="space-y-3.5 flex-1">
+        <div className="w-full h-44 sm:h-48 bg-slate-950 rounded-2xl overflow-hidden relative border border-slate-700/60">
           <img
-            src={petData.primary_image || 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba'}
+            src={safeImageUrl(petData.primary_image, DEFAULT_PET_IMAGE)}
             alt={petData.name}
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none" />
 
-          <div className="absolute top-3 right-3">
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider bg-black/60 text-[#D4AF37] border border-[#D4AF37]/40 shadow-sm backdrop-blur-sm">
-              #{petData.pet_id}
-            </span>
-          </div>
+          <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-black/65 text-[#D4AF37] border border-[#D4AF37]/40 backdrop-blur-sm">
+            #{petData.pet_id}
+          </span>
 
-          <div className="absolute bottom-3 left-3 flex items-center gap-2">
-            <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide border uppercase shadow-sm ${petData.adoption_status === 'Adopted'
-              ? 'bg-slate-800/90 text-slate-200 border-slate-600'
-              : (petData.pet_type || '').toLowerCase().includes('adoption') || petData.adoption_status === 'Available'
-                ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold'
-                : 'bg-[#5C0612]/95 text-[#D4AF37] border-[#D4AF37]/40'
-              }`}>
-              {petData.adoption_status === 'Adopted' ? 'Adopted Alumni' : (petData.pet_type || 'Campus Pet')}
+          <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-1.5">
+            <span
+              className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold border uppercase ${
+                petData.adoption_status === 'Adopted'
+                  ? 'bg-slate-800/90 text-slate-200 border-slate-600'
+                  : (petData.pet_type || '').toLowerCase().includes('adoption') ||
+                    petData.adoption_status === 'Available'
+                  ? 'bg-amber-500 text-slate-950 border-amber-400'
+                  : 'bg-[#5C0612]/95 text-[#D4AF37] border-[#D4AF37]/40'
+              }`}
+            >
+              {petData.adoption_status === 'Adopted' ? 'Adopted Alumni' : petData.pet_type || 'Campus Pet'}
             </span>
-
-            <span className={`px-2 py-0.5 rounded-md text-[10px] font-medium border ${petData.vaccination_status?.toLowerCase().includes('fully')
-              ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/50'
-              : (petData.vaccination_status?.toLowerCase().includes('core') || petData.vaccination_status?.toLowerCase().includes('partial'))
-                ? 'bg-amber-950/80 text-amber-300 border-amber-600/50'
-                : 'bg-rose-950/80 text-rose-300 border-rose-600/50'
-              }`}>
+            <span
+              className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
+                petData.vaccination_status?.toLowerCase().includes('fully')
+                  ? 'bg-emerald-950/85 text-emerald-300 border-emerald-600/50'
+                  : petData.vaccination_status?.toLowerCase().includes('core') ||
+                    petData.vaccination_status?.toLowerCase().includes('partial')
+                  ? 'bg-amber-950/85 text-amber-300 border-amber-600/50'
+                  : 'bg-rose-950/85 text-rose-300 border-rose-600/50'
+              }`}
+            >
               {petData.vaccination_status || 'Not Vaccinated'}
             </span>
           </div>
         </div>
 
-        {/* Public Health Quarantine Alert */}
-        {(petData.is_quarantined || petData.status?.includes('Quarantine')) && (
-          <div className="p-3 bg-rose-950/80 border border-rose-500/80 rounded-xl text-rose-200 text-xs space-y-1">
-            <div className="flex items-center gap-1.5 font-bold text-rose-300 uppercase tracking-wider text-[10px]">
-              <svg className="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-              </svg>
-              14-Day Health Observation (RA 9482)
+        {isPetQuarantined(petData) && (
+          <div className="p-3 bg-rose-950/80 border border-rose-500/70 rounded-xl text-rose-100 text-xs space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-rose-200 uppercase tracking-wider text-[10px]">
+              <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>14-Day Health Observation (RA 9482)</span>
             </div>
             <p className="text-[11px] leading-relaxed text-rose-200">
-              This animal is currently under routine campus health observation following an incident report. Please <strong>do not feed, touch, or handle</strong>.
+              Currently under routine 14-day campus observation. Please <strong>do not feed, touch, or handle</strong>.
             </p>
           </div>
         )}
 
-        {/* Identity & Basic Info */}
-        <div className="border-b border-slate-800 pb-3">
-          <div className="flex items-baseline justify-between">
-            <h3 className="text-xl font-bold text-white tracking-tight">{petData.name}</h3>
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              {petData.species} &bull; {petData.breed || 'Domestic Line'}
-            </span>
-          </div>
+        <div className="border-b border-slate-800 pb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-xl font-bold text-white tracking-tight">{petData.name}</h3>
+          <span className="text-xs font-medium text-slate-400">
+            {petData.species} &bull; {petData.breed || 'Domestic Mix'}
+          </span>
         </div>
 
-        {/* Vitals Grid */}
-        <div className="grid grid-cols-4 gap-2 text-center select-none shrink-0">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
           <div className="bg-slate-800/60 p-2 rounded-xl border border-slate-700/50">
-            <span className="text-[9px] text-slate-400 block font-medium">SEX</span>
+            <span className="text-[10px] text-slate-400 block">Sex</span>
             <span className="text-xs font-bold text-slate-100">{petData.gender || 'Unknown'}</span>
           </div>
           <div className="bg-slate-800/60 p-2 rounded-xl border border-slate-700/50">
-            <span className="text-[9px] text-slate-400 block font-medium">AGE</span>
+            <span className="text-[10px] text-slate-400 block">Age</span>
             <span className="text-xs font-bold text-slate-100">{petData.age || 'Adult'}</span>
           </div>
           <div className="bg-slate-800/60 p-2 rounded-xl border border-slate-700/50">
-            <span className="text-[9px] text-slate-400 block font-medium">WEIGHT</span>
-            <span className="text-xs font-bold text-slate-100">{petData.weight || 'N/A'}</span>
+            <span className="text-[10px] text-slate-400 block">Weight</span>
+            <span className="text-xs font-bold text-slate-100 font-mono">{petData.weight || 'N/A'}</span>
           </div>
           <div className="bg-slate-800/60 p-2 rounded-xl border border-slate-700/50">
-            <span className="text-[9px] text-slate-400 block font-medium">SIZE</span>
+            <span className="text-[10px] text-slate-400 block">Size</span>
             <span className="text-xs font-bold text-slate-100">{petData.size || 'Medium'}</span>
           </div>
         </div>
 
-        {/* Campus Location & Welfare Info */}
         <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-2 text-xs text-slate-300">
           <div className="flex justify-between items-center gap-2">
-            <span className="text-slate-400 flex items-center gap-1.5 font-medium">
-              <svg className="w-3.5 h-3.5 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Campus Zone:
+            <span className="text-slate-400 inline-flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-[#D4AF37]" />
+              Campus Zone
             </span>
-            <strong className="text-white font-medium truncate">{petData.found_near || 'CIT-U Grounds'}</strong>
+            <strong className="text-white font-medium truncate">
+              {petData.found_near || 'CIT-U Grounds'}
+            </strong>
           </div>
-
-          <div className="flex justify-between items-center gap-2 pt-2 border-t border-slate-800/80">
-            <span className="text-slate-400 flex items-center gap-1.5 font-medium">
-              <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-              TNR Sterilized:
+          <div className="flex justify-between items-center gap-2 pt-2 border-t border-slate-800">
+            <span className="text-slate-400 inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+              TNR Sterilized
             </span>
-            <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${petData.spayed_neutered ? 'bg-blue-950 text-blue-300 border border-blue-800/40' : 'bg-slate-800 text-slate-400'}`}>
-              {petData.spayed_neutered ? 'Yes (Spayed/Neutered)' : 'No'}
+            <span
+              className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                petData.spayed_neutered
+                  ? 'bg-sky-950 text-sky-300 border border-sky-800/60'
+                  : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              {petData.spayed_neutered ? 'Yes' : 'No'}
             </span>
           </div>
-
-          {petData.current_conditions && petData.current_conditions !== 'None' && (
-            <div className="pt-2 border-t border-slate-800/80 text-[11px]">
-              <span className="text-rose-400 font-semibold block mb-0.5">Medical Notes:</span>
-              <p className="text-rose-200 bg-rose-950/40 px-2.5 py-1 rounded-lg border border-rose-900/40">
-                {petData.current_conditions}
-              </p>
-            </div>
-          )}
         </div>
 
-        {/* Bio */}
         {petData.about_text && (
-          <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/80 text-xs text-slate-300 italic">
-            "{petData.about_text}"
-          </div>
+          <p className="bg-slate-950/40 p-3 rounded-xl border border-slate-800 text-xs text-slate-300 leading-relaxed">
+            {petData.about_text}
+          </p>
         )}
       </div>
 
-      {/* Action Buttons */}
-      <div className="pt-4 border-t border-slate-800 space-y-2 shrink-0">
+      <div className="pt-3 border-t border-slate-800 space-y-2">
         {onProfileIdentified && (
           <button
+            type="button"
             onClick={() => onProfileIdentified(petData.pet_id)}
-            className="w-full py-2.5 bg-gradient-to-r from-[#5C0612] to-[#7A0918] hover:from-[#6D0816] hover:to-[#8E0B1C] text-white rounded-xl text-xs font-bold tracking-wide border border-[#D4AF37]/30 hover:border-[#D4AF37]/60 shadow-md transition-all flex items-center justify-center gap-2"
+            className="w-full py-2.5 bg-[#5C0612] hover:bg-[#700816] text-white rounded-xl text-xs font-semibold border border-[#D4AF37]/40 shadow-sm transition-colors flex items-center justify-center gap-2"
           >
-            <span>View Complete Medical & Adoption Profile</span>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
+            <span>Open Full Health &amp; Welfare Profile</span>
+            <ArrowRight className="w-4 h-4" />
           </button>
         )}
-
         <button
-          onClick={onDisconnect}
-          className="w-full py-2 bg-slate-800/60 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-medium border border-slate-700/60 transition-all flex items-center justify-center gap-1.5"
+          type="button"
+          onClick={onReset}
+          className="w-full py-2 bg-slate-800/70 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-medium border border-slate-700 transition-colors flex items-center justify-center gap-1.5"
         >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <RotateCw className="w-3.5 h-3.5" />
           <span>Scan Another Animal</span>
         </button>
       </div>
@@ -495,160 +428,132 @@ export default function QRScannerView({ onProfileIdentified }) {
   );
 
   return (
-    <div className="w-full max-w-6xl xl:max-w-7xl mx-auto flex flex-col gap-5 sm:gap-6 py-1 px-1 sm:px-2 text-slate-100">
-
-      {/* HEADER BANNER */}
-      <div className="bg-white rounded-2xl p-4 sm:p-5 md:p-6 border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="w-full max-w-6xl xl:max-w-7xl mx-auto flex flex-col gap-5 pb-6 text-slate-100">
+      {/* Page Intro */}
+      <div className="bg-white rounded-2xl p-4 sm:p-5 md:p-6 border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[11px] font-bold font-mono uppercase tracking-wider text-[#5C0612]">
-              Campus Animal Telemetry
-            </span>
-          </div>
-          <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-            Collar QR Scanner & Trait Search
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[#5C0612] block mb-1">
+            Animal Identification
+          </span>
+          <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+            Collar QR Scanner &amp; Visual Trait Search
           </h2>
-          <p className="text-xs md:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-            Quickly identify registered CIT-U campus companions. Scan their collar QR tag with your camera, upload a photo, or use AI description search for untagged animals.
+          <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
+            Scan a companion&apos;s collar QR tag, upload a photo, or describe an untagged animal&apos;s appearance to find its record.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2 text-[11px] font-medium text-slate-600 shrink-0">
+        <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-600 shrink-0">
           <span className="inline-flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
-            <svg className="w-3.5 h-3.5 text-[#5C0612]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Camera Scanner
+            <Camera className="w-3.5 h-3.5 text-[#5C0612]" />
+            Camera Scan
           </span>
           <span className="inline-flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
-            <svg className="w-3.5 h-3.5 text-[#5C0612]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            Image Upload
+            <ImageIcon className="w-3.5 h-3.5 text-[#5C0612]" />
+            Photo Upload
           </span>
           <span className="inline-flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
-            <svg className="w-3.5 h-3.5 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            AI Search
+            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+            Trait Search
           </span>
         </div>
       </div>
 
-      {/* DUAL COLUMN MAIN GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-
-        {/* =========================================================
-            CARD 1: COLLAR QR SCANNER & MANUAL LOOKUP
-           ========================================================= */}
-        <div className="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden flex flex-col justify-between p-5 md:p-6 relative">
-
-          {/* Card Header */}
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#5C0612]/80 border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37]">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                </svg>
+      {/* Dual Modality Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+        {/* Card 1: QR Scanner */}
+        <div className="bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-800 shadow-lg overflow-hidden flex flex-col justify-between p-4 sm:p-6">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4 gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-[#5C0612] border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37] shrink-0">
+                <QrCode className="w-4 h-4" />
               </div>
-              <div>
-                <h3 className="text-base font-bold text-white tracking-tight">Collar QR Scanner</h3>
-                <p className="text-[11px] text-slate-400">Scan physical tag or enter ID</p>
+              <div className="min-w-0">
+                <h3 className="text-sm sm:text-base font-bold text-white truncate">Collar QR Scanner</h3>
+                <p className="text-[11px] text-slate-400">Scan collar tag or enter ID</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 text-[11px] font-mono font-medium px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700">
-              <span className={`w-2 h-2 rounded-full ${card1PetData ? 'bg-indigo-400' : isActiveCamera ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
-              <span className="text-slate-300">
-                {card1PetData ? 'Profile Loaded' : isActiveCamera ? 'Scanning Live' : 'Scanner Ready'}
-              </span>
-            </div>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 shrink-0">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  card1PetData ? 'bg-sky-400' : isActiveCamera ? 'bg-emerald-400' : 'bg-slate-500'
+                }`}
+              />
+              {card1PetData ? 'Loaded' : isActiveCamera ? 'Live' : 'Ready'}
+            </span>
           </div>
 
-          {/* Body */}
           {loadingCard1Profile ? (
             <div className="my-auto py-16 text-center space-y-3">
-              <div className="w-8 h-8 border-3 border-t-transparent border-[#D4AF37] rounded-full animate-spin mx-auto" />
-              <p className="text-xs font-medium text-slate-300">Retrieving animal records from campus registry...</p>
+              <div className="w-8 h-8 border-3 border-slate-700 border-t-[#D4AF37] rounded-full animate-spin mx-auto" />
+              <p className="text-xs text-slate-300">Loading animal profile...</p>
             </div>
           ) : card1PetData ? (
-            renderEmbeddedProfile(card1PetData, () => { setCard1PetData(null); setManualId(''); })
+            renderEmbeddedProfile(card1PetData, () => {
+              setCard1PetData(null);
+              setManualId('');
+            })
           ) : (
             <div className="flex flex-col gap-4 flex-1 justify-between">
-
-              {/* Viewfinder / Camera Area */}
               <div className="flex flex-col items-center">
-                <div className="w-full max-w-[260px] sm:max-w-[280px] aspect-square rounded-2xl bg-slate-950 border-2 border-slate-800 relative flex items-center justify-center overflow-hidden shadow-inner group">
+                <div className="w-full max-w-[260px] aspect-square rounded-2xl bg-slate-950 border-2 border-slate-800 relative flex items-center justify-center overflow-hidden">
                   <video
                     ref={videoRef}
-                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${isActiveCamera ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-200 ${
+                      isActiveCamera ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    }`}
                   />
 
-                  {/* Corner Targets */}
                   <div className="absolute top-3 left-3 w-5 h-5 border-t-2 border-l-2 border-[#D4AF37] rounded-tl z-20" />
                   <div className="absolute top-3 right-3 w-5 h-5 border-t-2 border-r-2 border-[#D4AF37] rounded-tr z-20" />
                   <div className="absolute bottom-3 left-3 w-5 h-5 border-b-2 border-l-2 border-[#D4AF37] rounded-bl z-20" />
                   <div className="absolute bottom-3 right-3 w-5 h-5 border-b-2 border-r-2 border-[#D4AF37] rounded-br z-20" />
 
-                  {/* Laser line when active */}
                   {isActiveCamera && (
-                    <div className="absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent shadow-[0_0_8px_#D4AF37] top-0 animate-[bounce_2s_infinite] z-20" />
+                    <div className="absolute left-3 right-3 h-0.5 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent animate-scanline z-20" />
                   )}
 
                   {isQrProcessing && !isActiveCamera ? (
-                    <div className="text-center space-y-2 z-10 px-4 animate-pulse">
-                      <div className="w-6 h-6 border-2 border-t-transparent border-[#D4AF37] rounded-full animate-spin mx-auto" />
+                    <div className="text-center space-y-2 z-10 px-4">
+                      <div className="w-6 h-6 border-2 border-slate-700 border-t-[#D4AF37] rounded-full animate-spin mx-auto" />
                       <span className="text-xs text-[#D4AF37] font-medium block">{qrStatusMessage}</span>
                     </div>
                   ) : !isActiveCamera ? (
                     <div className="flex flex-col items-center justify-center text-center p-4 z-10">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-700/80 flex items-center justify-center text-[#D4AF37] mb-2 group-hover:scale-105 transition-transform shadow-sm">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
+                      <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-700 flex items-center justify-center text-[#D4AF37] mb-2">
+                        <Camera className="w-6 h-6" />
                       </div>
                       <p className="text-xs font-semibold text-white">Camera Viewfinder</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Click below to start live scan</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Tap below to start scanning</p>
                     </div>
                   ) : (
                     <div className="absolute bottom-3 inset-x-0 text-center pointer-events-none z-20">
                       <span className="text-[10px] bg-black/75 text-[#D4AF37] border border-[#D4AF37]/30 px-2.5 py-0.5 rounded-full font-medium">
-                        Align QR within frame
+                        Center QR code in frame
                       </span>
                     </div>
                   )}
                 </div>
 
-                {/* Camera Toggle Button */}
-                {/* Camera & Mobile Snapshot Action Row */}
-                <div className="mt-3 flex flex-wrap gap-2 justify-center">
+                <div className="mt-3 flex flex-wrap gap-2 justify-center w-full">
                   {!isActiveCamera ? (
                     <>
                       <button
                         type="button"
                         onClick={startCameraStream}
                         disabled={isQrProcessing}
-                        className="inline-flex items-center gap-2 bg-[#5C0612] hover:bg-[#700816] text-white px-4 py-2.5 rounded-xl text-xs font-bold border border-[#D4AF37]/40 shadow-md transition-all active:scale-95"
+                        className="inline-flex items-center gap-2 bg-[#5C0612] hover:bg-[#700816] text-white px-4 py-2.5 rounded-xl text-xs font-semibold border border-[#D4AF37]/40 shadow-sm transition-colors"
                       >
-                        <svg className="w-4 h-4 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
+                        <Video className="w-4 h-4 text-[#D4AF37]" />
                         <span>Start Live Viewfinder</span>
                       </button>
 
-                      {/* Instant Mobile Camera Snapshot Fallback */}
                       <label
                         htmlFor="qr-direct-camera-input"
-                        className="inline-flex items-center gap-2 bg-amber-500/20 hover:bg-amber-500/30 text-[#D4AF37] px-4 py-2.5 rounded-xl text-xs font-bold border border-[#D4AF37]/50 shadow-md transition-all active:scale-95 cursor-pointer"
-                        title="Direct hardware camera snapshot (fastest on mobile phones)"
+                        className="inline-flex items-center gap-2 bg-amber-500/15 hover:bg-amber-500/25 text-[#D4AF37] px-4 py-2.5 rounded-xl text-xs font-semibold border border-[#D4AF37]/40 transition-colors cursor-pointer"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
+                        <Camera className="w-4 h-4" />
                         <span>Take Photo</span>
                         <input
                           type="file"
@@ -665,24 +570,21 @@ export default function QRScannerView({ onProfileIdentified }) {
                     <button
                       type="button"
                       onClick={stopCameraStream}
-                      className="inline-flex items-center gap-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-700/60 text-rose-200 px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all"
+                      className="inline-flex items-center gap-1.5 bg-rose-950/90 hover:bg-rose-900 border border-rose-700 text-rose-100 px-4 py-2 rounded-xl text-xs font-semibold transition-colors"
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <X className="w-3.5 h-3.5" />
                       <span>Stop Camera</span>
                     </button>
                   )}
                 </div>
 
                 {qrErrorMessage && (
-                  <div className="mt-3 text-xs text-rose-300 bg-rose-950/60 border border-rose-800/80 px-3.5 py-2.5 rounded-xl w-full text-center leading-relaxed">
+                  <div className="mt-3 text-xs text-rose-200 bg-rose-950/70 border border-rose-800 px-3.5 py-2.5 rounded-xl w-full text-center leading-relaxed">
                     {qrErrorMessage}
                   </div>
                 )}
               </div>
 
-              {/* Upload QR File Option from Gallery */}
               <div className="pt-2 border-t border-slate-800">
                 <input
                   type="file"
@@ -694,150 +596,145 @@ export default function QRScannerView({ onProfileIdentified }) {
                 />
                 <label
                   htmlFor="qr-file-input"
-                  className={`w-full flex items-center justify-center gap-2 border border-slate-700/80 hover:border-[#D4AF37]/50 bg-slate-800/40 hover:bg-slate-800 py-2.5 px-4 rounded-xl text-xs font-medium transition-all cursor-pointer text-slate-300 hover:text-white ${isQrProcessing ? 'opacity-40 pointer-events-none' : ''}`}
+                  className={`w-full flex items-center justify-center gap-2 border border-slate-700 hover:border-[#D4AF37]/50 bg-slate-800/50 hover:bg-slate-800 py-2.5 px-4 rounded-xl text-xs font-medium transition-colors cursor-pointer text-slate-200 ${
+                    isQrProcessing ? 'opacity-40 pointer-events-none' : ''
+                  }`}
                 >
-                  <svg className="w-4 h-4 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
+                  <ImageIcon className="w-4 h-4 text-[#D4AF37]" />
                   <span>Upload QR Photo from Gallery</span>
                 </label>
               </div>
 
-              {/* Manual ID Input Console */}
               <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800">
-                <label className="block text-[11px] font-semibold text-slate-400 mb-1.5">
-                  Or enter Pet ID tag directly:
+                <label htmlFor="manual-pet-id" className="block text-xs font-medium text-slate-400 mb-1.5">
+                  Or enter a Tag ID directly
                 </label>
                 <form onSubmit={handleManualSubmit} className="flex gap-2">
                   <input
+                    id="manual-pet-id"
                     type="text"
                     value={manualId}
                     onChange={(e) => setManualId(e.target.value)}
-                    placeholder="e.g. PET-0001 or STRAY-0042"
-                    className="flex-1 min-w-0 bg-slate-900 border border-slate-700/80 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 text-white placeholder-slate-500 font-mono"
+                    placeholder="e.g. PET-001 or STRAY-004"
+                    className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-base sm:text-xs focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 text-white placeholder-slate-500 font-mono"
                   />
                   <button
                     type="submit"
-                    className="shrink-0 bg-[#5C0612] hover:bg-[#720817] px-4 py-2 rounded-xl text-xs font-bold border border-[#D4AF37]/30 text-white transition-all shadow-sm active:scale-95"
+                    className="shrink-0 bg-[#5C0612] hover:bg-[#720817] px-4 py-2 rounded-xl text-xs font-semibold border border-[#D4AF37]/30 text-white transition-colors"
                   >
-                    Search ID
+                    Search
                   </button>
                 </form>
               </div>
-
             </div>
           )}
         </div>
 
-        {/* =========================================================
-            CARD 2: AI VISUAL TRAIT SEARCH
-           ========================================================= */}
-        <div className="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden flex flex-col justify-between p-5 md:p-6 relative">
-
-          {/* Card Header */}
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
+        {/* Card 2: Trait Search */}
+        <div className="bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-800 shadow-lg overflow-hidden flex flex-col justify-between p-4 sm:p-6">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4 gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                <Sparkles className="w-4 h-4" />
               </div>
-              <div>
-                <h3 className="text-base font-bold text-white tracking-tight">AI Visual Trait Search</h3>
-                <p className="text-[11px] text-slate-400">Search untagged animals by appearance</p>
+              <div className="min-w-0">
+                <h3 className="text-sm sm:text-base font-bold text-white truncate">Visual Trait Search</h3>
+                <p className="text-[11px] text-slate-400">Find untagged animals by description</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 text-[11px] font-mono font-medium px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700">
-              <span className={`w-2 h-2 rounded-full ${card2PetData ? 'bg-indigo-400' : aiCandidates.length > 0 ? 'bg-emerald-400' : isAiProcessing ? 'bg-amber-400 animate-pulse' : 'bg-slate-400'}`} />
-              <span className="text-slate-300">
-                {card2PetData ? 'Profile Loaded' : aiCandidates.length > 0 ? `${aiCandidates.length} Matches` : 'AI Ready'}
-              </span>
-            </div>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 shrink-0">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  card2PetData ? 'bg-sky-400' : aiCandidates.length > 0 ? 'bg-emerald-400' : 'bg-slate-500'
+                }`}
+              />
+              {card2PetData ? 'Loaded' : aiCandidates.length > 0 ? `${aiCandidates.length} Matches` : 'Ready'}
+            </span>
           </div>
 
-          {/* Body */}
           {loadingCard2Profile ? (
             <div className="my-auto py-16 text-center space-y-3">
-              <div className="w-8 h-8 border-3 border-t-transparent border-[#D4AF37] rounded-full animate-spin mx-auto" />
-              <p className="text-xs font-medium text-slate-300">Loading full profile for selected candidate...</p>
+              <div className="w-8 h-8 border-3 border-slate-700 border-t-[#D4AF37] rounded-full animate-spin mx-auto" />
+              <p className="text-xs text-slate-300">Loading matched profile...</p>
             </div>
           ) : card2PetData ? (
-            renderEmbeddedProfile(card2PetData, () => { setCard2PetData(null); setAiCandidates([]); setPetDescription(''); })
+            renderEmbeddedProfile(card2PetData, () => {
+              setCard2PetData(null);
+              setAiCandidates([]);
+              setPetDescription('');
+            })
           ) : (
             <div className="flex flex-col gap-4 flex-1 justify-between">
-
-              {/* Suggestions / Prompt helpers */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-semibold text-slate-400">Quick description presets:</span>
-                  <span className="text-[10px] text-slate-500">Click to fill</span>
-                </div>
+                <span className="text-xs font-medium text-slate-400 block mb-2">
+                  Quick search examples:
+                </span>
                 <div className="flex flex-wrap gap-1.5">
-                  {[
-                    "Calico cat near library",
-                    "Orange tabby near canteen",
-                    "Tan askal dog with floppy ears",
-                    "White stray cat near gym"
-                  ].map((preset) => (
+                  {QUICK_PRESETS.map((preset) => (
                     <button
                       key={preset}
                       type="button"
-                      onClick={() => handleApplyPreset(preset)}
-                      className="text-[11px] bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white px-2.5 py-1 rounded-lg border border-slate-700/60 transition-all"
+                      onClick={() => setPetDescription(preset)}
+                      className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-700 transition-colors"
                     >
-                      + {preset}
+                      {preset}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Candidate Results or Empty State */}
               <div className="flex-1 flex flex-col justify-center min-h-[160px]">
                 {aiCandidates.length > 0 ? (
                   <div className="space-y-2 animate-fade-in">
                     <div className="flex justify-between items-center px-1">
                       <span className="text-xs font-semibold text-[#D4AF37]">
-                        Top Candidate Matches ({aiCandidates.length})
+                        Top Matches ({aiCandidates.length})
                       </span>
                       <button
-                        onClick={() => { setAiCandidates([]); setPetDescription(''); }}
-                        className="text-[11px] text-rose-400 hover:text-rose-300 font-medium"
+                        type="button"
+                        onClick={() => {
+                          setAiCandidates([]);
+                          setPetDescription('');
+                        }}
+                        className="text-xs text-rose-300 hover:text-rose-200 font-medium"
                       >
-                        Clear Results
+                        Clear
                       </button>
                     </div>
 
-                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
                       {aiCandidates.map((candidate, idx) => (
                         <div
                           key={candidate.pet_id}
                           className="p-2.5 border border-slate-800 bg-slate-950/70 rounded-2xl flex items-center justify-between gap-3 hover:border-slate-700 transition-colors"
                         >
-                          <div className="flex items-center gap-3 truncate min-w-0">
+                          <div className="flex items-center gap-3 min-w-0">
                             <img
-                              src={candidate.primary_image || 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba'}
+                              src={safeImageUrl(candidate.primary_image, DEFAULT_PET_IMAGE)}
                               alt={candidate.name}
                               className="w-11 h-11 object-cover rounded-xl border border-slate-700 shrink-0"
                             />
-                            <div className="truncate text-xs min-w-0">
+                            <div className="min-w-0 text-xs">
                               <div className="font-bold text-white truncate flex items-center gap-1.5">
-                                {candidate.name}
-                                <span className="text-[10px] bg-amber-500/15 text-amber-300 px-1.5 py-0.2 rounded font-mono font-semibold">
+                                <span className="truncate">{candidate.name}</span>
+                                <span className="text-[10px] bg-amber-500/15 text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold shrink-0">
                                   #{idx + 1}
                                 </span>
                               </div>
                               <div className="text-[11px] text-slate-400 truncate mt-0.5">
-                                {candidate.species} &bull; {candidate.breed || 'Mixed'} &bull; {candidate.found_near || 'Campus'}
+                                {candidate.species} &bull; {candidate.breed || 'Mixed'} &bull;{' '}
+                                {candidate.found_near || 'Campus'}
                               </div>
                             </div>
                           </div>
 
                           <button
+                            type="button"
                             onClick={() => resolveCard2Profile(candidate.pet_id)}
-                            className="px-3 py-1.5 bg-[#5C0612] hover:bg-[#720817] text-white border border-[#D4AF37]/30 text-xs font-bold rounded-xl shrink-0 transition-all shadow-sm"
+                            className="px-3 py-1.5 bg-[#5C0612] hover:bg-[#720817] text-white border border-[#D4AF37]/30 text-xs font-semibold rounded-xl shrink-0 transition-colors"
                           >
-                            Inspect
+                            View
                           </button>
                         </div>
                       ))}
@@ -846,20 +743,18 @@ export default function QRScannerView({ onProfileIdentified }) {
                 ) : (
                   <div className="flex flex-col items-center justify-center text-center p-5 border border-dashed border-slate-800 rounded-2xl bg-slate-950/40 text-slate-400">
                     {isAiProcessing ? (
-                      <div className="space-y-2 py-4 animate-pulse">
-                        <div className="w-7 h-7 border-2 border-t-transparent border-[#D4AF37] rounded-full animate-spin mx-auto" />
+                      <div className="space-y-2 py-4">
+                        <div className="w-7 h-7 border-2 border-slate-700 border-t-[#D4AF37] rounded-full animate-spin mx-auto" />
                         <span className="text-xs text-[#D4AF37] block font-medium">{aiStatusMessage}</span>
                       </div>
                     ) : (
                       <>
-                        <div className="w-10 h-10 rounded-full bg-slate-800/60 flex items-center justify-center text-slate-500 mb-2">
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                          </svg>
+                        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 mb-2">
+                          <Search className="w-5 h-5" />
                         </div>
-                        <p className="text-xs font-medium text-slate-300">No search executed yet</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5 max-w-xs leading-relaxed">
-                          Describe what the animal looks like or pick a preset above to find matching records.
+                        <p className="text-xs font-semibold text-slate-200">Describe an animal to search</p>
+                        <p className="text-xs text-slate-400 mt-0.5 max-w-xs leading-relaxed">
+                          Include coat color, species (e.g. aspin, puspin), or where you saw it on campus.
                         </p>
                       </>
                     )}
@@ -867,81 +762,69 @@ export default function QRScannerView({ onProfileIdentified }) {
                 )}
 
                 {aiErrorMessage && (
-                  <div className="mt-2 text-xs text-rose-300 bg-rose-950/40 border border-rose-800/60 px-3.5 py-2 rounded-xl text-center">
+                  <div className="mt-2 text-xs text-rose-200 bg-rose-950/50 border border-rose-800 px-3.5 py-2 rounded-xl text-center">
                     {aiErrorMessage}
                   </div>
                 )}
               </div>
 
-              {/* AI Description Input Console */}
               <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-2">
-                <label className="block text-[11px] font-semibold text-slate-400">
-                  Describe physical characteristics & location:
+                <label htmlFor="trait-search-input" className="block text-xs font-medium text-slate-400">
+                  Appearance &amp; location description
                 </label>
-                <form onSubmit={handleAISearchSubmit} className="space-y-2">
+                <form onSubmit={handleAISearchSubmit} className="space-y-2.5">
                   <textarea
+                    id="trait-search-input"
                     rows="2"
+                    maxLength={300}
                     value={petDescription}
                     onChange={(e) => setPetDescription(e.target.value)}
-                    placeholder="e.g. Tan coat dog with floppy ears, or orange tabby cat seen near canteen..."
-                    className="w-full bg-slate-900 border border-slate-700/80 rounded-xl p-3 text-xs focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 text-white placeholder-slate-500 resize-none leading-relaxed"
+                    placeholder="e.g. Orange tabby cat with white paws near the canteen..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-base sm:text-xs focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 text-white placeholder-slate-500 resize-none leading-relaxed"
                   />
                   <button
                     type="submit"
                     disabled={isAiProcessing || !petDescription.trim()}
-                    className="w-full bg-gradient-to-r from-[#5C0612] to-[#7A0918] hover:from-[#6D0816] hover:to-[#8E0B1C] text-white py-2.5 rounded-xl border border-[#D4AF37]/30 hover:border-[#D4AF37]/60 text-xs font-bold tracking-wide transition-all shadow-md disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
+                    className="w-full bg-[#5C0612] hover:bg-[#700816] text-white py-2.5 rounded-xl border border-[#D4AF37]/40 text-xs font-semibold transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
                   >
-                    <svg className="w-4 h-4 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    <span>Search by Description</span>
+                    <Search className="w-4 h-4 text-[#D4AF37]" />
+                    <span>{isAiProcessing ? 'Searching...' : 'Search by Description'}</span>
                   </button>
                 </form>
               </div>
-
             </div>
           )}
-
         </div>
-
       </div>
 
-      {/* QUICK SCANNING & TELEMETRY PROTOCOL GUIDELINES (Full Width Desktop & Mobile) */}
-      <div className="bg-white rounded-2xl p-5 md:p-6 border border-slate-200/80 shadow-sm text-slate-700 space-y-3">
+      {/* Scanning Tips */}
+      <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs text-slate-700 space-y-3">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-[#5C0612]/10 text-[#5C0612] flex items-center justify-center">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div className="w-7 h-7 rounded-lg bg-[#5C0612]/10 text-[#5C0612] flex items-center justify-center">
+            <Info className="w-4 h-4" />
           </div>
-          <h4 className="font-bold text-slate-900 text-xs sm:text-sm tracking-tight">
-            Scanner Diagnostic & Telemetry Guidelines
-          </h4>
+          <h4 className="font-bold text-slate-900 text-sm">Scanning Tips</h4>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-100 text-[11px] leading-relaxed text-slate-600">
-          <div className="space-y-1">
-            <span className="font-bold text-slate-800 block">1. Hardware & Device Support</span>
-            <p>Compatible with smartphone cameras (Android Chrome / iOS Safari), tablets, and laptop webcams.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-100 text-xs leading-relaxed text-slate-600">
+          <div>
+            <span className="font-semibold text-slate-900 block mb-0.5">1. Device Support</span>
+            <p>Works on Android Chrome, iOS Safari, tablets, and laptop webcams.</p>
           </div>
-
-          <div className="space-y-1">
-            <span className="font-bold text-slate-800 block">2. Optimal Tag Alignment</span>
-            <p>Hold collar QR tag steady 4–6 inches from camera lens in good lighting for instant automatic decoding.</p>
+          <div>
+            <span className="font-semibold text-slate-900 block mb-0.5">2. Good Lighting</span>
+            <p>Hold the collar QR tag 4–6 inches from the lens in clear lighting for instant detection.</p>
           </div>
-
-          <div className="space-y-1">
-            <span className="font-bold text-slate-800 block">3. Offline Matrix Engine</span>
-            <p>Decodes standard QR matrix strings locally in real time without sending camera streams over the network.</p>
+          <div>
+            <span className="font-semibold text-slate-900 block mb-0.5">3. Private On-Device Scanning</span>
+            <p>QR codes are decoded locally on your device—live camera video is never uploaded.</p>
           </div>
-
-          <div className="space-y-1">
-            <span className="font-bold text-slate-800 block">4. Untagged Animals</span>
-            <p>If the animal has lost or has no physical tag, switch to the AI Trait Search on the right to match candidate records.</p>
+          <div>
+            <span className="font-semibold text-slate-900 block mb-0.5">4. Untagged Animals</span>
+            <p>If an animal has no collar tag, use Visual Trait Search to look up matching campus records.</p>
           </div>
         </div>
       </div>
-
     </div>
   );
 }

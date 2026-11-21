@@ -1,37 +1,21 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-
-function resolveApplicantFullName(session) {
-  let name = session?.full_name || '';
-  if (!name && (session?.first_name || session?.last_name)) {
-    name = `${session.first_name || ''} ${session.last_name || ''}`.trim();
-  }
-  if (session?.email) {
-    try {
-      const savedProf = JSON.parse(localStorage.getItem(`tfb_user_profile_${session.email}`) || '{}');
-      if (!name && savedProf.full_name) name = savedProf.full_name;
-      if (!name && savedProf.first_name) name = `${savedProf.first_name} ${savedProf.last_name || ''}`.trim();
-    } catch {
-      // Ignore malformed profile storage
-    }
-
-    if (!name) {
-      try {
-        const pastVols = JSON.parse(localStorage.getItem('tfb_volunteer_applications') || '[]');
-        const match = pastVols.find(v => (v.email || '').toLowerCase() === session.email.toLowerCase() && v.full_name);
-        if (match) name = match.full_name;
-      } catch {
-        // Ignore malformed volunteer storage
-      }
-    }
-
-    if (!name) {
-      const userPart = session.email.split('@')[0];
-      const segments = userPart.split('.').map(seg => seg.charAt(0).toUpperCase() + seg.slice(1));
-      name = segments.join(' ').trim();
-    }
-  }
-  return name;
-}
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import {
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Lock,
+  RotateCw,
+  X,
+} from 'lucide-react';
+import { apiGet, apiPost, apiPut } from '../lib/api';
+import { PHONE_PATTERN, getUserDisplayName } from '../lib/auth';
+import {
+  DEFAULT_PET_IMAGE,
+  getVaccinationBadgeStyles,
+  isAdoptablePet,
+  safeImageUrl,
+} from '../lib/pets';
 
 const DEFAULT_BUDGET = 'Moderate (PHP 2,000 - 5,000)';
 
@@ -39,29 +23,36 @@ export default function AdoptionGallery({ session }) {
   const [pets, setPets] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  
-  // Real-time tracking ledger array state
+  const [loadError, setLoadError] = useState('');
+
   const [myApplications, setMyApplications] = useState([]);
   const [loadingTracking, setLoadingTracking] = useState(true);
 
-  // Filter states
   const [speciesFilter, setSpeciesFilter] = useState('All');
   const [sizeFilter, setSizeFilter] = useState('All');
 
-  // Popup overlay configurations
   const [showApplyForm, setShowApplyForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [actionBanner, setActionBanner] = useState({ type: '', text: '' });
 
-  // Custom modal state trigger for cancellations
-  const [cancelModal, setCancelModal] = useState({ isOpen: false, appId: null });
+  const [cancelModal, setCancelModal] = useState({ isOpen: false, appId: null, submitting: false });
 
-  const verifiedFullName = resolveApplicantFullName(session);
+  const fullNameInputRef = useRef(null);
+  const contactInputRef = useRef(null);
+  const addressInputRef = useRef(null);
+  const housingSelectRef = useRef(null);
+  const agreementInputRef = useRef(null);
+  const planInputRef = useRef(null);
+
+  const verifiedFullName = getUserDisplayName(session, '');
+  const sessionEmail = (session?.email || '').trim().toLowerCase();
 
   const [applicationForm, setApplicationForm] = useState(() => ({
-    fullName: verifiedFullName, 
-    email: session?.email || '', 
+    fullName: verifiedFullName,
+    email: sessionEmail,
     contactNum: '',
     address: '',
     experience: 'Beginner',
@@ -69,41 +60,20 @@ export default function AdoptionGallery({ session }) {
     hasSecureFence: false,
     householdAgreement: false,
     petCareBudget: DEFAULT_BUDGET,
-    planIfMoving: ''
+    planIfMoving: '',
   }));
 
   const fetchAvailablePlacements = useCallback(async () => {
     setLoading(true);
-    try {
-      const res = await fetch('https://taskforcebruno.onrender.com/api/pets/');
-      const data = await res.json();
-      if (res.ok && Array.isArray(data)) {
-        const adoptionPlacements = data.filter(p => {
-          const type = (p.pet_type || '').toLowerCase();
-          const status = (p.adoption_status || '').toLowerCase();
-          const isCampus = type.includes('campus') || type.includes('resident') || status.includes('campus') || status === 'not for adoption';
-          const isAdopted = status === 'adopted';
-          return !isCampus && !isAdopted && (
-            status === 'available' ||
-            status === 'stray' ||
-            type.includes('adoption') ||
-            type.includes('stray') ||
-            (p.pet_id || '').toUpperCase().startsWith('STRAY-')
-          );
-        });
-        setPets(adoptionPlacements);
-      } else {
-        setPets([]);
-      }
-    } catch (err) {
-      console.error('Adoption fetch error:', err);
-      setPets([]);
-    } finally {
-      setLoading(false);
+    setLoadError('');
+    const res = await apiGet('/pets/');
+    if (res.ok && Array.isArray(res.data)) {
+      setPets(res.data.filter(isAdoptablePet));
+    } else if (!res.aborted) {
+      setLoadError(res.error || 'Unable to load available companions.');
     }
+    setLoading(false);
   }, []);
-
-  const sessionEmail = session?.email || '';
 
   const fetchMyTrackingLogs = useCallback(async () => {
     if (!sessionEmail) {
@@ -111,77 +81,56 @@ export default function AdoptionGallery({ session }) {
       return;
     }
     setLoadingTracking(true);
-    try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/applications/?email=${encodeURIComponent(sessionEmail)}`);
-      const data = await res.json();
-      setMyApplications(res.ok && Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Tracking log error:', err);
-      setMyApplications([]);
-    } finally {
-      setLoadingTracking(false);
+    const res = await apiGet('/pets/applications/');
+    if (res.ok && Array.isArray(res.data)) {
+      setMyApplications(res.data);
     }
+    setLoadingTracking(false);
   }, [sessionEmail]);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     const init = async () => {
-      try {
-        const petsRes = await fetch('https://taskforcebruno.onrender.com/api/pets/');
-        const petsData = await petsRes.json();
-        if (!cancelled) {
-          if (petsRes.ok && Array.isArray(petsData)) {
-            const adoptionPlacements = petsData.filter(p => {
-              const type = (p.pet_type || '').toLowerCase();
-              const status = (p.adoption_status || '').toLowerCase();
-              const isCampus = type.includes('campus') || type.includes('resident') || status.includes('campus') || status === 'not for adoption';
-              const isAdopted = status === 'adopted';
-              return !isCampus && !isAdopted && (
-                status === 'available' ||
-                status === 'stray' ||
-                type.includes('adoption') ||
-                type.includes('stray') ||
-                (p.pet_id || '').toUpperCase().startsWith('STRAY-')
-              );
-            });
-            setPets(adoptionPlacements);
-          }
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error('Adoption fetch error:', err);
-        if (!cancelled) setLoading(false);
+      setLoading(true);
+      setLoadingTracking(true);
+      setLoadError('');
+      const [petsRes, appsRes] = await Promise.all([
+        apiGet('/pets/', { signal: controller.signal }),
+        sessionEmail ? apiGet('/pets/applications/', { signal: controller.signal }) : Promise.resolve(null),
+      ]);
+      if (controller.signal.aborted) return;
+
+      if (petsRes.ok && Array.isArray(petsRes.data)) {
+        setPets(petsRes.data.filter(isAdoptablePet));
+      } else {
+        setLoadError(petsRes.error || 'Unable to load available companions.');
       }
 
-      if (session?.email) {
-        try {
-          const appsRes = await fetch(`https://taskforcebruno.onrender.com/api/pets/applications/?email=${encodeURIComponent(session.email)}`);
-          const appsData = await appsRes.json();
-          if (!cancelled) {
-            setMyApplications(appsRes.ok && Array.isArray(appsData) ? appsData : []);
-            setLoadingTracking(false);
-          }
-        } catch (err) {
-          console.error('Tracking log error:', err);
-          if (!cancelled) {
-            setMyApplications([]);
-            setLoadingTracking(false);
-          }
-        }
-      } else if (!cancelled) {
-        setLoadingTracking(false);
+      if (appsRes && appsRes.ok && Array.isArray(appsRes.data)) {
+        setMyApplications(appsRes.data);
       }
+      setLoading(false);
+      setLoadingTracking(false);
     };
     init();
-    return () => {
-      cancelled = true;
+    return () => controller.abort();
+  }, [sessionEmail]);
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (!isSubmitting) setShowApplyForm(false);
+        if (!cancelModal.submitting) setCancelModal({ isOpen: false, appId: null, submitting: false });
+      }
     };
-  }, [session?.email]);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isSubmitting, cancelModal.submitting]);
 
   const filteredPets = useMemo(() => {
     let result = pets;
-    if (speciesFilter !== 'All') result = result.filter(p => p.species === speciesFilter);
-    if (sizeFilter !== 'All') result = result.filter(p => p.size === sizeFilter);
+    if (speciesFilter !== 'All') result = result.filter((p) => p.species === speciesFilter);
+    if (sizeFilter !== 'All') result = result.filter((p) => p.size === sizeFilter);
     return result;
   }, [speciesFilter, sizeFilter, pets]);
 
@@ -199,10 +148,13 @@ export default function AdoptionGallery({ session }) {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setApplicationForm(prev => ({
+    setApplicationForm((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === 'checkbox' ? checked : value,
     }));
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: '' }));
+    }
   };
 
   const handleApplySubmit = async (e) => {
@@ -210,6 +162,7 @@ export default function AdoptionGallery({ session }) {
     if (isSubmitting) return;
     setSuccessMessage('');
     setErrorMessage('');
+    setFieldErrors({});
 
     const targetPet = filteredPets[safeIndex];
     if (!targetPet) {
@@ -217,41 +170,50 @@ export default function AdoptionGallery({ session }) {
       return;
     }
 
+    const errors = {};
     const fullNameClean = (applicationForm.fullName || '').trim();
     const contactNumClean = (applicationForm.contactNum || '').trim();
     const addressClean = (applicationForm.address || '').trim();
-    const planIfMovingClean = (applicationForm.planIfMoving || '').trim();
+    const planClean = (applicationForm.planIfMoving || '').trim();
 
     if (!fullNameClean || fullNameClean.split(/\s+/).length < 2) {
-      setErrorMessage('Validation Error: Please provide your full name (both First and Last name).');
-      return;
+      errors.fullName = 'Please enter both your first and last name.';
     }
-
     const cleanDigits = contactNumClean.replace(/[\s-]/g, '');
-    if (!/^(09\d{9}|\+639\d{9}|\d{7,12})$/.test(cleanDigits)) {
-      setErrorMessage('Validation Error: Please enter a valid 11-digit Philippine contact number (e.g., 09171234567).');
-      return;
+    if (!contactNumClean) {
+      errors.contactNum = 'Contact number is required.';
+    } else if (!PHONE_PATTERN.test(cleanDigits)) {
+      errors.contactNum = 'Enter a valid Philippine mobile number (e.g., 09171234567).';
     }
-
     if (!addressClean || addressClean.length < 8) {
-      setErrorMessage('Validation Error: Please provide a complete residential address with street/barangay details.');
-      return;
+      errors.address = 'Please enter your complete residential address.';
     }
-
+    if (!applicationForm.housingType) {
+      errors.housingType = 'Please select your residence type.';
+    }
     if (!applicationForm.householdAgreement) {
-      setErrorMessage('Validation Error: All members of your household must agree to adopt the pet before proceeding.');
+      errors.householdAgreement = 'All household members must agree to adopt this pet.';
+    }
+    if (!planClean || planClean.length < 10) {
+      errors.planIfMoving = 'Please describe your plan if you relocate or graduate (at least 10 characters).';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setErrorMessage('Please review the highlighted fields below.');
+      if (errors.fullName) fullNameInputRef.current?.focus();
+      else if (errors.contactNum) contactInputRef.current?.focus();
+      else if (errors.address) addressInputRef.current?.focus();
+      else if (errors.housingType) housingSelectRef.current?.focus();
+      else if (errors.householdAgreement) agreementInputRef.current?.focus();
+      else if (errors.planIfMoving) planInputRef.current?.focus();
       return;
     }
 
-    if (!planIfMovingClean || planIfMovingClean.length < 10) {
-      setErrorMessage('Validation Error: Please describe your contingency plan if you relocate or graduate (at least 10 characters).');
-      return;
-    }
-
-    const payload = {
+    setIsSubmitting(true);
+    const res = await apiPost('/pets/applications/', {
       pet_id: targetPet.pet_id,
-      full_name: fullNameClean, 
-      email: applicationForm.email || session?.email || '', 
+      full_name: fullNameClean,
       contact_number: contactNumClean,
       address: addressClean,
       experience_level: applicationForm.experience,
@@ -259,75 +221,65 @@ export default function AdoptionGallery({ session }) {
       has_secure_fence: applicationForm.hasSecureFence,
       household_agreement: applicationForm.householdAgreement,
       pet_care_budget: applicationForm.petCareBudget,
-      plan_if_moving: planIfMovingClean
-    };
+      plan_if_moving: planClean,
+    });
 
-    setIsSubmitting(true);
-    try {
-      const res = await fetch('https://taskforcebruno.onrender.com/api/pets/applications/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        setSuccessMessage(`Application for ${targetPet.name} has been submitted successfully.`);
-        setTimeout(() => {
-          setSuccessMessage('');
-          setShowApplyForm(false);
-          setApplicationForm({
-            fullName: resolveApplicantFullName(session), 
-            email: session?.email || '', 
-            contactNum: '', address: '', experience: 'Beginner',
-            housingType: 'Owned House', hasSecureFence: false, householdAgreement: false,
-            petCareBudget: DEFAULT_BUDGET, planIfMoving: ''
-          });
-          fetchAvailablePlacements();
-          fetchMyTrackingLogs(); 
-        }, 2200);
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        setErrorMessage(errData.error || 'Server could not process your application submission. Please verify all fields.');
-      }
-    } catch {
-      setErrorMessage('Network error connecting to server. Please try again.');
-    } finally {
-      setIsSubmitting(false);
+    if (res.ok) {
+      setSuccessMessage(`Application for ${targetPet.name} submitted successfully.`);
+      setTimeout(() => {
+        setSuccessMessage('');
+        setShowApplyForm(false);
+        setApplicationForm({
+          fullName: getUserDisplayName(session, ''),
+          email: sessionEmail,
+          contactNum: '',
+          address: '',
+          experience: 'Beginner',
+          housingType: 'Owned House',
+          hasSecureFence: false,
+          householdAgreement: false,
+          petCareBudget: DEFAULT_BUDGET,
+          planIfMoving: '',
+        });
+        fetchAvailablePlacements();
+        fetchMyTrackingLogs();
+      }, 1800);
+    } else {
+      setErrorMessage(res.error || 'Could not submit your application. Please try again.');
     }
-  };
-
-  const openCancelModal = (appId) => {
-    setCancelModal({ isOpen: true, appId });
+    setIsSubmitting(false);
   };
 
   const confirmCancelApplication = async () => {
-    const { appId } = cancelModal;
-    if (!appId) return;
+    const { appId, submitting } = cancelModal;
+    if (!appId || submitting) return;
 
-    try {
-      const res = await fetch(`https://taskforcebruno.onrender.com/api/pets/applications/${appId}/`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ application_status: 'Cancelled' })
+    setCancelModal((prev) => ({ ...prev, submitting: true }));
+    setActionBanner({ type: '', text: '' });
+
+    const res = await apiPut(`/pets/applications/${appId}/`, {
+      application_status: 'Cancelled',
+    });
+
+    if (res.ok) {
+      setCancelModal({ isOpen: false, appId: null, submitting: false });
+      setActionBanner({ type: 'success', text: `Application #${appId} has been withdrawn.` });
+      fetchAvailablePlacements();
+      fetchMyTrackingLogs();
+    } else {
+      setCancelModal({ isOpen: false, appId: null, submitting: false });
+      setActionBanner({
+        type: 'error',
+        text: res.error || 'Unable to withdraw this application right now.',
       });
-      
-      if (res.ok) {
-        setCancelModal({ isOpen: false, appId: null });
-        fetchAvailablePlacements();
-        fetchMyTrackingLogs();
-      } else {
-        alert("Unable to cancel application at this time.");
-      }
-    } catch (err) {
-      console.error('Cancellation error:', err);
     }
   };
 
   if (loading) {
     return (
-      <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-16 text-center shadow-sm mx-auto flex flex-col items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-100 border-t-[#5C0612] rounded-full animate-spin mb-4"></div>
-        <p className="text-xs text-slate-400 font-mono uppercase tracking-widest">Loading available pets...</p>
+      <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-12 text-center shadow-xs mx-auto flex flex-col items-center justify-center">
+        <div className="w-8 h-8 border-3 border-slate-200 border-t-[#5C0612] rounded-full animate-spin mb-3" />
+        <p className="text-xs text-slate-500 font-medium">Loading adoptable companions...</p>
       </div>
     );
   }
@@ -336,66 +288,94 @@ export default function AdoptionGallery({ session }) {
   const progressPercent = filteredPets.length > 0 ? ((safeIndex + 1) / filteredPets.length) * 100 : 0;
 
   return (
-    <div className="w-full max-w-6xl xl:max-w-7xl flex flex-col gap-6 animate-fade-in text-xs text-slate-700 mx-auto px-2 sm:px-4 py-2">
-      
-      {/* HEADER BANNER */}
-      <div className="bg-white rounded-2xl p-5 md:p-6 border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="w-full max-w-6xl xl:max-w-7xl flex flex-col gap-5 text-xs text-slate-700 mx-auto pb-8">
+      {/* Header Banner */}
+      <div className="bg-white rounded-2xl p-5 md:p-6 border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#5C0612]" />
-            <span className="text-[11px] font-bold font-mono uppercase tracking-wider text-[#5C0612]">
-              Rehoming & Community Care
-            </span>
-          </div>
-          <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-            Adoption Placement Portal
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[#5C0612] block mb-1">
+            Campus Rehoming
+          </span>
+          <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+            Adoption Portal
           </h2>
-          <p className="text-xs md:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-            Browse verified campus companions looking for permanent homes. Submit adoption inquiries and track application progress in real time.
+          <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
+            Browse campus rescues looking for permanent homes, submit adoption applications, and track review status.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 text-xs shrink-0">
-          <span className="bg-slate-100 text-slate-700 px-3.5 py-1.5 rounded-xl border border-slate-200 font-semibold">
-            {filteredPets.length} Available Companions
+        <div className="flex flex-wrap items-center gap-2 text-xs shrink-0">
+          <span className="bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl border border-slate-200 font-semibold">
+            {filteredPets.length} Available
           </span>
-          <span className="bg-[#5C0612]/10 text-[#5C0612] px-3.5 py-1.5 rounded-xl border border-[#5C0612]/20 font-semibold">
+          <span className="bg-[#5C0612]/10 text-[#5C0612] px-3 py-1.5 rounded-xl border border-[#5C0612]/20 font-semibold">
             {myApplications.length} My Applications
           </span>
         </div>
       </div>
 
-      {/* MAIN TWO-COLUMN WORKSPACE */}
+      {loadError && (
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-900 rounded-2xl flex items-center justify-between gap-3 text-xs">
+          <span>{loadError}</span>
+          <button
+            type="button"
+            onClick={fetchAvailablePlacements}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-rose-200 rounded-xl font-semibold text-rose-800"
+          >
+            <RotateCw className="w-3.5 h-3.5" />
+            Retry
+          </button>
+        </div>
+      )}
+
+      {actionBanner.text && (
+        <div
+          role="status"
+          className={`p-3.5 rounded-2xl border flex items-center justify-between gap-2 text-xs font-medium ${
+            actionBanner.type === 'error'
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          }`}
+        >
+          <span>{actionBanner.text}</span>
+          <button
+            type="button"
+            onClick={() => setActionBanner({ type: '', text: '' })}
+            aria-label="Dismiss message"
+            className="p-1 rounded-lg hover:bg-black/5"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Main Two-Column Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* LEFT SECTION: FILTERS & PET SHOWCASE (Col 5 on desktop) */}
-        <div className="lg:col-span-6 xl:col-span-5 space-y-5 flex flex-col items-center w-full">
-          
-          {/* Filter Bar */}
-          <div className="w-full bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+        {/* Left Column: Filters & Pet Showcase */}
+        <div className="lg:col-span-6 xl:col-span-5 space-y-4 w-full">
+          <div className="w-full bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-900">Filter Companions</span>
-              <span className="text-[11px] text-slate-400 font-mono">
-                Showing {filteredPets.length} of {pets.length}
+              <span className="text-xs text-slate-500 font-mono">
+                {filteredPets.length} of {pets.length}
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              {/* Species Filter */}
               <div className="space-y-1.5">
-                <span className="text-slate-400 pl-1 text-[10px] font-bold uppercase tracking-wider font-mono block">
-                  Species
-                </span>
-                <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-100 gap-1">
-                  {['All', 'Cat', 'Dog'].map(sp => (
+                <span className="text-slate-500 text-[11px] font-semibold block">Species</span>
+                <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
+                  {['All', 'Cat', 'Dog'].map((sp) => (
                     <button
                       key={sp}
                       type="button"
-                      onClick={() => { setSpeciesFilter(sp); setCurrentIndex(0); }}
-                      className={`flex-1 py-1.5 px-2 rounded-lg transition-all font-semibold text-xs text-center ${
+                      onClick={() => {
+                        setSpeciesFilter(sp);
+                        setCurrentIndex(0);
+                      }}
+                      className={`flex-1 py-1.5 px-2 rounded-lg transition-colors font-semibold text-xs text-center ${
                         speciesFilter === sp
-                          ? 'bg-[#5C0612] text-white shadow-sm'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+                          ? 'bg-[#5C0612] text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       {sp === 'All' ? 'All' : `${sp}s`}
@@ -404,23 +384,22 @@ export default function AdoptionGallery({ session }) {
                 </div>
               </div>
 
-              {/* Size Filter */}
               <div className="space-y-1.5">
-                <span className="text-slate-400 pl-1 text-[10px] font-bold uppercase tracking-wider font-mono block">
-                  Size
-                </span>
-                <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-100 gap-1">
-                  {['All', 'Small', 'Medium', 'Large'].map(sz => (
+                <span className="text-slate-500 text-[11px] font-semibold block">Size</span>
+                <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
+                  {['All', 'Small', 'Medium', 'Large'].map((sz) => (
                     <button
                       key={sz}
                       type="button"
-                      onClick={() => { setSizeFilter(sz); setCurrentIndex(0); }}
-                      className={`flex-1 py-1.5 px-1 rounded-lg transition-all font-semibold text-xs text-center truncate ${
+                      onClick={() => {
+                        setSizeFilter(sz);
+                        setCurrentIndex(0);
+                      }}
+                      className={`flex-1 py-1.5 px-1 rounded-lg transition-colors font-semibold text-xs text-center truncate ${
                         sizeFilter === sz
-                          ? 'bg-[#5C0612] text-white shadow-sm'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+                          ? 'bg-[#5C0612] text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
                       }`}
-                      title={sz}
                     >
                       {sz}
                     </button>
@@ -430,218 +409,229 @@ export default function AdoptionGallery({ session }) {
             </div>
           </div>
 
-          {/* Pet Showcase Card */}
           {filteredPets.length === 0 ? (
-            <div className="h-[480px] w-full bg-white border border-dashed border-slate-200 rounded-3xl p-8 text-center text-slate-400 flex flex-col items-center justify-center shadow-sm">
-              <svg className="w-10 h-10 text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-              <p className="font-semibold text-slate-600 text-sm">No companions match these filters</p>
-              <p className="text-xs text-slate-400 mt-1">Try resetting the species or size filters to view available animals.</p>
+            <div className="min-h-[360px] w-full bg-white border border-dashed border-slate-300 rounded-3xl p-8 text-center text-slate-400 flex flex-col items-center justify-center">
+              <p className="font-semibold text-slate-700 text-sm">No companions match these filters</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Try resetting the species or size filters to see all adoptable animals.
+              </p>
+              {(speciesFilter !== 'All' || sizeFilter !== 'All') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSpeciesFilter('All');
+                    setSizeFilter('All');
+                    setCurrentIndex(0);
+                  }}
+                  className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
+                >
+                  Reset Filters
+                </button>
+              )}
             </div>
           ) : (
-            <div className="w-full bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm flex flex-col relative transition-all">
-              
-              {/* Pet Image Frame */}
-              <div className="w-full h-56 relative bg-slate-950 overflow-hidden shrink-0 border-b border-slate-100">
-                <img
-                  src={currentPet.primary_image || 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba'}
-                  alt={currentPet.name}
-                  className="w-full h-full object-cover select-none brightness-[0.96]"
-                />
-                
-                <div className="absolute top-3 left-3 flex gap-1.5 font-mono text-[10px] font-bold select-none">
-                  <span className="px-2.5 py-1 bg-black/60 backdrop-blur-md text-white rounded-lg border border-white/10 shadow-sm">
-                    #{currentPet.pet_id}
-                  </span>
-                  <span className={`px-2.5 py-1 backdrop-blur-md rounded-lg border shadow-sm tracking-wide uppercase font-semibold ${
-                    currentPet.pet_id?.startsWith('STRAY-')
-                      ? 'bg-rose-950/80 text-rose-200 border-rose-800'
-                      : 'bg-amber-950/80 text-amber-200 border-amber-800'
-                  }`}>
-                    {currentPet.pet_id?.startsWith('STRAY-') ? `Stray ${currentPet.species}` : (currentPet.pet_type || 'For Adoption')}
-                  </span>
-                </div>
-
-                <div className="absolute bottom-3 right-3">
-                  <span className="px-2.5 py-1 bg-black/60 backdrop-blur-md text-slate-200 rounded-lg text-[10px] font-medium border border-white/10">
-                    {currentPet.found_near}
-                  </span>
-                </div>
-              </div>
-
-              {/* Pet Details */}
-              <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                <div className="space-y-2.5">
-                  <div className="flex justify-between items-baseline">
-                    <h4 className="text-xl font-bold tracking-tight text-slate-900 truncate pr-2">
-                      {currentPet.name}
-                    </h4>
-                    <span className="font-mono text-xs text-slate-500 font-semibold bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-lg uppercase">
-                      {currentPet.breed || 'Domestic Line'}
+            <>
+              <div className="w-full bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs flex flex-col">
+                <div className="w-full h-56 relative bg-slate-900 overflow-hidden shrink-0">
+                  <img
+                    src={safeImageUrl(currentPet.primary_image, DEFAULT_PET_IMAGE)}
+                    alt={currentPet.name}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-3 left-3 flex gap-1.5 font-mono text-[10px] font-bold">
+                    <span className="px-2.5 py-1 bg-black/65 backdrop-blur-sm text-white rounded-lg">
+                      #{currentPet.pet_id}
+                    </span>
+                    <span className="px-2.5 py-1 bg-amber-950/85 backdrop-blur-sm text-amber-100 rounded-lg uppercase">
+                      {currentPet.pet_id?.startsWith('STRAY-')
+                        ? `Stray ${currentPet.species}`
+                        : currentPet.pet_type || 'For Adoption'}
                     </span>
                   </div>
-
-                  <div className="flex flex-wrap gap-1.5 font-medium text-xs text-slate-600">
-                    <span className="bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80">{currentPet.gender}</span>
-                    <span className="bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80">{currentPet.age || 'Adult'}</span>
-                    <span className="bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80">{currentPet.size} Size</span>
-                    <span className={`px-2.5 py-1 rounded-lg border font-semibold ${
-                      currentPet.vaccination_status?.toLowerCase().includes('fully')
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : (currentPet.vaccination_status?.toLowerCase().includes('core') || currentPet.vaccination_status?.toLowerCase().includes('partial'))
-                        ? 'bg-amber-50 text-amber-800 border-amber-200'
-                        : 'bg-rose-50 text-rose-700 border-rose-200'
-                    }`}>
-                      {currentPet.vaccination_status || 'Not Vaccinated'}
+                  {currentPet.found_near && (
+                    <span className="absolute bottom-3 right-3 px-2.5 py-1 bg-black/65 backdrop-blur-sm text-white rounded-lg text-[11px] font-medium">
+                      {currentPet.found_near}
                     </span>
-                  </div>
-
-                  <p className="text-xs text-slate-600 leading-relaxed font-normal border-l-2 border-[#5C0612]/30 pl-3 py-0.5 max-h-[80px] overflow-y-auto">
-                    {currentPet.about_text || 'Active campus companion currently under care and ready for adoption.'}
-                  </p>
+                  )}
                 </div>
 
-                <div className="pt-3 border-t border-slate-100 space-y-3 shrink-0">
+                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-baseline gap-2">
+                      <h4 className="text-xl font-bold text-slate-900 truncate">{currentPet.name}</h4>
+                      <span className="font-mono text-[11px] text-slate-600 font-semibold bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-lg shrink-0">
+                        {currentPet.breed || 'Domestic Mix'}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 text-xs text-slate-600">
+                      <span className="bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                        {currentPet.gender}
+                      </span>
+                      <span className="bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                        {currentPet.age || 'Adult'}
+                      </span>
+                      <span className="bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                        {currentPet.size}
+                      </span>
+                      <span
+                        className={`px-2.5 py-1 rounded-lg border font-semibold ${getVaccinationBadgeStyles(
+                          currentPet.vaccination_status
+                        )}`}
+                      >
+                        {currentPet.vaccination_status || 'Not Vaccinated'}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-600 leading-relaxed border-l-2 border-[#5C0612]/30 pl-3 py-0.5 max-h-24 overflow-y-auto">
+                      {currentPet.about_text ||
+                        'Campus companion currently under MDC care and ready for a loving home.'}
+                    </p>
+                  </div>
+
                   <button
-                    onClick={() => setShowApplyForm(true)}
-                    className="w-full py-3 bg-gradient-to-r from-[#5C0612] to-[#7A0918] hover:from-[#6D0816] hover:to-[#8E0B1C] text-white font-bold tracking-wide rounded-xl border-b-2 border-[#D4AF37] shadow-md transition-all text-xs uppercase"
+                    type="button"
+                    onClick={() => {
+                      setErrorMessage('');
+                      setFieldErrors({});
+                      setSuccessMessage('');
+                      setShowApplyForm(true);
+                    }}
+                    className="w-full py-3 bg-[#5C0612] hover:bg-[#42040B] text-white font-semibold rounded-xl border-b-2 border-[#D4AF37] shadow-sm transition-colors text-xs"
                   >
-                    Apply for Adoption
+                    Apply to Adopt {currentPet.name}
                   </button>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Carousel Controls */}
-          {filteredPets.length > 0 && (
-            <div className="w-full space-y-2.5 shrink-0 select-none">
-              <div className="flex justify-between items-center px-1">
-                <button
-                  type="button"
-                  onClick={handlePrevCard}
-                  className="w-10 h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-full flex items-center justify-center font-bold shadow-sm transition-all active:scale-95"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                
-                <span className="font-mono text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Companion {safeIndex + 1} of {filteredPets.length}
-                </span>
+              <div className="w-full space-y-2.5 select-none">
+                <div className="flex justify-between items-center px-1">
+                  <button
+                    type="button"
+                    onClick={handlePrevCard}
+                    aria-label="Previous companion"
+                    className="w-10 h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-full flex items-center justify-center shadow-xs transition-colors"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={handleNextCard}
-                  className="w-10 h-10 bg-[#5C0612] hover:bg-[#720817] text-white rounded-full flex items-center justify-center font-bold shadow-md border-b-2 border-[#D4AF37] transition-all active:scale-95"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
+                  <span className="font-mono text-xs font-semibold text-slate-500">
+                    {safeIndex + 1} of {filteredPets.length}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={handleNextCard}
+                    aria-label="Next companion"
+                    className="w-10 h-10 bg-[#5C0612] hover:bg-[#42040B] text-white rounded-full flex items-center justify-center shadow-sm border-b-2 border-[#D4AF37] transition-colors"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    style={{ width: `${progressPercent}%` }}
+                    className="h-full bg-gradient-to-r from-[#5C0612] to-[#D4AF37] transition-all duration-300 rounded-full"
+                  />
+                </div>
               </div>
-
-              <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                <div
-                  style={{ width: `${progressPercent}%` }}
-                  className="h-full bg-gradient-to-r from-[#5C0612] to-[#D4AF37] transition-all duration-300 rounded-full"
-                />
-              </div>
-            </div>
+            </>
           )}
-
         </div>
 
-        {/* RIGHT SECTION: APPLICATION TRACKING (Col 7 on desktop) */}
-        <div className="lg:col-span-6 xl:col-span-7 w-full bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-sm min-h-[580px] flex flex-col justify-between">
+        {/* Right Column: My Applications */}
+        <div className="lg:col-span-6 xl:col-span-7 w-full bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-xs flex flex-col justify-between gap-4">
           <div className="space-y-4 w-full">
-            
-            {/* Card Header */}
-            <div className="border-b border-slate-100 pb-4 flex justify-between items-center">
+            <div className="border-b border-slate-100 pb-4 flex justify-between items-center gap-3">
               <div>
-                <h3 className="text-base font-bold tracking-tight text-slate-900">My Adoption Applications</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Track reviews, statuses, and hand-off instructions.</p>
+                <h3 className="text-base font-bold text-slate-900">My Adoption Applications</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Track review decisions and pickup instructions.
+                </p>
               </div>
-
               <button
                 type="button"
                 onClick={fetchMyTrackingLogs}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 bg-white shadow-sm rounded-xl transition-all"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 bg-white rounded-xl transition-colors shrink-0"
               >
-                <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
+                <RotateCw className="w-3.5 h-3.5 text-slate-500" />
                 <span>Refresh</span>
               </button>
             </div>
 
-            {/* List */}
             {loadingTracking ? (
-              <div className="p-16 text-center text-slate-400 animate-pulse text-xs">
-                Syncing application records...
-              </div>
-            ) : !Array.isArray(myApplications) || myApplications.length === 0 ? (
-              <div className="text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl p-12 mt-6">
-                <svg className="w-10 h-10 text-slate-300 mx-auto mb-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <p className="font-semibold text-slate-700 text-xs">No active applications yet</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Select a companion on the left and submit an adoption inquiry to start the review process.</p>
+              <div className="py-12 text-center text-slate-400 text-xs">Loading your applications...</div>
+            ) : myApplications.length === 0 ? (
+              <div className="text-center text-slate-500 border border-dashed border-slate-200 rounded-2xl p-10 space-y-2">
+                <FileText className="w-9 h-9 text-slate-300 mx-auto" />
+                <p className="font-semibold text-slate-700 text-xs">No applications submitted yet</p>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  Select an adoptable pet on the left and submit an application to start the review process.
+                </p>
               </div>
             ) : (
-              <div className="space-y-3 overflow-y-auto max-h-[460px] pr-1">
+              <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
                 {myApplications.map((app) => {
                   const isPending = app.application_status === 'Pending';
                   const isApproved = app.application_status === 'Approved';
-                  const isCancelled = app.application_status === 'Cancelled'; 
-                  
+                  const isCancelled = app.application_status === 'Cancelled';
+
                   return (
                     <div
                       key={app.application_id}
-                      className="p-4 border border-slate-200/80 rounded-2xl bg-slate-50/70 flex flex-col gap-3 shadow-sm hover:bg-slate-50 transition-colors text-left"
+                      className="p-4 border border-slate-200 rounded-2xl bg-slate-50/70 flex flex-col gap-3 text-left"
                     >
-                      <div className="flex items-center justify-between w-full">
-                        <div className="space-y-1 max-w-[70%]">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-900 text-xs font-mono">Case #{app.application_id}</span>
-                            <span className="font-mono text-[10px] bg-slate-200 px-2 py-0.5 rounded text-slate-700 font-bold uppercase">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 text-xs font-mono">
+                              Application #{app.application_id}
+                            </span>
+                            <span className="font-mono text-[11px] bg-slate-200 px-2 py-0.5 rounded text-slate-800 font-bold">
                               {app.pet_id}
                             </span>
                           </div>
-                          <p className="text-slate-500 text-[11px]">
-                            Submitted: {app.submitted_at && !Number.isNaN(new Date(app.submitted_at).getTime()) ? new Date(app.submitted_at).toLocaleDateString() : 'Recently'}
+                          <p className="text-slate-500 text-xs">
+                            Submitted:{' '}
+                            {app.submitted_at && !Number.isNaN(new Date(app.submitted_at).getTime())
+                              ? new Date(app.submitted_at).toLocaleDateString()
+                              : 'Recently'}
                           </p>
-                          <p className="text-slate-600 truncate text-[11px]">
+                          <p className="text-slate-600 text-xs break-words">
                             Address: <span className="font-medium text-slate-800">{app.address}</span>
                           </p>
                         </div>
 
-                        <div className="shrink-0 text-right">
-                          <span className={`inline-block px-3 py-1 text-[10px] font-bold uppercase rounded-lg border shadow-sm ${
-                            isApproved ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
-                            isPending ? 'bg-amber-50 border-amber-200 text-amber-800 animate-pulse' :
-                            isCancelled ? 'bg-slate-100 border-slate-200 text-slate-500' : 
-                            'bg-rose-50 border-rose-200 text-rose-800'
-                          }`}>
-                            {app.application_status}
-                          </span>
-                        </div>
+                        <span
+                          className={`px-3 py-1 text-[11px] font-semibold rounded-lg border shrink-0 ${
+                            isApproved
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                              : isPending
+                              ? 'bg-amber-50 border-amber-200 text-amber-900'
+                              : isCancelled
+                              ? 'bg-slate-100 border-slate-200 text-slate-600'
+                              : 'bg-rose-50 border-rose-200 text-rose-800'
+                          }`}
+                        >
+                          {app.application_status}
+                        </span>
                       </div>
 
                       {isApproved && (
-                        <div className="p-3 bg-emerald-50 border border-emerald-200/80 text-emerald-900 rounded-xl text-xs leading-relaxed font-normal">
-                          <span className="font-bold text-emerald-800 block mb-1">Next Steps:</span>
-                          Please watch for an official confirmation SMS/email from our clinic coordinators, or visit the Task Force Bruno clinic office to finalize adoption paperwork and meet your companion.
+                        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs leading-relaxed">
+                          <strong className="block mb-0.5">Next Steps</strong>
+                          Watch for confirmation from MDC coordinators or visit the campus clinic office to complete adoption paperwork and meet your companion.
                         </div>
                       )}
 
                       {isPending && (
                         <button
                           type="button"
-                          onClick={() => openCancelModal(app.application_id)}
-                          className="w-full mt-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-medium text-xs rounded-xl border border-rose-200 transition-all text-center"
+                          onClick={() =>
+                            setCancelModal({ isOpen: true, appId: app.application_id, submitting: false })
+                          }
+                          className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs rounded-xl border border-rose-200 transition-colors"
                         >
                           Withdraw Application
                         </button>
@@ -653,272 +643,347 @@ export default function AdoptionGallery({ session }) {
             )}
           </div>
 
-          <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl text-[11px] text-slate-500 mt-4">
-            Signed in as: <span className="text-slate-800 font-medium ml-1">{session?.email}</span>
+          <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-xl text-xs text-slate-500">
+            Signed in as <strong className="text-slate-800">{sessionEmail}</strong>
           </div>
         </div>
-
       </div>
 
-      {/* ADOPTION APPLICATION MODAL */}
-      {showApplyForm && filteredPets.length > 0 && (
-        <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-left">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-scale-up max-h-[88vh] overflow-y-auto">
-            <div className="border-b border-slate-100 pb-3 flex justify-between items-start">
+      {/* Adoption Form Modal */}
+      {showApplyForm && currentPet && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="adoption-form-title"
+          onClick={() => !isSubmitting && setShowApplyForm(false)}
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in text-left"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 flex flex-col max-h-[90dvh] overflow-hidden animate-scale-up"
+          >
+            <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-start gap-2 shrink-0">
               <div>
-                <h3 className="text-base font-bold text-slate-900 tracking-tight">Adoption Inquiry Application</h3>
+                <h3 id="adoption-form-title" className="text-base font-bold text-slate-900">
+                  Adoption Application
+                </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Submitting inquiry for: <strong className="text-[#5C0612]">{currentPet.name}</strong> ({currentPet.pet_id})
+                  Applying for <strong className="text-[#5C0612]">{currentPet.name}</strong> ({currentPet.pet_id})
                 </p>
               </div>
               <button
                 type="button"
+                aria-label="Close application form"
                 onClick={() => setShowApplyForm(false)}
-                className="text-slate-400 hover:text-slate-700 text-sm p-1"
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {successMessage && (
-              <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-center font-medium">
-                {successMessage}
-              </div>
-            )}
-            
-            {errorMessage && (
-              <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-center font-medium">
-                {errorMessage}
-              </div>
-            )}
+            <div className="p-5 overflow-y-auto space-y-4">
+              {successMessage && (
+                <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-center font-semibold text-xs">
+                  {successMessage}
+                </div>
+              )}
 
-            {!successMessage && (
-              <form onSubmit={handleApplySubmit} className="space-y-3.5 text-xs">
-                
-                {/* Section 1 */}
-                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/60 space-y-2.5">
-                  <span className="text-[10px] font-bold text-slate-400 font-mono uppercase tracking-wider block">
-                    1. Applicant Information
-                  </span>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase">Full Legal Name *</label>
-                        <span className="text-[9px] font-mono text-emerald-700 font-semibold flex items-center gap-1">
-                          <svg className="w-2.5 h-2.5 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                          </svg>
-                          Verified
-                        </span>
+              {errorMessage && (
+                <div role="alert" className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-medium">
+                  {errorMessage}
+                </div>
+              )}
+
+              {!successMessage && (
+                <form onSubmit={handleApplySubmit} noValidate className="space-y-4 text-xs">
+                  {/* Section 1 */}
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/70 space-y-3">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                      1. Applicant Information
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-semibold text-slate-700">Full Name *</label>
+                          {verifiedFullName && (
+                            <span className="text-[10px] text-emerald-700 font-semibold inline-flex items-center gap-0.5">
+                              <Lock className="w-3 h-3" /> Verified
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          ref={fullNameInputRef}
+                          type="text"
+                          name="fullName"
+                          readOnly={Boolean(verifiedFullName)}
+                          value={applicationForm.fullName}
+                          onChange={handleInputChange}
+                          placeholder="e.g. Maria Santos"
+                          className={`w-full px-3 py-2.5 border rounded-xl text-base sm:text-xs ${
+                            fieldErrors.fullName
+                              ? 'border-rose-500 bg-rose-50/40'
+                              : verifiedFullName
+                              ? 'bg-slate-100 border-slate-200 text-slate-600 cursor-not-allowed'
+                              : 'bg-white border-slate-200'
+                          }`}
+                        />
+                        {fieldErrors.fullName && (
+                          <p className="text-[11px] text-rose-600 mt-1">{fieldErrors.fullName}</p>
+                        )}
                       </div>
-                      <input
-                        type="text"
-                        name="fullName"
-                        readOnly={Boolean(verifiedFullName)}
-                        required
-                        value={applicationForm.fullName}
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Institutional Email
+                        </label>
+                        <input
+                          type="email"
+                          name="email"
+                          readOnly
+                          value={applicationForm.email}
+                          className="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 text-base sm:text-xs cursor-not-allowed"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Contact Number *
+                        </label>
+                        <input
+                          ref={contactInputRef}
+                          type="tel"
+                          name="contactNum"
+                          value={applicationForm.contactNum}
+                          onChange={handleInputChange}
+                          placeholder="09171234567"
+                          className={`w-full px-3 py-2.5 border rounded-xl font-mono text-base sm:text-xs ${
+                            fieldErrors.contactNum ? 'border-rose-500 bg-rose-50/40' : 'bg-white border-slate-200'
+                          }`}
+                        />
+                        {fieldErrors.contactNum && (
+                          <p className="text-[11px] text-rose-600 mt-1">{fieldErrors.contactNum}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Residential Address *
+                        </label>
+                        <input
+                          ref={addressInputRef}
+                          type="text"
+                          name="address"
+                          value={applicationForm.address}
+                          onChange={handleInputChange}
+                          placeholder="Street, Barangay, Cebu City"
+                          className={`w-full px-3 py-2.5 border rounded-xl text-base sm:text-xs ${
+                            fieldErrors.address ? 'border-rose-500 bg-rose-50/40' : 'bg-white border-slate-200'
+                          }`}
+                        />
+                        {fieldErrors.address && (
+                          <p className="text-[11px] text-rose-600 mt-1">{fieldErrors.address}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 2 */}
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/70 space-y-3">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                      2. Housing &amp; Experience
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Housing Type *
+                        </label>
+                        <select
+                          ref={housingSelectRef}
+                          name="housingType"
+                          value={applicationForm.housingType}
+                          onChange={handleInputChange}
+                          className={`w-full p-2.5 bg-white border rounded-xl text-base sm:text-xs ${
+                            fieldErrors.housingType ? 'border-rose-500' : 'border-slate-200'
+                          }`}
+                        >
+                          <option value="Owned House">Owned House</option>
+                          <option value="Rented House">Rented House (Pet-Friendly)</option>
+                          <option value="Condo or Apartment">Condo / Apartment</option>
+                        </select>
+                        {fieldErrors.housingType && (
+                          <p className="text-[11px] text-rose-600 mt-1">{fieldErrors.housingType}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Pet Experience
+                        </label>
+                        <select
+                          name="experience"
+                          value={applicationForm.experience}
+                          onChange={handleInputChange}
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-base sm:text-xs"
+                        >
+                          <option value="Beginner">First-time caregiver</option>
+                          <option value="Intermediate">Owned 1–2 pets previously</option>
+                          <option value="Expert">Experienced multi-pet caregiver</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <label className="flex items-start gap-2.5 cursor-pointer bg-white p-3 rounded-xl border border-slate-200">
+                        <input
+                          type="checkbox"
+                          name="hasSecureFence"
+                          checked={applicationForm.hasSecureFence}
+                          onChange={handleInputChange}
+                          className="w-4 h-4 accent-[#5C0612] rounded mt-0.5 shrink-0"
+                        />
+                        <div>
+                          <span className="font-semibold text-slate-800 block text-xs">Fenced Yard</span>
+                          <span className="text-[11px] text-slate-500">Home has secure perimeter fencing</span>
+                        </div>
+                      </label>
+
+                      <label
+                        className={`flex items-start gap-2.5 cursor-pointer bg-white p-3 rounded-xl border ${
+                          fieldErrors.householdAgreement ? 'border-rose-500 bg-rose-50/30' : 'border-slate-200'
+                        }`}
+                      >
+                        <input
+                          ref={agreementInputRef}
+                          type="checkbox"
+                          name="householdAgreement"
+                          checked={applicationForm.householdAgreement}
+                          onChange={handleInputChange}
+                          className="w-4 h-4 accent-[#5C0612] rounded mt-0.5 shrink-0"
+                        />
+                        <div>
+                          <span className="font-semibold text-slate-800 block text-xs">
+                            Household Agreement *
+                          </span>
+                          <span className="text-[11px] text-slate-500">All household members agree to adopt</span>
+                        </div>
+                      </label>
+                    </div>
+                    {fieldErrors.householdAgreement && (
+                      <p className="text-[11px] text-rose-600">{fieldErrors.householdAgreement}</p>
+                    )}
+                  </div>
+
+                  {/* Section 3 */}
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/70 space-y-3">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                      3. Care Budget &amp; Relocation Plan
+                    </span>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Monthly Care &amp; Vet Budget
+                      </label>
+                      <select
+                        name="petCareBudget"
+                        value={applicationForm.petCareBudget}
                         onChange={handleInputChange}
-                        placeholder="e.g. Maria Santos"
-                        className={`w-full px-3 py-2 border border-slate-200 rounded-xl text-slate-700 font-semibold text-xs focus:outline-none ${
-                          verifiedFullName ? 'bg-slate-100 cursor-not-allowed select-none' : 'bg-white focus:ring-2 focus:ring-[#5C0612]/20'
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-base sm:text-xs"
+                      >
+                        <option value="Basic (Under PHP 2,000)">Under PHP 2,000 / month</option>
+                        <option value="Moderate (PHP 2,000 - 5,000)">PHP 2,000 – 5,000 / month</option>
+                        <option value="Premium (Above PHP 5,000)">Above PHP 5,000 / month</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Plan if You Relocate or Graduate *
+                      </label>
+                      <textarea
+                        ref={planInputRef}
+                        name="planIfMoving"
+                        rows="2"
+                        value={applicationForm.planIfMoving}
+                        onChange={handleInputChange}
+                        placeholder="Describe how you will continue caring for your pet if you move..."
+                        className={`w-full p-3 border rounded-xl text-base sm:text-xs leading-relaxed ${
+                          fieldErrors.planIfMoving ? 'border-rose-500 bg-rose-50/40' : 'bg-white border-slate-200'
                         }`}
                       />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Institutional Email</label>
-                      <input
-                        type="email"
-                        name="email"
-                        readOnly
-                        value={applicationForm.email}
-                        className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 cursor-not-allowed select-none"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Phone / Contact Number *</label>
-                      <input
-                        type="text"
-                        name="contactNum"
-                        required
-                        value={applicationForm.contactNum}
-                        onChange={handleInputChange}
-                        placeholder="09XXXXXXXXX"
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-[#5C0612]/20"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Residential Address *</label>
-                      <input
-                        type="text"
-                        name="address"
-                        required
-                        value={applicationForm.address}
-                        onChange={handleInputChange}
-                        placeholder="Cebu City, Cebu"
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#5C0612]/20"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 2 */}
-                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/60 space-y-2.5">
-                  <span className="text-[10px] font-bold text-slate-400 font-mono uppercase tracking-wider block">
-                    2. Housing & Experience
-                  </span>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Housing Type</label>
-                      <select
-                        name="housingType"
-                        value={applicationForm.housingType}
-                        onChange={handleInputChange}
-                        className="w-full p-2 bg-white border border-slate-200 rounded-xl focus:outline-none"
-                      >
-                        <option value="Owned House">Owned Residential House</option>
-                        <option value="Rented House">Rented House (Landlord Permitted)</option>
-                        <option value="Condo or Apartment">Condo / Apartment</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Pet Ownership Experience</label>
-                      <select
-                        name="experience"
-                        value={applicationForm.experience}
-                        onChange={handleInputChange}
-                        className="w-full p-2 bg-white border border-slate-200 rounded-xl focus:outline-none"
-                      >
-                        <option value="Beginner">First-time Pet Caretaker</option>
-                        <option value="Intermediate">Owned 1-2 pets previously</option>
-                        <option value="Expert">Experienced Multi-Pet Caregiver</option>
-                      </select>
+                      {fieldErrors.planIfMoving && (
+                        <p className="text-[11px] text-rose-600 mt-1">{fieldErrors.planIfMoving}</p>
+                      )}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <label className="flex items-start gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="hasSecureFence"
-                        checked={applicationForm.hasSecureFence}
-                        onChange={handleInputChange}
-                        className="w-4 h-4 accent-[#5C0612] rounded mt-0.5"
-                      />
-                      <div>
-                        <span className="font-bold text-slate-800 block text-xs">Fenced Perimeter</span>
-                        <span className="text-[10px] text-slate-400 block font-normal">Home has secure boundary fencing</span>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="householdAgreement"
-                        checked={applicationForm.householdAgreement}
-                        onChange={handleInputChange}
-                        className="w-4 h-4 accent-[#5C0612] rounded mt-0.5"
-                      />
-                      <div>
-                        <span className="font-bold text-slate-800 block text-xs">Household Agreement</span>
-                        <span className="text-[10px] text-slate-400 block font-normal">All family/housemates agree to adopt</span>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Section 3 */}
-                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/60 space-y-2.5">
-                  <span className="text-[10px] font-bold text-slate-400 font-mono uppercase tracking-wider block">
-                    3. Care Budget & Relocation Plan
-                  </span>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Monthly Care & Veterinary Budget *</label>
-                    <select
-                      name="petCareBudget"
-                      value={applicationForm.petCareBudget}
-                      onChange={handleInputChange}
-                      className="w-full p-2 bg-white border border-slate-200 rounded-xl focus:outline-none"
+                  <div className="flex gap-2.5 pt-1">
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => setShowApplyForm(false)}
+                      className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs"
                     >
-                      <option value="Basic (Under PHP 2,000)">Basic Tier (Under PHP 2,000 / month)</option>
-                      <option value="Moderate (PHP 2,000 - 5,000)">Moderate Tier (PHP 2,000 - 5,000 / month)</option>
-                      <option value="Premium (Above PHP 5,000)">Comprehensive Tier (Above PHP 5,000 / month)</option>
-                    </select>
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex-1 py-2.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-50 text-white font-semibold border-b-2 border-[#D4AF37] rounded-xl shadow-sm text-xs"
+                    >
+                      {isSubmitting ? 'Submitting...' : 'Submit Application'}
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Plan if You Relocate / Move *</label>
-                    <textarea
-                      name="planIfMoving"
-                      required
-                      rows="2"
-                      value={applicationForm.planIfMoving}
-                      onChange={handleInputChange}
-                      placeholder="Explain your plans to keep and accommodate your pet if you move to a new home..."
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none text-slate-800 leading-relaxed font-sans"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2.5 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowApplyForm(false)}
-                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl uppercase tracking-wider text-xs transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="flex-1 py-2.5 bg-[#5C0612] hover:bg-[#720817] disabled:opacity-50 text-white font-bold border-b-2 border-[#D4AF37] rounded-xl shadow-md uppercase tracking-wider text-xs transition-all"
-                  >
-                    {isSubmitting ? 'Submitting...' : 'Submit Application'}
-                  </button>
-                </div>
-              </form>
-            )}
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* WITHDRAW APPLICATION CONFIRMATION MODAL */}
+      {/* Withdraw Confirmation Modal */}
       {cancelModal.isOpen && (
-        <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in text-left">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 text-center space-y-4">
-            <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto border border-rose-100 text-rose-600">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-              </svg>
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() =>
+            !cancelModal.submitting && setCancelModal({ isOpen: false, appId: null, submitting: false })
+          }
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in text-left"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 text-center space-y-4 animate-scale-up"
+          >
+            <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 text-rose-600">
+              <AlertTriangle className="w-6 h-6" />
             </div>
-            
             <div>
               <h3 className="text-base font-bold text-slate-900">Withdraw Application</h3>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                 Are you sure you want to withdraw this adoption request? This action cannot be undone.
               </p>
             </div>
-
-            <div className="flex gap-2 pt-2">
-              <button 
-                type="button" 
-                onClick={() => setCancelModal({ isOpen: false, appId: null })} 
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all"
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                disabled={cancelModal.submitting}
+                onClick={() => setCancelModal({ isOpen: false, appId: null, submitting: false })}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs"
               >
-                Keep Application
+                Keep
               </button>
-              <button 
-                type="button" 
-                onClick={confirmCancelApplication} 
-                className="flex-1 py-2.5 bg-[#5C0612] hover:bg-[#720817] text-white font-semibold rounded-xl transition-all shadow-md text-xs border-b border-[#D4AF37]/40"
+              <button
+                type="button"
+                disabled={cancelModal.submitting}
+                onClick={confirmCancelApplication}
+                className="flex-1 py-2.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-50 text-white font-semibold rounded-xl text-xs"
               >
-                Withdraw
+                {cancelModal.submitting ? 'Withdrawing...' : 'Withdraw'}
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }

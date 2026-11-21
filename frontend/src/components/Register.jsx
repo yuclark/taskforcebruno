@@ -1,31 +1,45 @@
 import { useState } from 'react';
-import { ShieldCheck, PawPrint, BellRing } from 'lucide-react';
+import { ShieldCheck, PawPrint, BellRing, Eye, EyeOff, Check } from 'lucide-react';
+import { apiPost } from '../lib/api';
+import { EMAIL_PATTERN, ID_PATTERN, formatStudentIdInput } from '../lib/auth';
 
-export default function Register({ togglePage }) {
-  const [formData, setFormData] = useState({ id: '', first_name: '', last_name: '', email: '', password: '' });
+export default function Register({ togglePage, onRegisterSuccess }) {
+  const [formData, setFormData] = useState({
+    id: '',
+    first_name: '',
+    last_name: '',
+    email: '',
+    password: '',
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
 
   const handleIdChange = (e) => {
-    let value = e.target.value.replace(/\D/g, ''); 
-    if (value.length > 9) value = value.slice(0, 9); 
-    
-    let formatted = '';
-    if (value.length > 0) formatted += value.substring(0, 2);
-    if (value.length > 2) formatted += '-' + value.substring(2, 6);
-    if (value.length > 6) formatted += '-' + value.substring(6, 9);
-    
-    setFormData({ ...formData, id: formatted });
+    setFormData((prev) => ({ ...prev, id: formatStudentIdInput(e.target.value) }));
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const [isLoading, setIsLoading] = useState(false);
+  const handleInputFocus = (e) => {
+    if (window.innerWidth < 768 && typeof e.target.scrollIntoView === 'function') {
+      setTimeout(() => {
+        e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+    }
+  };
+
+  const hasMinLen = formData.password.length >= 8;
+  const hasLetter = /[A-Za-z]/.test(formData.password);
+  const hasDigit = /\d/.test(formData.password);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage({ type: '', text: '' });
+    setNeedsEmailConfirm(false);
 
     const emailClean = (formData.email || '').trim().toLowerCase();
     const idClean = (formData.id || '').trim();
@@ -34,70 +48,91 @@ export default function Register({ togglePage }) {
     const passwordClean = formData.password || '';
 
     if (!firstNameClean || !lastNameClean) {
-      setMessage({ type: 'error', text: 'Both First Name and Last Name are required.' });
+      setMessage({ type: 'error', text: 'Both first name and last name are required.' });
       return;
     }
 
-    if (!idClean || !/^\d{2}-\d{4}-\d{3}$/.test(idClean)) {
-      setMessage({ type: 'error', text: 'Institutional ID format mismatch. Must be XX-XXXX-XXX.' });
+    if (!idClean || !ID_PATTERN.test(idClean)) {
+      setMessage({ type: 'error', text: 'Student or employee ID must follow the format XX-XXXX-XXX.' });
       return;
     }
 
-    if (!emailClean.endsWith('@cit.edu')) {
-      setMessage({ type: 'error', text: 'Registration requires an active CIT-U email address ending in @cit.edu' });
+    if (!EMAIL_PATTERN.test(emailClean)) {
+      setMessage({
+        type: 'error',
+        text: 'Registration is restricted to authorized @cit.edu institutional accounts.',
+      });
       return;
     }
 
-    if (passwordClean.length < 6) {
-      setMessage({ type: 'error', text: 'Password must contain at least 6 characters.' });
+    if (!hasMinLen || !hasLetter || !hasDigit) {
+      setMessage({
+        type: 'error',
+        text: 'Password must be at least 8 characters and include both letters and numbers.',
+      });
       return;
     }
 
     setIsLoading(true);
     try {
-      const res = await fetch('https://taskforcebruno.onrender.com/api/register/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const res = await apiPost(
+        '/register/',
+        {
           id: idClean,
           first_name: firstNameClean,
           last_name: lastNameClean,
           email: emailClean,
-          password: passwordClean
-        }),
-      });
-      const data = await res.json();
+          password: passwordClean,
+        },
+        { auth: false }
+      );
+
       if (res.ok) {
         try {
-          localStorage.setItem(`tfb_user_profile_${emailClean}`, JSON.stringify({
-            id: idClean,
-            student_id: idClean,
-            custom_id: idClean,
-            first_name: firstNameClean,
-            last_name: lastNameClean,
-            full_name: `${firstNameClean} ${lastNameClean}`.trim(),
-            email: emailClean
-          }));
+          localStorage.setItem(
+            `tfb_user_profile_${emailClean}`,
+            JSON.stringify({
+              id: idClean,
+              student_id: idClean,
+              custom_id: idClean,
+              first_name: firstNameClean,
+              last_name: lastNameClean,
+              full_name: `${firstNameClean} ${lastNameClean}`.trim(),
+              email: emailClean,
+            })
+          );
         } catch {
           // Ignore storage quota errors
         }
-        setMessage({ type: 'success', text: data.message || 'Account initialized successfully! You may now sign in.' });
+
+        if (res.data?.session && onRegisterSuccess) {
+          onRegisterSuccess(res.data.session, res.data.message || `Welcome, ${firstNameClean}!`);
+          return;
+        }
+
+        setNeedsEmailConfirm(true);
+        setMessage({
+          type: 'success',
+          text:
+            res.data?.message ||
+            'Account created successfully! Please check your @cit.edu inbox to verify your email before signing in.',
+        });
         setFormData({ id: '', first_name: '', last_name: '', email: '', password: '' });
       } else {
-        setMessage({ type: 'error', text: data.error || 'Account creation failed. Please check inputs.' });
+        setMessage({
+          type: 'error',
+          text: res.error || 'Could not create your account. Please review your details.',
+        });
       }
-    } catch {
-      setMessage({ type: 'error', text: 'Connection error: Unable to reach registration server. Please check your internet.' });
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row-reverse bg-white text-slate-800">
-      {/* Right Mirrored Branding Column */}
-      <div className="hidden md:flex md:w-1/2 bg-gradient-to-bl from-[#6D0A19] via-[#5C0612] to-[#38030A] p-12 lg:p-16 flex-col justify-between relative overflow-hidden border-l-4 border-[#D4AF37]">
-        {/* Subtle Ambient Radial Glow */}
+    <div className="min-h-dvh flex flex-col md:flex-row-reverse bg-slate-50 text-slate-800">
+      {/* Desktop Right Branding Column */}
+      <div className="hidden md:flex md:w-1/2 bg-gradient-to-bl from-[#6D0A19] via-[#5C0612] to-[#38030A] p-10 lg:p-16 flex-col justify-between relative overflow-hidden border-l-4 border-[#D4AF37]">
         <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#D4AF37]/10 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-32 -left-24 w-96 h-96 rounded-full bg-black/30 blur-3xl pointer-events-none" />
 
@@ -112,7 +147,7 @@ export default function Register({ togglePage }) {
           <div className="flex items-center gap-4">
             <img
               src="/logo.png"
-              alt="Wildcat Welfare Portal - Task Force Bruno Logo"
+              alt="Wildcat Welfare Portal Logo"
               className="w-24 h-24 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.4)] select-none shrink-0"
             />
             <div>
@@ -129,13 +164,13 @@ export default function Register({ togglePage }) {
             Create your verified <strong className="text-white">@cit.edu</strong> account to help care for campus pets, report sightings, and apply for adoption.
           </p>
 
-          <div className="space-y-3 pt-2 border-t border-white/10">
+          <div className="space-y-3 pt-3 border-t border-white/10">
             <div className="flex items-center gap-3 text-xs text-stone-200">
               <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[#D4AF37] shrink-0">
                 <ShieldCheck className="w-4 h-4" />
               </div>
               <div>
-                <span className="font-semibold text-white block">Verified Institutional Access</span>
+                <span className="font-semibold text-white block">Verified Campus Access</span>
                 <span className="text-stone-300/80 text-[11px]">Exclusive to CIT-U students, faculty, and staff</span>
               </div>
             </div>
@@ -162,105 +197,205 @@ export default function Register({ togglePage }) {
           </div>
         </div>
 
-        <div className="relative z-10 text-[11px] text-stone-300/70 tracking-wide text-right">
+        <div className="relative z-10 text-[11px] text-stone-300/75 tracking-wide text-right">
           CIT-U Medical-Dental Clinic &bull; Task Force Bruno
         </div>
       </div>
 
-      {/* Main Interactive Account Creation Panel */}
-      <div className="flex-1 flex items-center justify-center p-8 md:p-12 bg-slate-50">
-        <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl shadow-slate-100 border border-slate-100">
+      {/* Mobile Compact Maroon Top Bar */}
+      <div className="md:hidden bg-gradient-to-r from-[#6D0A19] to-[#4A050F] text-white px-5 py-4 border-b-2 border-[#D4AF37] flex items-center gap-3">
+        <img
+          src="/logo.png"
+          alt="Wildcat Welfare Portal Logo"
+          className="w-11 h-11 object-contain drop-shadow-md select-none shrink-0"
+        />
+        <div className="min-w-0">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#D4AF37] block">
+            CIT-U Wildcat Welfare Portal
+          </span>
+          <h1 className="text-lg font-extrabold tracking-tight leading-tight">
+            Create Your Account
+          </h1>
+        </div>
+      </div>
+
+      {/* Registration Form Column */}
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-8 md:p-12 pb-12">
+        <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-lg shadow-slate-200/70 border border-slate-200/80">
           <div className="mb-6">
-            <div className="flex items-center gap-3 mb-4">
-              <img
-                src="/logo.png"
-                alt="Wildcat Welfare Portal Logo"
-                className="w-12 h-12 object-contain drop-shadow-md select-none shrink-0"
-              />
-              <div className="md:hidden">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#D4AF37] block">CIT-U Task Force Bruno</span>
-                <span className="text-sm font-black text-[#5C0612] tracking-tight">Wildcat Welfare Portal</span>
-              </div>
-            </div>
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Identity Initialization</h2>
-            <p className="text-xs text-slate-500 mt-1">Provide records to verify institutional placement.</p>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Create an Account</h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Register with your CIT-U student or employee details to get started.
+            </p>
           </div>
 
           {message.text && (
-            <div className={`p-3 rounded-xl text-xs mb-5 font-medium border ${
-              message.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'
-            }`}>
-              {message.text}
+            <div
+              role="alert"
+              className={`p-3.5 rounded-xl text-xs mb-5 font-medium border space-y-2 ${
+                message.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-rose-50 text-rose-800 border-rose-200'
+              }`}
+            >
+              <p>{message.text}</p>
+              {needsEmailConfirm && (
+                <button
+                  type="button"
+                  onClick={togglePage}
+                  className="inline-flex items-center px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-semibold transition-colors"
+                >
+                  Go to Sign In
+                </button>
+              )}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">First Name</label>
-                <input 
-                  type="text" name="first_name" value={formData.first_name} onChange={handleChange} required
+                <label htmlFor="reg-first" className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  First Name
+                </label>
+                <input
+                  id="reg-first"
+                  type="text"
+                  name="first_name"
+                  autoComplete="given-name"
+                  value={formData.first_name}
+                  onChange={handleChange}
+                  onFocus={handleInputFocus}
+                  required
                   placeholder="Juan"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#5C0612] text-sm bg-slate-50/50"
+                  disabled={isLoading}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#5C0612]/25 focus:border-[#5C0612] text-base sm:text-sm bg-slate-50/60 focus:bg-white"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Last Name</label>
-                <input 
-                  type="text" name="last_name" value={formData.last_name} onChange={handleChange} required
+                <label htmlFor="reg-last" className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Last Name
+                </label>
+                <input
+                  id="reg-last"
+                  type="text"
+                  name="last_name"
+                  autoComplete="family-name"
+                  value={formData.last_name}
+                  onChange={handleChange}
+                  onFocus={handleInputFocus}
+                  required
                   placeholder="Dela Cruz"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#5C0612] text-sm bg-slate-50/50"
+                  disabled={isLoading}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#5C0612]/25 focus:border-[#5C0612] text-base sm:text-sm bg-slate-50/60 focus:bg-white"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Institutional ID String</label>
-              <input 
-                type="text" name="id" value={formData.id} onChange={handleIdChange} required
-                placeholder="12-3456-789"
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#5C0612] font-mono text-sm bg-slate-50/50 tracking-widest"
+              <label htmlFor="reg-id" className="block text-[11px] font-semibold text-slate-700 mb-1">
+                Student / Employee ID
+              </label>
+              <input
+                id="reg-id"
+                type="text"
+                name="id"
+                inputMode="numeric"
+                value={formData.id}
+                onChange={handleIdChange}
+                onFocus={handleInputFocus}
+                required
+                placeholder="22-1234-567"
+                disabled={isLoading}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#5C0612]/25 focus:border-[#5C0612] font-mono text-base sm:text-sm bg-slate-50/60 focus:bg-white tracking-wider"
+              />
+              <span className="text-[11px] text-slate-400 mt-1 block">Format: XX-XXXX-XXX</span>
+            </div>
+
+            <div>
+              <label htmlFor="reg-email" className="block text-[11px] font-semibold text-slate-700 mb-1">
+                Institutional Email
+              </label>
+              <input
+                id="reg-email"
+                type="email"
+                name="email"
+                autoComplete="email"
+                value={formData.email}
+                onChange={handleChange}
+                onFocus={handleInputFocus}
+                required
+                placeholder="juan.delacruz@cit.edu"
+                disabled={isLoading}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#5C0612]/25 focus:border-[#5C0612] text-base sm:text-sm bg-slate-50/60 focus:bg-white"
               />
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">CIT Domain Email</label>
-              <input 
-                type="email" name="email" value={formData.email} onChange={handleChange} required
-                placeholder="juandela.cruz@cit.edu"
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#5C0612] text-sm bg-slate-50/50"
-              />
+              <label htmlFor="reg-password" className="block text-[11px] font-semibold text-slate-700 mb-1">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  id="reg-password"
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  autoComplete="new-password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  onFocus={handleInputFocus}
+                  required
+                  placeholder="Create a strong password"
+                  disabled={isLoading}
+                  className="w-full pl-3.5 pr-11 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#5C0612]/25 focus:border-[#5C0612] text-base sm:text-sm bg-slate-50/60 focus:bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[11px]">
+                <span className={`inline-flex items-center gap-1 ${hasMinLen ? 'text-emerald-700 font-medium' : 'text-slate-400'}`}>
+                  <Check className="w-3 h-3" /> 8+ characters
+                </span>
+                <span className={`inline-flex items-center gap-1 ${hasLetter ? 'text-emerald-700 font-medium' : 'text-slate-400'}`}>
+                  <Check className="w-3 h-3" /> Letter
+                </span>
+                <span className={`inline-flex items-center gap-1 ${hasDigit ? 'text-emerald-700 font-medium' : 'text-slate-400'}`}>
+                  <Check className="w-3 h-3" /> Number
+                </span>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Password Assignment</label>
-              <input 
-                type="password" name="password" value={formData.password} onChange={handleChange} required
-                placeholder="••••••••"
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#5C0612] text-sm bg-slate-50/50"
-              />
-            </div>
-
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={isLoading}
-              className="w-full py-3 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-60 text-white font-medium rounded-xl tracking-wider text-xs shadow-md transition-colors border-b-4 border-[#D4AF37] mt-2 flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-60 text-white font-semibold rounded-xl text-sm shadow-md transition-colors border-b-4 border-[#D4AF37] mt-2 flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>
-                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>INITIALIZING ACCOUNT...</span>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Creating account...</span>
                 </>
               ) : (
-                <span>SUBMIT SYSTEM REGISTRATION</span>
+                <span>Create Account</span>
               )}
             </button>
           </form>
 
           <div className="text-center mt-6 pt-4 border-t border-slate-100">
             <p className="text-xs text-slate-500">
-              Already possess an authenticated token?{" "}
-              <button onClick={togglePage} className="text-[#5C0612] font-semibold hover:underline focus:outline-none">Sign In</button>
+              Already have an account?{' '}
+              <button
+                type="button"
+                onClick={togglePage}
+                className="text-[#5C0612] font-semibold hover:underline"
+              >
+                Sign In
+              </button>
             </p>
           </div>
         </div>
