@@ -1,13 +1,19 @@
-export const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || 'https://taskforcebruno.onrender.com/api'
-).replace(/\/+$/, '');
+function resolveApiBaseUrl(rawUrl) {
+  const cleaned = String(rawUrl || 'https://taskforcebruno.onrender.com/api')
+    .trim()
+    .replace(/\/+$/, '');
+  if (!cleaned) return 'https://taskforcebruno.onrender.com/api';
+  return cleaned.endsWith('/api') ? cleaned : `${cleaned}/api`;
+}
+
+export const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 export const PUBLIC_APP_URL = (
   import.meta.env.VITE_PUBLIC_APP_URL ||
   (typeof window !== 'undefined' ? window.location.origin : 'https://taskforcebruno.vercel.app')
 ).replace(/\/+$/, '');
 
-const DEFAULT_TIMEOUT_MS = 25000;
+const DEFAULT_TIMEOUT_MS = 45000;
 
 export const UNAUTHORIZED_EVENT = 'tfb:unauthorized';
 
@@ -22,18 +28,29 @@ function getStoredAccessToken() {
   }
 }
 
-export function extractErrorMessage(data, fallback = 'Request failed. Please try again.') {
-  if (!data || typeof data !== 'object') return fallback;
-  if (typeof data.error === 'string' && data.error.trim()) return data.error.trim();
-  if (typeof data.detail === 'string' && data.detail.trim()) return data.detail.trim();
+export function extractErrorMessage(data, fallback = 'Request failed. Please try again.', statusCode = 0) {
+  if (data && typeof data === 'object') {
+    if (typeof data.error === 'string' && data.error.trim()) return data.error.trim();
+    if (typeof data.detail === 'string' && data.detail.trim()) return data.detail.trim();
 
-  for (const val of Object.values(data)) {
-    if (Array.isArray(val) && typeof val[0] === 'string' && val[0].trim()) {
-      return val[0].trim();
+    for (const val of Object.values(data)) {
+      if (Array.isArray(val) && typeof val[0] === 'string' && val[0].trim()) {
+        return val[0].trim();
+      }
+      if (typeof val === 'string' && val.trim()) {
+        return val.trim();
+      }
     }
-    if (typeof val === 'string' && val.trim()) {
-      return val.trim();
-    }
+  }
+
+  if (statusCode === 502 || statusCode === 503 || statusCode === 504) {
+    return 'The server is temporarily restarting or waking up. Please try again in a few seconds.';
+  }
+  if (statusCode === 429) {
+    return 'Too many attempts. Please wait a minute and try again.';
+  }
+  if (statusCode >= 500) {
+    return 'An unexpected server error occurred. Please try again shortly.';
   }
   return fallback;
 }
@@ -109,7 +126,7 @@ export async function apiRequest(path, options = {}) {
       ok: response.ok,
       status: response.status,
       data,
-      error: response.ok ? '' : extractErrorMessage(data),
+      error: response.ok ? '' : extractErrorMessage(data, 'Request failed. Please try again.', response.status),
     };
   } catch (err) {
     if (err?.name === 'AbortError') {
