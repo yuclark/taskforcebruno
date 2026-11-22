@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
-  AlertTriangle,
+  Archive,
   ChevronRight,
   Download,
   Edit3,
   Printer,
   QrCode,
+  RotateCcw,
   RotateCw,
   Search,
   Trash2,
   X,
 } from 'lucide-react';
-import { PUBLIC_APP_URL, apiDelete, apiGet, apiPut } from '../lib/api';
+import { PUBLIC_APP_URL, apiDelete, apiGet, apiPost, apiPut } from '../lib/api';
 import {
   CAMPUS_LOCATIONS,
   DEFAULT_PET_IMAGE,
@@ -32,6 +33,8 @@ export default function PetListings({
   loadError = '',
   onRefresh,
   readOnly = false,
+  includeArchived = false,
+  onToggleArchived,
 }) {
   const [expandedPetId, setExpandedPetId] = useState(null);
   const [expandedPetData, setExpandedPetData] = useState(null);
@@ -189,20 +192,34 @@ export default function PetListings({
     setSavingEdit(false);
   };
 
-  const handleDeletePet = async () => {
+  const handleDeletePet = async (permanent = false) => {
     if (readOnly || !petIdToDelete || deletingPet) return;
     setErrorMessage('');
     setDeletingPet(true);
 
-    const res = await apiDelete(`/pets/${encodeURIComponent(petIdToDelete)}/`);
+    const url = permanent
+      ? `/pets/${encodeURIComponent(petIdToDelete)}/?permanent=true`
+      : `/pets/${encodeURIComponent(petIdToDelete)}/`;
+    const res = await apiDelete(url);
     if (res.ok) {
       setPetIdToDelete(null);
       setExpandedPetId(null);
       if (onRefresh) onRefresh();
     } else {
-      setErrorMessage(res.error || 'Failed to delete animal profile.');
+      setErrorMessage(res.error || 'Failed to archive animal profile.');
     }
     setDeletingPet(false);
+  };
+
+  const handleRestorePet = async (petId) => {
+    if (readOnly || !petId) return;
+    setErrorMessage('');
+    const res = await apiPost(`/pets/${encodeURIComponent(petId)}/restore/`, {});
+    if (res.ok) {
+      if (onRefresh) onRefresh();
+    } else {
+      setErrorMessage(res.error || 'Failed to restore animal profile.');
+    }
   };
 
   const requestSortAction = (columnKey) => {
@@ -713,14 +730,25 @@ export default function PetListings({
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Edit</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setPetIdToDelete(pet.pet_id)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-semibold text-xs transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete</span>
-              </button>
+              {pet.archived_at ? (
+                <button
+                  type="button"
+                  onClick={() => handleRestorePet(pet.pet_id)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl font-semibold text-xs transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restore Profile</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setPetIdToDelete(pet.pet_id)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl font-semibold text-xs transition-colors"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                  <span>Archive</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -958,6 +986,21 @@ export default function PetListings({
             ))}
           </div>
 
+          {!readOnly && onToggleArchived && (
+            <button
+              type="button"
+              onClick={() => onToggleArchived(!includeArchived)}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 border rounded-xl text-xs font-semibold transition-colors ${
+                includeArchived
+                  ? 'bg-amber-50 border-amber-300 text-amber-900'
+                  : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'
+              }`}
+            >
+              <Archive className="w-3.5 h-3.5" />
+              <span>{includeArchived ? 'Showing Archived' : 'Archived'}</span>
+            </button>
+          )}
+
           {onRefresh && (
             <button
               type="button"
@@ -1181,7 +1224,7 @@ export default function PetListings({
         </div>
       )}
 
-      {/* Delete Pet Confirmation Modal */}
+      {/* Archive / Delete Pet Confirmation Modal */}
       {petIdToDelete && (
         <div
           role="dialog"
@@ -1193,14 +1236,13 @@ export default function PetListings({
             onClick={(e) => e.stopPropagation()}
             className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-sm w-full p-6 text-center animate-scale-up space-y-3"
           >
-            <div className="w-12 h-12 bg-rose-50 border border-rose-200 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-6 h-6" />
+            <div className="w-12 h-12 bg-amber-50 border border-amber-200 text-amber-700 rounded-2xl flex items-center justify-center mx-auto">
+              <Archive className="w-6 h-6" />
             </div>
-            <h3 className="font-bold text-slate-900 text-base">Delete Animal Profile</h3>
+            <h3 className="font-bold text-slate-900 text-base">Archive Animal Profile</h3>
             <p className="text-slate-500 text-xs leading-relaxed">
-              Are you sure you want to permanently delete{' '}
-              <strong className="text-slate-800">#{petIdToDelete}</strong>? This will also remove its
-              medical records, vaccination logs, adoption applications, and feed interactions.
+              Archiving <strong className="text-slate-800">#{petIdToDelete}</strong> hides it from the
+              public directory while preserving its RA 9482 medical &amp; vaccination audit trail. You can restore it anytime.
             </p>
             <div className="flex gap-2.5 pt-2">
               <button
@@ -1214,12 +1256,21 @@ export default function PetListings({
               <button
                 type="button"
                 disabled={deletingPet}
-                onClick={handleDeletePet}
-                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-semibold rounded-xl text-xs shadow-sm"
+                onClick={() => handleDeletePet(false)}
+                className="flex-1 py-2.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-50 text-white font-semibold rounded-xl text-xs shadow-sm"
               >
-                {deletingPet ? 'Deleting...' : 'Delete Permanently'}
+                {deletingPet ? 'Archiving...' : 'Archive Profile'}
               </button>
             </div>
+            <button
+              type="button"
+              disabled={deletingPet}
+              onClick={() => handleDeletePet(true)}
+              className="w-full pt-1 text-[11px] font-semibold text-rose-600 hover:underline disabled:opacity-50 inline-flex items-center justify-center gap-1"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Or permanently delete (erases clinical history)</span>
+            </button>
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
 import logging
 import re
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -105,7 +105,30 @@ def _upload_image_to_bucket(image_file, bucket: str, prefix: str) -> str:
     return db.storage.from_(bucket).get_public_url(storage_filename)
 
 
-def _build_session_payload(access_token: str, supa_user, profile_rec: dict | None = None) -> dict:
+def _parse_pagination_params(request, default_limit: int = 0, max_limit: int = 200):
+    raw_limit = request.query_params.get("limit")
+    raw_offset = request.query_params.get("offset")
+    limit = default_limit
+    offset = 0
+    if raw_limit is not None:
+        try:
+            limit = max(1, min(int(raw_limit), max_limit))
+        except (ValueError, TypeError):
+            limit = default_limit
+    if raw_offset is not None:
+        try:
+            offset = max(0, int(raw_offset))
+        except (ValueError, TypeError):
+            offset = 0
+    return limit, offset
+
+
+def _build_session_payload(
+    access_token: str,
+    supa_user,
+    profile_rec: dict | None = None,
+    refresh_token: str | None = None,
+) -> dict:
     user_meta = getattr(supa_user, "user_metadata", None) or {}
     app_meta = getattr(supa_user, "app_metadata", None) or {}
     profile = profile_rec or {}
@@ -131,7 +154,7 @@ def _build_session_payload(access_token: str, supa_user, profile_rec: dict | Non
     is_staff = resolve_is_staff(role, email)
     resolved_role = role or ("staff" if is_staff else "user")
 
-    return {
+    payload = {
         "access_token": access_token,
         "role": resolved_role,
         "is_staff": is_staff,
@@ -142,6 +165,9 @@ def _build_session_payload(access_token: str, supa_user, profile_rec: dict | Non
         "custom_id": custom_id,
         "student_id": custom_id,
     }
+    if refresh_token:
+        payload["refresh_token"] = refresh_token
+    return payload
 
 
 # =====================================================================
@@ -215,9 +241,13 @@ class RegisterUserView(APIView):
                 logger.warning("Profile upsert failed after signup for %s: %s", email, exc)
 
             # Automatically issue session when Supabase returns an active access token
-            access_token = getattr(getattr(auth_response, "session", None), "access_token", None)
+            supa_session = getattr(auth_response, "session", None)
+            access_token = getattr(supa_session, "access_token", None)
+            refresh_token = getattr(supa_session, "refresh_token", None)
             if access_token:
-                session_payload = _build_session_payload(access_token, auth_response.user, profile_payload)
+                session_payload = _build_session_payload(
+                    access_token, auth_response.user, profile_payload, refresh_token=refresh_token
+                )
                 return Response(
                     {
                         "message": f"Welcome, {first_name}! Your account has been created.",
@@ -276,7 +306,9 @@ class LoginView(APIView):
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
 
-            access_token = getattr(getattr(response, "session", None), "access_token", None)
+            supa_session = getattr(response, "session", None)
+            access_token = getattr(supa_session, "access_token", None)
+            refresh_token = getattr(supa_session, "refresh_token", None)
             if not access_token:
                 return Response(
                     {"error": "Please confirm your institutional email before signing in."},
@@ -293,7 +325,9 @@ class LoginView(APIView):
             except Exception as exc:
                 logger.warning("Profile lookup during login failed for %s: %s", email, exc)
 
-            session_payload = _build_session_payload(access_token, response.user, profile_rec)
+            session_payload = _build_session_payload(
+                access_token, response.user, profile_rec, refresh_token=refresh_token
+            )
             return Response({"session": session_payload}, status=status.HTTP_200_OK)
         except Exception as exc:
             err_str = str(exc).lower()
@@ -346,7 +380,13 @@ class PetListAPIView(APIView):
     def get(self, request):
         try:
             db = get_db_client()
+            include_archived = (
+                bool(getattr(request.user, "is_staff", False))
+                and str(request.query_params.get("include_archived", "")).strip().lower() in ("true", "1", "yes")
+            )
             res_data = db.table("pets").select("*").execute().data or []
+            if not include_archived:
+                res_data = [p for p in res_data if not p.get("archived_at")]
 
             logs_by_pet = {}
             try:
@@ -394,6 +434,9 @@ class PetListAPIView(APIView):
                         pet["status"] = "Active / Campus Resident"
 
             res_data.sort(key=lambda x: str(x.get("created_at") or x.get("rescue_date") or ""), reverse=True)
+            limit, offset = _parse_pagination_params(request)
+            if limit > 0:
+                res_data = res_data[offset: offset + limit]
             return Response(res_data, status=status.HTTP_200_OK)
         except Exception as exc:
             logger.exception("Failed to list pets: %s", exc)
@@ -634,7 +677,31 @@ class PetDetailAPIView(APIView):
     def delete(self, request, pet_id):
         try:
             db = get_db_client()
-            logger.info("Deleting pet %s and dependent records by %s", pet_id, request.user.email)
+            permanent = str(request.query_params.get("permanent", "")).strip().lower() in ("true", "1", "yes")
+
+            if not permanent:
+                logger.info("Soft-archiving pet %s by %s", pet_id, request.user.email)
+                res = (
+                    db.table("pets")
+                    .update({
+                        "archived_at": datetime.now(timezone.utc).isoformat(),
+                        "archived_by": request.user.email,
+                    })
+                    .eq("pet_id", pet_id)
+                    .execute()
+                )
+                if not res.data:
+                    return Response({"error": f'Animal "{pet_id}" not found.'}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {
+                        "message": "Animal profile archived (clinical & RA 9482 history preserved).",
+                        "archived": True,
+                        "pet": res.data[0],
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            logger.info("Permanently deleting pet %s and dependent records by %s", pet_id, request.user.email)
 
             feed_id_token = f"pet_{pet_id}"
             db.table("feed_likes").delete().eq("feed_id", feed_id_token).execute()
@@ -648,11 +715,11 @@ class PetDetailAPIView(APIView):
             if not res.data:
                 return Response({"error": f'Animal "{pet_id}" not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-            return Response({"message": "Animal profile deleted successfully."}, status=status.HTTP_200_OK)
+            return Response({"message": "Animal profile permanently deleted."}, status=status.HTTP_200_OK)
         except Exception as exc:
-            logger.exception("Failed to delete pet %s: %s", pet_id, exc)
+            logger.exception("Failed to delete/archive pet %s: %s", pet_id, exc)
             return Response(
-                {"error": "Unable to delete animal profile."},
+                {"error": "Unable to archive animal profile."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1048,6 +1115,35 @@ class InventoryTransactionAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+            reason_clean = clean_text(d.get("reason"), 300) or "Routine Stock Update"
+            supplier_clean = clean_text(d.get("supplier_donor"), 150) or None
+            logged_by = request.user.email or request.user.full_name or "MDC Staff"
+
+            # Prefer atomic Postgres RPC (locks inventory row with FOR UPDATE)
+            if hasattr(db, "rpc"):
+                try:
+                    rpc_res = db.rpc(
+                        "record_inventory_transaction",
+                        {
+                            "p_item_id": int(item_id),
+                            "p_transaction_type": tx_type or "IN",
+                            "p_quantity_changed": qty_changed,
+                            "p_reason": reason_clean,
+                            "p_supplier_donor": supplier_clean,
+                            "p_logged_by": logged_by,
+                        },
+                    ).execute()
+                    tx_row = rpc_res.data[0] if isinstance(rpc_res.data, list) and rpc_res.data else rpc_res.data
+                    if tx_row:
+                        return Response(tx_row, status=status.HTTP_201_CREATED)
+                except Exception as rpc_err:
+                    err_str = str(rpc_err)
+                    if "exceeds available balance" in err_str.lower() or "greater than zero" in err_str.lower():
+                        return Response({"error": err_str}, status=status.HTTP_400_BAD_REQUEST)
+                    if "not found in inventory" in err_str.lower():
+                        return Response({"error": "Item not found in inventory."}, status=status.HTTP_404_NOT_FOUND)
+                    logger.warning("Atomic inventory RPC fallback triggered: %s", rpc_err)
+
             i_q = db.table("inventory").select("quantity, item_name, unit").eq("item_id", item_id).execute()
             if not i_q.data:
                 return Response({"error": "Item not found in inventory."}, status=status.HTTP_404_NOT_FOUND)
@@ -1073,8 +1169,9 @@ class InventoryTransactionAPIView(APIView):
                 "item_id": item_id,
                 "transaction_type": "OUT" if is_outflow else "IN",
                 "quantity_changed": qty_changed,
-                "reason": clean_text(d.get("reason"), 300) or None,
-                "supplier_donor": clean_text(d.get("supplier_donor"), 150) or None,
+                "reason": reason_clean,
+                "supplier_donor": supplier_clean,
+                "logged_by": logged_by,
             }).execute()
             if not tx.data:
                 return Response({"error": "Failed to record inventory transaction."}, status=status.HTTP_400_BAD_REQUEST)
@@ -1390,6 +1487,8 @@ class AnimalSightingAPIView(APIView):
                 "animal_type": animal_type,
                 "distinct_features": distinct_features,
                 "location_details": location_details,
+                "campus_zone": campus_zone or None,
+                "is_emergency": is_emergency,
                 "image_url": image_url,
                 "status": "Pending",
             }
@@ -1532,7 +1631,7 @@ class UnifiedNewsfeedAPIView(APIView):
             sightings = db.table("animal_sightings").select("*").neq("status", "Resolved").execute().data or []
             for s in sightings:
                 raw_features = s.get("distinct_features") or ""
-                is_urgent = _is_urgent_feature_text(raw_features)
+                is_urgent = bool(s.get("is_emergency")) or _is_urgent_feature_text(raw_features)
                 status_val = s.get("status") or "Pending"
                 if status_val == "Pending" and not is_urgent:
                     continue
@@ -1548,6 +1647,7 @@ class UnifiedNewsfeedAPIView(APIView):
                     "body": f"{clean_features}",
                     "badge_text": badge,
                     "meta_details": s.get("location_details") or "CIT-U Campus Grounds",
+                    "campus_zone": s.get("campus_zone") or "",
                     "image_url": s.get("image_url"),
                     "author_tag": s.get("reporter_email") or "Campus Reporter",
                     "timestamp": s.get("logged_at") or "",
@@ -1556,8 +1656,8 @@ class UnifiedNewsfeedAPIView(APIView):
                     "comments": comments_map.get(fid, []),
                 })
 
-            # 2. Registered companion profiles
-            pets = db.table("pets").select("*").execute().data or []
+            # 2. Registered companion profiles (exclude soft-archived records)
+            pets = [p for p in (db.table("pets").select("*").execute().data or []) if not p.get("archived_at")]
             for p in pets:
                 fid = f"pet_{p.get('pet_id')}"
                 pet_timestamp = p.get("created_at") or p.get("rescue_date") or ""
@@ -1602,6 +1702,9 @@ class UnifiedNewsfeedAPIView(APIView):
                 })
 
             unified_feed.sort(key=lambda x: str(x.get("timestamp") or ""), reverse=True)
+            limit, offset = _parse_pagination_params(request)
+            if limit > 0:
+                unified_feed = unified_feed[offset: offset + limit]
             return Response(unified_feed, status=status.HTTP_200_OK)
         except Exception as exc:
             logger.exception("Failed to build unified newsfeed: %s", exc)

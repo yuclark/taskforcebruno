@@ -1,14 +1,89 @@
 import { useState } from 'react';
-import { QrCode, Stethoscope, HeartHandshake, Eye, EyeOff } from 'lucide-react';
+import { QrCode, Stethoscope, HeartHandshake, Eye, EyeOff, KeyRound, ArrowLeft } from 'lucide-react';
 import CollarQRScanner from './CollarQRScanner';
 import { apiPost } from '../lib/api';
 
-export default function Login({ onLoginSuccess, togglePage, onScanCollar }) {
+export default function Login({
+  onLoginSuccess,
+  togglePage,
+  onScanCollar,
+  recoveryToken = '',
+  onClearRecovery,
+}) {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [showScanner, setShowScanner] = useState(false);
+
+  const [authMode, setAuthMode] = useState(recoveryToken ? 'reset' : 'login'); // 'login' | 'forgot' | 'reset'
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    setMessage({ type: '', text: '' });
+    const emailClean = (forgotEmail || '').trim().toLowerCase();
+    if (!emailClean.endsWith('@cit.edu')) {
+      setMessage({ type: 'error', text: 'Please enter a valid CIT-U email address ending in @cit.edu.' });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await apiPost('/auth/forgot-password/', { email: emailClean }, { auth: false });
+      if (res.ok) {
+        setMessage({
+          type: 'success',
+          text:
+            res.data?.message ||
+            'If an account exists for that @cit.edu email, a password reset link has been sent.',
+        });
+      } else {
+        setMessage({ type: 'error', text: res.error || 'Unable to send password reset email.' });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetSubmit = async (e) => {
+    e.preventDefault();
+    setMessage({ type: '', text: '' });
+    if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      setMessage({
+        type: 'error',
+        text: 'Password must be at least 8 characters and include both letters and numbers.',
+      });
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setMessage({ type: 'error', text: 'Passwords do not match.' });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await apiPost(
+        '/auth/reset-password/',
+        { access_token: recoveryToken, password: newPassword },
+        { auth: false }
+      );
+      if (res.ok) {
+        setMessage({
+          type: 'success',
+          text: res.data?.message || 'Password updated! You can now sign in with your new password.',
+        });
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setAuthMode('login');
+        if (onClearRecovery) onClearRecovery();
+      } else {
+        setMessage({ type: 'error', text: res.error || 'Unable to update password.' });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -153,13 +228,29 @@ export default function Login({ onLoginSuccess, togglePage, onScanCollar }) {
       <div className="flex-1 flex items-center justify-center p-4 sm:p-8 md:p-12 lg:p-16 pb-12">
         <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-lg shadow-slate-200/70 border border-slate-200/80">
           <div className="mb-6">
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Sign In</h2>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+              {authMode === 'forgot'
+                ? 'Reset Password'
+                : authMode === 'reset'
+                ? 'Choose New Password'
+                : 'Sign In'}
+            </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Use your official CIT-U institutional account (<span className="font-medium text-slate-700">@cit.edu</span>).
+              {authMode === 'forgot' ? (
+                'Enter your @cit.edu email and we will send you a secure reset link.'
+              ) : authMode === 'reset' ? (
+                'Create a new strong password for your CIT-U account.'
+              ) : (
+                <>
+                  Use your official CIT-U institutional account (
+                  <span className="font-medium text-slate-700">@cit.edu</span>).
+                </>
+              )}
             </p>
           </div>
 
           {/* Public Collar QR Quick Action */}
+          {authMode === 'login' && (
           <div className="mb-6 p-3.5 bg-amber-50/70 rounded-xl border border-[#D4AF37]/40 flex items-center justify-between gap-3">
             <div className="text-left min-w-0">
               <span className="text-[11px] font-bold uppercase tracking-wider text-[#5C0612] block">
@@ -176,6 +267,7 @@ export default function Login({ onLoginSuccess, togglePage, onScanCollar }) {
               <span>Scan Tag</span>
             </button>
           </div>
+          )}
 
           {showScanner && (
             <CollarQRScanner
@@ -200,6 +292,104 @@ export default function Login({ onLoginSuccess, togglePage, onScanCollar }) {
             </div>
           )}
 
+          {authMode === 'forgot' ? (
+            <form onSubmit={handleForgotSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="forgot-email" className="block text-[11px] font-semibold text-slate-700 mb-1.5">
+                  Institutional Email
+                </label>
+                <input
+                  id="forgot-email"
+                  type="email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  onFocus={handleInputFocus}
+                  required
+                  placeholder="name@cit.edu"
+                  disabled={isLoading}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#5C0612]/25 focus:border-[#5C0612] text-base sm:text-sm bg-slate-50/60 focus:bg-white transition-all"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-60 text-white font-semibold rounded-xl text-sm shadow-md transition-colors border-b-4 border-[#D4AF37] flex items-center justify-center gap-2"
+              >
+                <KeyRound className="w-4 h-4 text-[#D4AF37]" />
+                <span>{isLoading ? 'Sending Reset Link...' : 'Send Reset Link'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMessage({ type: '', text: '' });
+                  setAuthMode('login');
+                }}
+                className="w-full py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center justify-center gap-1.5"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Sign In</span>
+              </button>
+            </form>
+          ) : authMode === 'reset' ? (
+            <form onSubmit={handleResetSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="new-password" className="block text-[11px] font-semibold text-slate-700 mb-1.5">
+                  New Password
+                </label>
+                <input
+                  id="new-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  onFocus={handleInputFocus}
+                  required
+                  placeholder="At least 8 chars with letters & numbers"
+                  disabled={isLoading}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#5C0612]/25 focus:border-[#5C0612] text-base sm:text-sm bg-slate-50/60 focus:bg-white transition-all"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="confirm-new-password" className="block text-[11px] font-semibold text-slate-700 mb-1.5">
+                  Confirm New Password
+                </label>
+                <input
+                  id="confirm-new-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  onFocus={handleInputFocus}
+                  required
+                  placeholder="Re-enter your new password"
+                  disabled={isLoading}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#5C0612]/25 focus:border-[#5C0612] text-base sm:text-sm bg-slate-50/60 focus:bg-white transition-all"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-60 text-white font-semibold rounded-xl text-sm shadow-md transition-colors border-b-4 border-[#D4AF37]"
+              >
+                {isLoading ? 'Updating Password...' : 'Update Password'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMessage({ type: '', text: '' });
+                  setAuthMode('login');
+                  if (onClearRecovery) onClearRecovery();
+                }}
+                className="w-full py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center justify-center gap-1.5"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Cancel &amp; Return to Sign In</span>
+              </button>
+            </form>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="login-email" className="block text-[11px] font-semibold text-slate-700 mb-1.5">
@@ -221,9 +411,22 @@ export default function Login({ onLoginSuccess, togglePage, onScanCollar }) {
             </div>
 
             <div>
-              <label htmlFor="login-password" className="block text-[11px] font-semibold text-slate-700 mb-1.5">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="login-password" className="block text-[11px] font-semibold text-slate-700">
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMessage({ type: '', text: '' });
+                    setForgotEmail(formData.email || '');
+                    setAuthMode('forgot');
+                  }}
+                  className="text-[11px] font-semibold text-[#5C0612] hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <div className="relative">
                 <input
                   id="login-password"
@@ -264,6 +467,7 @@ export default function Login({ onLoginSuccess, togglePage, onScanCollar }) {
               )}
             </button>
           </form>
+          )}
 
           <div className="text-center mt-7 pt-5 border-t border-slate-100">
             <p className="text-xs text-slate-500">

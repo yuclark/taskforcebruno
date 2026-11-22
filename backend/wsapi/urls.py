@@ -24,6 +24,19 @@ from .views import (
     UnifiedNewsfeedAPIView,
     VaccinationLogsAPIView,
 )
+from .views_staff_ops import (
+    ForgotPasswordView,
+    MedicalRecordDetailAPIView,
+    PetRestoreAPIView,
+    RefreshTokenView,
+    ResetPasswordView,
+    StaffSummaryAPIView,
+    VaccinationLogDetailAPIView,
+)
+from .views_volunteers import (
+    VolunteerApplicationAPIView,
+    VolunteerApplicationDetailAPIView,
+)
 
 urlpatterns = [
     # Authentication & session
@@ -31,20 +44,31 @@ urlpatterns = [
     path("login/", LoginView.as_view(), name="login"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("session/", SessionView.as_view(), name="session"),
+    path("auth/refresh/", RefreshTokenView.as_view(), name="auth-refresh"),
+    path("auth/forgot-password/", ForgotPasswordView.as_view(), name="auth-forgot-password"),
+    path("auth/reset-password/", ResetPasswordView.as_view(), name="auth-reset-password"),
 
-    # Adoption applications
+    # Staff operations summary & badges
+    path("staff/summary/", StaffSummaryAPIView.as_view(), name="staff-summary"),
+
+    # Adoption & volunteer applications
     path("pets/applications/", AdoptionApplicationAPIView.as_view(), name="adoption-applications-list-create"),
     path("pets/applications/<int:application_id>/", AdoptionApplicationDetailAPIView.as_view(), name="adoption-application-detail"),
+    path("volunteers/", VolunteerApplicationAPIView.as_view(), name="volunteers-list-create"),
+    path("volunteers/<int:application_id>/", VolunteerApplicationDetailAPIView.as_view(), name="volunteer-detail"),
 
     # Pet directory & trait search
     path("pets/", PetListAPIView.as_view(), name="pet-list"),
     path("pets/ai-search/", PetAISearchAPIView.as_view(), name="pet-ai-search"),
+    path("pets/<str:pet_id>/restore/", PetRestoreAPIView.as_view(), name="pet-restore"),
     path("pets/<str:pet_id>/", PetDetailAPIView.as_view(), name="pet-detail"),
 
     # Medical & vaccination records
+    path("medical/record/<int:record_id>/", MedicalRecordDetailAPIView.as_view(), name="medical-record-detail"),
     path("medical/log/", MedicalRecordsAPIView.as_view(), name="medical-log-slash"),
     path("medical/log", MedicalRecordsAPIView.as_view(), name="medical-log"),
     path("medical/<str:pet_id>/", MedicalRecordsAPIView.as_view(), name="medical-logs"),
+    path("vaccinations/record/<int:log_id>/", VaccinationLogDetailAPIView.as_view(), name="vaccination-record-detail"),
     path("vaccinations/<str:pet_id>/", VaccinationLogsAPIView.as_view(), name="vaccination-logs"),
 
     # Supply inventory & transaction ledger

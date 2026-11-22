@@ -1,18 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
-  Cat,
-  Dog,
-  Utensils,
-  Cross,
-  Shield,
+  AlertTriangle,
   Box,
-  Tag,
-  MapPin,
-  Users,
+  Cat,
   CheckCircle2,
+  Clock,
+  Cross,
+  Dog,
   Lock,
+  MapPin,
   Package,
+  Shield,
+  Tag,
+  Users,
+  Utensils,
 } from 'lucide-react';
+import { apiGet, apiPost, apiPut } from '../lib/api';
 import {
   ID_PATTERN,
   PHONE_PATTERN,
@@ -31,48 +34,6 @@ function resolveUserIdentity(session) {
   }
 
   const emailKey = (session?.email || '').trim().toLowerCase();
-  if (!studentId && emailKey) {
-    const storedForEmail = localStorage.getItem(`tfb_student_id_${emailKey}`) || '';
-    if (ID_PATTERN.test(storedForEmail)) {
-      studentId = storedForEmail;
-    }
-  }
-
-  if (emailKey) {
-    try {
-      const savedProf = JSON.parse(localStorage.getItem(`tfb_user_profile_${emailKey}`) || '{}');
-      if (!name && savedProf.full_name) name = savedProf.full_name;
-      if (!name && savedProf.first_name) {
-        name = `${savedProf.first_name} ${savedProf.last_name || ''}`.trim();
-      }
-      const profId = savedProf.student_id || savedProf.custom_id || savedProf.id || '';
-      if (!studentId && ID_PATTERN.test(profId)) {
-        studentId = profId;
-      }
-    } catch {
-      // Ignore malformed local profile JSON
-    }
-
-    if (!name || !studentId) {
-      try {
-        const pastVols = JSON.parse(localStorage.getItem('tfb_volunteer_applications') || '[]');
-        const match = pastVols.find(
-          (v) =>
-            (v.email || '').trim().toLowerCase() === emailKey &&
-            (v.student_id || v.full_name)
-        );
-        if (match) {
-          if (!name && match.full_name) name = match.full_name;
-          if (!studentId && match.student_id && ID_PATTERN.test(match.student_id)) {
-            studentId = match.student_id;
-          }
-        }
-      } catch {
-        // Ignore malformed volunteer cache
-      }
-    }
-  }
-
   if (!name && emailKey) {
     const userPart = emailKey.split('@')[0];
     const segments = userPart
@@ -85,7 +46,7 @@ function resolveUserIdentity(session) {
   return { name, studentId };
 }
 
-const WISHLIST_ITEMS = [
+const DEFAULT_WISHLIST_ITEMS = [
   {
     name: 'Cat Kibble / Dry Food',
     tier: 'Urgent',
@@ -145,10 +106,10 @@ const DROP_OFF_POINTS = [
       'Label package with "ATTN: Task Force Bruno Pet Welfare" and hand over to on-duty safety personnel.',
   },
   {
-    location: 'MDC Office / Campus Clinic',
+    location: 'GLE Building — MDC Office / Campus Clinic',
     hours: 'Monday – Friday: 8:00 AM – 5:00 PM',
     instructions:
-      'Student Affairs Complex. Hand directly to the animal welfare coordinator or clinic nurse on duty.',
+      'Hand directly to the animal welfare coordinator or clinic nurse on duty.',
   },
 ];
 
@@ -167,8 +128,79 @@ export default function SupportAndVolunteers({ session }) {
     notes: '',
   }));
 
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+
+  const [myApplications, setMyApplications] = useState([]);
+  const [loadingApps, setLoadingApps] = useState(true);
+  const [withdrawingId, setWithdrawingId] = useState(null);
+
+  const [lowStockNeeds, setLowStockNeeds] = useState([]);
+
+  const fetchSupportData = useCallback(async (signal) => {
+    setLoadingApps(true);
+    const [volRes, invRes] = await Promise.all([
+      apiGet('/volunteers/', { signal }),
+      apiGet('/inventory/', { signal }),
+    ]);
+    if (signal?.aborted) return;
+
+    if (volRes.ok && Array.isArray(volRes.data)) {
+      setMyApplications(volRes.data);
+    }
+
+    if (invRes.ok && Array.isArray(invRes.data)) {
+      const lowItems = invRes.data
+        .filter((item) => Number(item.quantity || 0) <= Number(item.min_threshold || 10))
+        .map((item) => ({
+          id: item.item_id,
+          name: item.item_name,
+          category: item.category || 'Supplies',
+          quantity: Number(item.quantity || 0),
+          unit: item.unit || 'pcs',
+          threshold: Number(item.min_threshold || 10),
+          tier: Number(item.quantity || 0) === 0 ? 'Out of Stock' : 'Low Stock',
+        }));
+      setLowStockNeeds(lowItems);
+    }
+
+    setLoadingApps(false);
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const load = async () => {
+      const [volRes, invRes] = await Promise.all([
+        apiGet('/volunteers/', { signal: controller.signal }),
+        apiGet('/inventory/', { signal: controller.signal }),
+      ]);
+      if (controller.signal.aborted) return;
+
+      if (volRes.ok && Array.isArray(volRes.data)) {
+        setMyApplications(volRes.data);
+      }
+
+      if (invRes.ok && Array.isArray(invRes.data)) {
+        const lowItems = invRes.data
+          .filter((item) => Number(item.quantity || 0) <= Number(item.min_threshold || 10))
+          .map((item) => ({
+            id: item.item_id,
+            name: item.item_name,
+            category: item.category || 'Supplies',
+            quantity: Number(item.quantity || 0),
+            unit: item.unit || 'pcs',
+            threshold: Number(item.min_threshold || 10),
+            tier: Number(item.quantity || 0) === 0 ? 'Out of Stock' : 'Low Stock',
+          }));
+        setLowStockNeeds(lowItems);
+      }
+
+      setLoadingApps(false);
+    };
+    load();
+    return () => controller.abort();
+  }, []);
 
   const handleStudentIdChange = (e) => {
     setVolunteerForm((prev) => ({
@@ -177,8 +209,9 @@ export default function SupportAndVolunteers({ session }) {
     }));
   };
 
-  const handleVolunteerSubmit = (e) => {
+  const handleVolunteerSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     setError('');
 
     const trimmedName = volunteerForm.name.trim();
@@ -208,46 +241,36 @@ export default function SupportAndVolunteers({ session }) {
       return;
     }
 
-    if (session?.email) {
-      try {
-        localStorage.setItem(
-          `tfb_user_profile_${session.email}`,
-          JSON.stringify({
-            full_name: trimmedName,
-            student_id: trimmedId,
-            custom_id: trimmedId,
-            id: trimmedId,
-            contact_number: volunteerForm.contactNum.trim(),
-            program: trimmedProgram,
-            email: session.email,
-          })
-        );
-      } catch {
-        // Ignore storage quota errors
-      }
-    }
+    setSubmitting(true);
+    const res = await apiPost('/volunteers/', {
+      full_name: trimmedName,
+      student_id: trimmedId,
+      contact_number: volunteerForm.contactNum.trim(),
+      program: trimmedProgram,
+      role: volunteerForm.role,
+      availability: trimmedAvailability,
+      notes: volunteerForm.notes.trim(),
+    });
+    setSubmitting(false);
 
-    try {
-      const existing = JSON.parse(localStorage.getItem('tfb_volunteer_applications') || '[]');
-      const newRecord = {
-        application_id: `VOL-${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`,
-        full_name: trimmedName,
-        student_id: trimmedId,
-        contact_number: volunteerForm.contactNum.trim(),
-        program: trimmedProgram,
-        role: volunteerForm.role,
-        availability: trimmedAvailability,
-        email: session?.email || 'student@cit.edu',
-        status: 'Pending',
-        created_at: new Date().toISOString(),
-      };
-      existing.unshift(newRecord);
-      localStorage.setItem('tfb_volunteer_applications', JSON.stringify(existing));
-    } catch {
-      // Ignore storage quota errors
+    if (res.ok) {
+      setSubmitted(true);
+      await fetchSupportData();
+    } else {
+      setError(res.error || 'Unable to submit volunteer application. Please try again.');
     }
+  };
 
-    setSubmitted(true);
+  const handleWithdrawApplication = async (appId) => {
+    if (withdrawingId) return;
+    setWithdrawingId(appId);
+    const res = await apiPut(`/volunteers/${encodeURIComponent(appId)}/`, { status: 'Cancelled' });
+    setWithdrawingId(null);
+    if (res.ok) {
+      await fetchSupportData();
+    } else {
+      setError(res.error || 'Unable to withdraw application.');
+    }
   };
 
   return (
@@ -276,14 +299,14 @@ export default function SupportAndVolunteers({ session }) {
           </span>
           <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-900 border border-emerald-200 flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-            Direct Veterinary Care
+            Live Clinic Inventory Sync
           </span>
         </div>
       </div>
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-start">
-        {/* Left 7 Cols: Wishlist & Donations */}
+        {/* Left 7 Cols: Live Wishlist & Donations */}
         <div className="lg:col-span-7 space-y-6">
           <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm space-y-5">
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
@@ -297,12 +320,44 @@ export default function SupportAndVolunteers({ session }) {
                 </p>
               </div>
               <span className="font-mono text-[10px] bg-slate-100 px-2.5 py-1 rounded-lg text-slate-600 font-bold shrink-0">
-                Open Needs
+                {lowStockNeeds.length > 0 ? `${lowStockNeeds.length} Live Shortages` : 'Open Needs'}
               </span>
             </div>
 
+            {/* Live Low-Stock Needs Pulled From Clinic Inventory */}
+            {lowStockNeeds.length > 0 && (
+              <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200 space-y-2.5">
+                <div className="flex items-center gap-2 text-rose-800 font-bold text-xs">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Priority Clinic Shortages (Live Inventory)</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {lowStockNeeds.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-3 rounded-xl bg-white border border-rose-200/80 flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-900 text-xs truncate">{item.name}</p>
+                        <p className="text-[11px] text-slate-500">
+                          {item.category} &bull; Only{' '}
+                          <strong className="text-rose-700">
+                            {item.quantity} {item.unit}
+                          </strong>{' '}
+                          left
+                        </p>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white text-[9px] font-mono font-bold uppercase shrink-0">
+                        {item.tier}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {WISHLIST_ITEMS.map((item) => {
+              {DEFAULT_WISHLIST_ITEMS.map((item) => {
                 const Icon = item.icon;
                 return (
                   <div
@@ -368,7 +423,7 @@ export default function SupportAndVolunteers({ session }) {
                 </h3>
               </div>
               <span className="px-2.5 py-1 rounded-xl bg-white/10 text-white font-mono text-[10px] font-bold border border-white/20 shrink-0">
-                100% Transparent
+                Verified MDC Channel
               </span>
             </div>
 
@@ -396,187 +451,242 @@ export default function SupportAndVolunteers({ session }) {
           </div>
         </div>
 
-        {/* Right 5 Cols: Volunteer Sign-up */}
-        <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm space-y-5">
-          <div className="border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-[#5C0612]" />
-              <h3 className="font-bold text-slate-900 text-sm">Join the Volunteer Team</h3>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Help with daily campus feeding, welfare checks, and vaccination drives.
-            </p>
-          </div>
-
-          {submitted ? (
-            <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-3 animate-fade-in">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-6 h-6" />
+        {/* Right 5 Cols: Volunteer Sign-up & My Applications */}
+        <div className="lg:col-span-5 space-y-5">
+          <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm space-y-5">
+            <div className="border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#5C0612]" />
+                <h3 className="font-bold text-slate-900 text-sm">Join the Volunteer Team</h3>
               </div>
-              <h4 className="font-bold text-emerald-900 text-sm">Volunteer Application Received</h4>
-              <p className="text-xs text-emerald-700 leading-relaxed">
-                Thank you for volunteering to care for CIT-U campus animals. The Task Force Bruno team will review your application and contact you via your CIT-U email.
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Applications are synced directly to the CIT-U MDC Staff portal for review.
               </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setSubmitted(false);
-                  const resetId = resolveUserIdentity(session);
-                  setVolunteerForm({
-                    name: resetId.name,
-                    studentId: resetId.studentId,
-                    contactNum: '',
-                    program: '',
-                    role: 'Feeding Patrol',
-                    availability: '',
-                    notes: '',
-                  });
-                }}
-                className="mt-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all"
-              >
-                Submit Another Application
-              </button>
             </div>
-          ) : (
-            <form onSubmit={handleVolunteerSubmit} className="space-y-3.5">
-              {error && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-medium">
-                  {error}
-                </div>
-              )}
 
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[10px] font-bold uppercase text-slate-600">
-                    Full Name *
-                  </label>
-                  {hasVerifiedName && (
-                    <span className="text-[9px] font-mono text-emerald-700 font-semibold flex items-center gap-1">
-                      <Lock className="w-3 h-3 text-emerald-600" />
-                      Verified Profile
-                    </span>
-                  )}
+            {submitted ? (
+              <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-3 animate-fade-in">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-6 h-6" />
                 </div>
-                <input
-                  type="text"
-                  readOnly={hasVerifiedName}
-                  required
-                  placeholder="e.g. Juan Dela Cruz"
-                  value={volunteerForm.name}
-                  onChange={(e) => setVolunteerForm((prev) => ({ ...prev, name: e.target.value }))}
-                  className={`w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-slate-700 font-semibold text-base sm:text-xs focus:outline-none ${
-                    hasVerifiedName
-                      ? 'bg-slate-100 cursor-not-allowed select-none'
-                      : 'bg-slate-50 focus:bg-white'
-                  }`}
-                />
+                <h4 className="font-bold text-emerald-900 text-sm">Volunteer Application Saved</h4>
+                <p className="text-xs text-emerald-700 leading-relaxed">
+                  Your application is now in the MDC Staff review queue. Track its status below or check your CIT-U email for updates.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubmitted(false);
+                    const resetId = resolveUserIdentity(session);
+                    setVolunteerForm({
+                      name: resetId.name,
+                      studentId: resetId.studentId,
+                      contactNum: '',
+                      program: '',
+                      role: 'Feeding Patrol',
+                      availability: '',
+                      notes: '',
+                    });
+                  }}
+                  className="mt-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all"
+                >
+                  Apply for Another Role
+                </button>
               </div>
+            ) : (
+              <form onSubmit={handleVolunteerSubmit} className="space-y-3.5">
+                {error && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-medium">
+                    {error}
+                  </div>
+                )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-[10px] font-bold uppercase text-slate-600">
-                      Student ID *
+                      Full Name *
                     </label>
-                    {hasVerifiedStudentId && (
+                    {hasVerifiedName && (
                       <span className="text-[9px] font-mono text-emerald-700 font-semibold flex items-center gap-1">
                         <Lock className="w-3 h-3 text-emerald-600" />
-                        Verified
+                        Verified Profile
                       </span>
                     )}
                   </div>
                   <input
                     type="text"
-                    readOnly={hasVerifiedStudentId}
+                    readOnly={hasVerifiedName}
                     required
-                    placeholder="XX-XXXX-XXX"
-                    value={volunteerForm.studentId}
-                    onChange={handleStudentIdChange}
-                    className={`w-full px-3.5 py-2.5 border border-slate-200 rounded-xl font-mono text-slate-700 font-bold text-base sm:text-xs focus:outline-none ${
-                      hasVerifiedStudentId
+                    placeholder="e.g. Juan Dela Cruz"
+                    value={volunteerForm.name}
+                    onChange={(e) => setVolunteerForm((prev) => ({ ...prev, name: e.target.value }))}
+                    className={`w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-slate-700 font-semibold text-base sm:text-xs focus:outline-none ${
+                      hasVerifiedName
                         ? 'bg-slate-100 cursor-not-allowed select-none'
                         : 'bg-slate-50 focus:bg-white'
                     }`}
                   />
-                  <span className="text-[9px] text-slate-400 font-mono mt-0.5 block">
-                    Format: 22-4102-184
-                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[10px] font-bold uppercase text-slate-600">
+                        Student ID *
+                      </label>
+                      {hasVerifiedStudentId && (
+                        <span className="text-[9px] font-mono text-emerald-700 font-semibold flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-emerald-600" />
+                          Verified
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      readOnly={hasVerifiedStudentId}
+                      required
+                      placeholder="XX-XXXX-XXX"
+                      value={volunteerForm.studentId}
+                      onChange={handleStudentIdChange}
+                      className={`w-full px-3.5 py-2.5 border border-slate-200 rounded-xl font-mono text-slate-700 font-bold text-base sm:text-xs focus:outline-none ${
+                        hasVerifiedStudentId
+                          ? 'bg-slate-100 cursor-not-allowed select-none'
+                          : 'bg-slate-50 focus:bg-white'
+                      }`}
+                    />
+                    <span className="text-[9px] text-slate-400 font-mono mt-0.5 block">
+                      Format: 22-4102-184
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
+                      Contact Phone *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="09XXXXXXXXX"
+                      value={volunteerForm.contactNum}
+                      onChange={(e) => setVolunteerForm((prev) => ({ ...prev, contactNum: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white font-mono text-base sm:text-xs"
+                    />
+                    <span className="text-[9px] text-slate-400 font-mono mt-0.5 block">
+                      11-digit PH mobile
+                    </span>
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
-                    Contact Phone *
+                    Department / Degree Program *
                   </label>
                   <input
-                    type="tel"
+                    type="text"
                     required
-                    placeholder="09XXXXXXXXX"
-                    value={volunteerForm.contactNum}
-                    onChange={(e) => setVolunteerForm({ ...volunteerForm, contactNum: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white font-mono text-base sm:text-xs"
+                    placeholder="e.g. BS Information Technology / CCS"
+                    value={volunteerForm.program}
+                    onChange={(e) => setVolunteerForm((prev) => ({ ...prev, program: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-base sm:text-xs"
                   />
-                  <span className="text-[9px] text-slate-400 font-mono mt-0.5 block">
-                    11-digit PH mobile
-                  </span>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
-                  Department / Degree Program *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. BS Information Technology / CCS"
-                  value={volunteerForm.program}
-                  onChange={(e) => setVolunteerForm({ ...volunteerForm, program: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-base sm:text-xs"
-                />
-              </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
+                    Preferred Volunteer Role *
+                  </label>
+                  <select
+                    value={volunteerForm.role}
+                    onChange={(e) => setVolunteerForm((prev) => ({ ...prev, role: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-base sm:text-xs font-semibold text-slate-800"
+                  >
+                    <option value="Feeding Patrol">Campus Daily Feeding Patrol</option>
+                    <option value="Clinic Assistant">Clinic &amp; TNR Recovery Assistant</option>
+                    <option value="Rescue Marshal">Emergency Sighting &amp; Rescue Marshal</option>
+                    <option value="Media & Photography">Pet Photography &amp; Adoption Content</option>
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
-                  Preferred Volunteer Role *
-                </label>
-                <select
-                  value={volunteerForm.role}
-                  onChange={(e) => setVolunteerForm({ ...volunteerForm, role: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-base sm:text-xs font-semibold text-slate-800"
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
+                    Availability / Free Schedule *
+                  </label>
+                  <textarea
+                    rows="2"
+                    required
+                    placeholder="e.g. MWF after 4:00 PM, or Saturday mornings"
+                    value={volunteerForm.availability}
+                    onChange={(e) => setVolunteerForm((prev) => ({ ...prev, availability: e.target.value }))}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-base sm:text-xs resize-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-3 bg-[#5C0612] hover:bg-[#720817] disabled:opacity-60 text-white font-bold rounded-xl border-b-2 border-[#D4AF37] shadow-sm transition-all text-xs uppercase tracking-wider"
                 >
-                  <option value="Feeding Patrol">Campus Daily Feeding Patrol</option>
-                  <option value="Clinic Assistant">Clinic &amp; TNR Recovery Assistant</option>
-                  <option value="Rescue Marshal">Emergency Sighting &amp; Rescue Marshal</option>
-                  <option value="Media & Photography">Pet Photography &amp; Adoption Content</option>
-                </select>
-              </div>
+                  {submitting ? 'Submitting Application...' : 'Submit Volunteer Application'}
+                </button>
+              </form>
+            )}
 
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-600 mb-1">
-                  Availability / Free Schedule *
-                </label>
-                <textarea
-                  rows="2"
-                  required
-                  placeholder="e.g. MWF after 4:00 PM, or Saturday mornings"
-                  value={volunteerForm.availability}
-                  onChange={(e) => setVolunteerForm({ ...volunteerForm, availability: e.target.value })}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-base sm:text-xs resize-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-[#5C0612] hover:bg-[#720817] text-white font-bold rounded-xl border-b-2 border-[#D4AF37] shadow-sm transition-all text-xs uppercase tracking-wider"
-              >
-                Submit Volunteer Application
-              </button>
-            </form>
-          )}
-
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-[10px] text-slate-400 font-mono">
-            Coordinated by Task Force Bruno &amp; CIT-U Medical &amp; Dental Clinic
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-[10px] text-slate-400 font-mono">
+              Coordinated by Task Force Bruno &amp; CIT-U Medical &amp; Dental Clinic
+            </div>
           </div>
+
+          {/* Applicant Self-Service Volunteer Status Tracker */}
+          {!loadingApps && myApplications.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-[#5C0612]" />
+                  My Volunteer Applications ({myApplications.length})
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                {myApplications.map((app) => {
+                  const st = app.status || 'Pending';
+                  return (
+                    <div
+                      key={app.application_id}
+                      className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-900 text-xs">{app.role}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 truncate">{app.availability}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            st === 'Approved' || st === 'Active'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : st === 'Declined' || st === 'Cancelled'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-amber-50 text-amber-800 border-amber-200'
+                          }`}
+                        >
+                          {st}
+                        </span>
+                        {st === 'Pending' && (
+                          <button
+                            type="button"
+                            disabled={withdrawingId === app.application_id}
+                            onClick={() => handleWithdrawApplication(app.application_id)}
+                            className="text-[10px] font-semibold text-rose-600 hover:underline disabled:opacity-50"
+                          >
+                            {withdrawingId === app.application_id ? 'Withdrawing...' : 'Withdraw'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

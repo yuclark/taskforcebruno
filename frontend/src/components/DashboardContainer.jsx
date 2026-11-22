@@ -5,6 +5,7 @@ import {
   Heart,
   HeartHandshake,
   LogOut,
+  MapPin,
   Menu,
   MoreHorizontal,
   Newspaper,
@@ -28,9 +29,11 @@ const SupplyLogistics = lazy(() => import('./SupplyLogistics'));
 const AdoptionGallery = lazy(() => import('./AdoptionGallery'));
 const ReportSightingView = lazy(() => import('./ReportSightingView'));
 const SupportAndVolunteers = lazy(() => import('./SupportAndVolunteers'));
+const CampusMap = lazy(() => import('./CampusMap'));
 
 const NAV_ITEMS = [
   { key: 'newsfeed', label: 'Community Newsfeed', shortLabel: 'Feed', Icon: Newspaper },
+  { key: 'campus-map', label: 'CIT-U Campus Map', shortLabel: 'Map', Icon: MapPin },
   { key: 'pet-listings', label: 'Pet Directory', shortLabel: 'Pets', Icon: PawPrint },
   { key: 'scanner', label: 'Collar QR Scanner', shortLabel: 'Scan', Icon: QrCode },
   { key: 'adoption', label: 'Adoption Portal', shortLabel: 'Adopt', Icon: Heart },
@@ -57,6 +60,7 @@ export default function DashboardContainer({ session, onLogout }) {
   });
 
   const [activePetId, setActivePetId] = useState(null);
+  const [prefilledSightingZone, setPrefilledSightingZone] = useState('');
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(() => {
     try {
@@ -330,6 +334,24 @@ export default function DashboardContainer({ session, onLogout }) {
             </div>
           )}
 
+          {currentTab === 'campus-map' && (
+            <div className="w-full p-3 sm:p-5 md:p-7">
+              <Suspense fallback={<TabSpinner />}>
+                <CampusMap
+                  mode="explorer"
+                  onReportAtZone={(zoneName) => {
+                    setPrefilledSightingZone(zoneName);
+                    navigateTo('report');
+                  }}
+                  onInspectPet={(petId) => {
+                    setCurrentTab('scanner');
+                    setActivePetId(petId);
+                  }}
+                />
+              </Suspense>
+            </div>
+          )}
+
           {currentTab === 'pet-listings' && (
             <div className="w-full p-3 sm:p-5 md:p-7">
               <div className="max-w-7xl mx-auto pb-6">
@@ -364,7 +386,11 @@ export default function DashboardContainer({ session, onLogout }) {
           {currentTab === 'report' && (
             <div className="w-full p-3 sm:p-5 md:p-7">
               <Suspense fallback={<TabSpinner />}>
-                <ReportSightingView session={session} />
+                <ReportSightingView
+                  key={prefilledSightingZone || 'default-zone'}
+                  session={session}
+                  initialZone={prefilledSightingZone}
+                />
               </Suspense>
             </div>
           )}
@@ -403,9 +429,9 @@ export default function DashboardContainer({ session, onLogout }) {
         <div className="flex items-center justify-around h-16 px-1">
           {[
             { key: 'newsfeed', label: 'Feed', Icon: Newspaper, activeColor: 'text-[#5C0612]' },
+            { key: 'campus-map', label: 'Map', Icon: MapPin, activeColor: 'text-[#5C0612]' },
             { key: 'scanner', label: 'Scan', Icon: QrCode, activeColor: 'text-[#5C0612]' },
             { key: 'report', label: 'Report', Icon: AlertTriangle, activeColor: 'text-rose-600' },
-            { key: 'adoption', label: 'Adopt', Icon: Heart, activeColor: 'text-amber-700' },
           ].map(({ key, label, Icon, activeColor }) => {
             const isActive = currentTab === key;
             return (
@@ -427,7 +453,7 @@ export default function DashboardContainer({ session, onLogout }) {
             type="button"
             onClick={() => setIsMobileOpen(true)}
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-colors ${
-              ['pet-listings', 'support', 'resources'].includes(currentTab)
+              ['pet-listings', 'adoption', 'support', 'resources'].includes(currentTab)
                 ? 'text-[#5C0612] font-bold'
                 : 'text-slate-500 font-medium'
             }`}

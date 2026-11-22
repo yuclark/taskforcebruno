@@ -11,14 +11,20 @@ import {
   X,
 } from 'lucide-react';
 import EmergencyProtocolModal from './EmergencyProtocolModal';
+import CampusMap from './CampusMap';
 import { apiPost } from '../lib/api';
 import { SIGHTING_CAMPUS_ZONES } from '../lib/pets';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
-export default function ReportSightingView({ session }) {
+export default function ReportSightingView({ session, initialZone = '' }) {
   const [animalType, setAnimalType] = useState('Cat');
-  const [campusZone, setCampusZone] = useState(SIGHTING_CAMPUS_ZONES[0]);
+  const [campusZone, setCampusZone] = useState(
+    initialZone && SIGHTING_CAMPUS_ZONES.includes(initialZone)
+      ? initialZone
+      : SIGHTING_CAMPUS_ZONES[0]
+  );
+  const [showMapPicker, setShowMapPicker] = useState(true);
   const [locationDetails, setLocationDetails] = useState('');
   const [distinctFeatures, setDistinctFeatures] = useState('');
   const [isEmergency, setIsEmergency] = useState(false);
@@ -270,10 +276,19 @@ export default function ReportSightingView({ session }) {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Campus Zone *
-              </label>
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  CIT-U Campus Building / Zone *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowMapPicker((prev) => !prev)}
+                  className="text-[11px] font-bold text-[#5C0612] hover:underline"
+                >
+                  {showMapPicker ? 'Hide Campus Map' : 'Pin on Campus Map'}
+                </button>
+              </div>
               <select
                 value={campusZone}
                 onChange={(e) => setCampusZone(e.target.value)}
@@ -285,6 +300,14 @@ export default function ReportSightingView({ session }) {
                   </option>
                 ))}
               </select>
+
+              {showMapPicker && (
+                <CampusMap
+                  mode="picker"
+                  selectedZoneName={campusZone}
+                  onSelectZone={(zone) => setCampusZone(zone.name)}
+                />
+              )}
             </div>
 
             <div>

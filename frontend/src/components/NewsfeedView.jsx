@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
   Heart,
+  Info,
   MapPin,
   MessageSquare,
   MoreVertical,
@@ -16,10 +19,31 @@ import { isStaffSession } from '../lib/auth';
 import { formatCommentTime, formatFeedDate } from '../lib/dates';
 import { isAdoptablePet, safeImageUrl } from '../lib/pets';
 
+function formatAuthorName(rawTag) {
+  const s = String(rawTag || '').trim();
+  if (!s) return 'CIT-U Member';
+  if (!s.includes('@')) return s;
+  const local = s.split('@')[0];
+  if (local.toLowerCase().includes('mdc')) return 'CIT-U MDC Clinic';
+  return local
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function getAuthorInitials(rawTag) {
+  const name = formatAuthorName(rawTag);
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return name.slice(0, 2).toUpperCase() || 'CU';
+}
+
 export default function NewsfeedView({ session }) {
   const [feedItems, setFeedItems] = useState([]);
   const [petsData, setPetsData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [commentInputs, setCommentInputs] = useState({});
   const [postingCommentId, setPostingCommentId] = useState(null);
@@ -36,9 +60,12 @@ export default function NewsfeedView({ session }) {
   const [moderationError, setModerationError] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [showMobileInfo, setShowMobileInfo] = useState(false);
   const [feedFilter, setFeedFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedComments, setExpandedComments] = useState({});
+  const [expandedBodies, setExpandedBodies] = useState({});
 
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState('');
@@ -50,6 +77,7 @@ export default function NewsfeedView({ session }) {
   const isStaffClearance = isStaffSession(session);
 
   const fetchStreamData = useCallback(async () => {
+    setRefreshing(true);
     setLoadError('');
     const [feedRes, petsRes] = await Promise.all([
       apiGet('/newsfeed/'),
@@ -67,6 +95,7 @@ export default function NewsfeedView({ session }) {
     }
 
     setLoading(false);
+    setRefreshing(false);
   }, []);
 
   useEffect(() => {
@@ -257,17 +286,17 @@ export default function NewsfeedView({ session }) {
         {[1, 2, 3].map((idx) => (
           <div
             key={idx}
-            className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 animate-pulse"
+            className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3.5 animate-pulse"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-slate-200" />
-              <div className="space-y-1.5 flex-1">
-                <div className="h-3.5 bg-slate-200 rounded w-1/3" />
+              <div className="w-10 h-10 rounded-full bg-slate-200" />
+              <div className="space-y-2 flex-1">
+                <div className="h-3.5 bg-slate-200 rounded w-2/5" />
                 <div className="h-2.5 bg-slate-100 rounded w-1/4" />
               </div>
             </div>
             <div className="h-3 bg-slate-100 rounded w-full" />
-            <div className="h-3 bg-slate-100 rounded w-4/5" />
+            <div className="h-3 bg-slate-100 rounded w-3/4" />
           </div>
         ))}
       </div>
@@ -323,14 +352,24 @@ export default function NewsfeedView({ session }) {
     );
   });
 
-  const ITEMS_PER_PAGE = 5;
+  const ITEMS_PER_PAGE = 6;
   const totalPagesCount = Math.ceil(filteredFeedItems.length / ITEMS_PER_PAGE);
   const safeCurrentPage = Math.min(currentPage, Math.max(1, totalPagesCount));
   const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
   const paginatedFeedItems = filteredFeedItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
+  const filterTabs = [
+    { key: 'all', label: 'All', count: feedItems.length },
+    ...(urgentPostsCount > 0
+      ? [{ key: 'urgent', label: 'Urgent', count: urgentPostsCount, urgent: true }]
+      : []),
+    { key: 'announcement', label: 'Bulletins', count: announcementsCount },
+    { key: 'sighting', label: 'Sightings', count: sightingsCount },
+    { key: 'pet', label: 'Pets', count: petPostsCount },
+  ];
+
   return (
-    <div className="w-full max-w-6xl xl:max-w-7xl mx-auto font-sans antialiased flex flex-col gap-4 pb-6">
+    <div className="w-full max-w-6xl xl:max-w-7xl mx-auto font-sans antialiased flex flex-col gap-4 pb-8">
       {loadError && (
         <div className="p-4 bg-rose-50 border border-rose-200 text-rose-900 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2 font-medium">
@@ -367,89 +406,174 @@ export default function NewsfeedView({ session }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Main Feed Stream */}
-        <div className="lg:col-span-7 xl:col-span-8 w-full flex flex-col gap-3">
-          {/* Quick Campus Metrics Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-xs">
-            <span className="text-xs font-semibold text-slate-700">
-              {roamingPetsCount} {roamingPetsCount === 1 ? 'pet' : 'pets'} on campus &bull;{' '}
-              {petsAwaitingHomeCount} awaiting adoption
-            </span>
-            <button
-              type="button"
-              onClick={fetchStreamData}
-              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:text-[#5C0612] bg-slate-100 hover:bg-slate-200/70 px-2.5 py-1 rounded-lg transition-colors"
-            >
-              <RotateCw className="w-3 h-3" />
-              <span>Refresh</span>
-            </button>
-          </div>
+        <div className="lg:col-span-7 xl:col-span-8 w-full flex flex-col gap-4">
+          {/* Sleek Mobile & Desktop Unified Toolbar (de-congested on mobile) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3 sm:p-3.5 space-y-3">
+            {/* Top Row: Compact Snapshot + Quick Action Buttons */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 sm:gap-3 text-xs min-w-0">
+                <span className="inline-flex items-center gap-1.5 font-bold text-slate-800 shrink-0">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span>{roamingPetsCount} On Campus</span>
+                </span>
+                <span className="text-slate-300">&bull;</span>
+                <span className="font-semibold text-amber-800 truncate">
+                  {petsAwaitingHomeCount} Adoptable
+                </span>
+              </div>
 
-          {/* 1-Click Category Filters */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-            {[
-              { key: 'all', label: `All (${feedItems.length})` },
-              { key: 'announcement', label: `Bulletins (${announcementsCount})` },
-              { key: 'sighting', label: `Sightings (${sightingsCount})` },
-              { key: 'pet', label: `Campus Pets (${petPostsCount})` },
-              { key: 'urgent', label: `Urgent (${urgentPostsCount})`, urgent: true },
-            ].map((tab) => {
-              const isActive = feedFilter === tab.key;
-              return (
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
-                  key={tab.key}
                   type="button"
-                  onClick={() => {
-                    setFeedFilter(tab.key);
-                    setCurrentPage(1);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors whitespace-nowrap ${
-                    isActive
-                      ? tab.urgent
-                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
-                        : 'bg-[#5C0612] text-white border-[#5C0612] shadow-xs'
-                      : tab.urgent && urgentPostsCount > 0
-                      ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  onClick={() => setShowMobileSearch((prev) => !prev)}
+                  aria-label="Toggle search"
+                  className={`sm:hidden p-2 rounded-xl border transition-colors ${
+                    showMobileSearch || searchQuery
+                      ? 'bg-[#5C0612] text-white border-[#5C0612]'
+                      : 'bg-slate-50 text-slate-600 border-slate-200'
                   }`}
                 >
-                  {tab.label}
+                  <Search className="w-4 h-4" />
                 </button>
-              );
-            })}
-          </div>
 
-          {/* Search Input */}
-          <div className="bg-white px-3 py-2 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-2.5">
-            <Search className="w-4 h-4 text-slate-400 shrink-0" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Search announcements, pet names, or campus locations..."
-              className="w-full bg-transparent text-base sm:text-xs text-slate-800 focus:outline-none placeholder-slate-400"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
+                <button
+                  type="button"
+                  onClick={() => setShowMobileInfo((prev) => !prev)}
+                  className={`lg:hidden inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold transition-colors ${
+                    showMobileInfo
+                      ? 'bg-[#5C0612]/10 text-[#5C0612] border-[#5C0612]/25'
+                      : 'bg-slate-50 text-slate-600 border-slate-200'
+                  }`}
+                >
+                  <Info className="w-3.5 h-3.5" />
+                  <span>Info</span>
+                  {showMobileInfo ? (
+                    <ChevronUp className="w-3 h-3" />
+                  ) : (
+                    <ChevronDown className="w-3 h-3" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={fetchStreamData}
+                  disabled={refreshing}
+                  aria-label="Refresh feed"
+                  className="inline-flex items-center gap-1.5 p-2 sm:px-2.5 sm:py-1.5 text-[11px] font-semibold text-slate-600 hover:text-[#5C0612] bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors"
+                >
+                  <RotateCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Collapsible Mobile Campus Info Drawer (replaces bottom wall of cards on mobile) */}
+            {showMobileInfo && (
+              <div className="lg:hidden rounded-xl bg-slate-50 border border-slate-200/80 p-3.5 space-y-3 text-xs animate-fade-in">
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/70">
+                    <span className="text-[10px] text-slate-500 font-semibold block">On Campus</span>
+                    <span className="text-base font-black text-slate-900 tabular-nums">{roamingPetsCount}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/70">
+                    <span className="text-[10px] text-slate-500 font-semibold block">Adoptable</span>
+                    <span className="text-base font-black text-amber-700 tabular-nums">{petsAwaitingHomeCount}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/70">
+                    <span className="text-[10px] text-slate-500 font-semibold block">Sightings</span>
+                    <span className="text-base font-black text-slate-900 tabular-nums">{sightingsCount}</span>
+                  </div>
+                </div>
+                <div className="text-[11px] text-slate-600 space-y-1 leading-relaxed">
+                  <p className="font-bold text-slate-800">Quick Guidelines</p>
+                  <p>&bull; Mention exact CIT-U buildings (GLE, NGE, RTL, SAL, P.E Area) in sightings.</p>
+                  <p>&bull; Never remove collar QR tags from resident animals.</p>
+                  <p>
+                    &bull; Bites or injuries? Call CIT-U MDC / Security:{' '}
+                    <a href="tel:0322617741" className="font-mono font-bold text-[#5C0612] underline">
+                      (032) 261-7741
+                    </a>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Filter Chips: Clean Horizontal Pill Bar */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar -mx-0.5 px-0.5">
+              {filterTabs.map((tab) => {
+                const isActive = feedFilter === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => {
+                      setFeedFilter(tab.key);
+                      setCurrentPage(1);
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors whitespace-nowrap inline-flex items-center gap-1.5 shrink-0 ${
+                      isActive
+                        ? tab.urgent
+                          ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                          : 'bg-[#5C0612] text-white border-[#5C0612] shadow-xs'
+                        : tab.urgent
+                        ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                        : 'bg-slate-50 text-slate-600 border-slate-200/90 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full tabular-nums ${
+                        isActive
+                          ? 'bg-white/20 text-white'
+                          : tab.urgent
+                          ? 'bg-rose-200/70 text-rose-800'
+                          : 'bg-white text-slate-500'
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Search Input (Always visible on sm+, toggleable on mobile to save vertical space) */}
+            <div
+              className={`${
+                showMobileSearch || searchQuery ? 'flex' : 'hidden sm:flex'
+              } bg-slate-50 px-3 py-2 rounded-xl border border-slate-200/80 items-center gap-2 focus-within:bg-white focus-within:border-[#5C0612]/40 transition-colors`}
+            >
+              <Search className="w-4 h-4 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="text-slate-500 hover:text-slate-800 text-xs font-semibold px-2 py-1 bg-slate-100 rounded-lg transition-colors shrink-0"
-              >
-                Clear
-              </button>
-            )}
+                placeholder="Search posts, pet names, or CIT-U buildings..."
+                className="w-full bg-transparent text-base sm:text-xs text-slate-800 focus:outline-none placeholder-slate-400"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCurrentPage(1);
+                  }}
+                  className="text-slate-500 hover:text-slate-800 text-xs font-semibold px-2 py-0.5 bg-white border border-slate-200 rounded-lg transition-colors shrink-0"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Feed Cards */}
           <div className="space-y-4">
             {paginatedFeedItems.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center space-y-2.5">
-                <p className="text-slate-600 font-semibold text-sm">No matching posts</p>
+                <p className="text-slate-700 font-bold text-sm">No matching posts</p>
                 <p className="text-slate-400 text-xs">
                   No announcements or sightings match your current filter.
                 </p>
@@ -461,7 +585,7 @@ export default function NewsfeedView({ session }) {
                       setSearchQuery('');
                       setCurrentPage(1);
                     }}
-                    className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
                   >
                     Reset filters
                   </button>
@@ -469,9 +593,8 @@ export default function NewsfeedView({ session }) {
               </div>
             ) : (
               paginatedFeedItems.map((item) => {
-                const initials = item.author_tag
-                  ? item.author_tag.substring(0, 2).toUpperCase()
-                  : 'CU';
+                const authorName = formatAuthorName(item.author_tag);
+                const initials = getAuthorInitials(item.author_tag);
                 const formattedTimestamp = formatFeedDate(item.timestamp);
                 const isAnnouncement = item.item_type === 'announcement';
                 const isUrgent =
@@ -483,68 +606,65 @@ export default function NewsfeedView({ session }) {
                 const isEditing = editingItemId === item.feed_id;
                 const isCommentsOpen = Boolean(expandedComments[item.feed_id]);
                 const imgSrc = safeImageUrl(item.image_url);
+                const bodyText = String(item.body || '');
+                const isLongBody = bodyText.length > 260;
+                const isBodyExpanded = Boolean(expandedBodies[item.feed_id]);
+                const displayedBody =
+                  isLongBody && !isBodyExpanded ? `${bodyText.slice(0, 260).trim()}...` : bodyText;
 
                 return (
                   <article
                     key={item.feed_id}
-                    className={`bg-white border rounded-2xl shadow-xs overflow-hidden text-left w-full ${
-                      isUrgent ? 'border-rose-300 ring-1 ring-rose-100' : 'border-slate-200'
+                    className={`bg-white border rounded-2xl shadow-xs overflow-hidden text-left w-full transition-shadow hover:shadow-sm ${
+                      isUrgent ? 'border-rose-300 ring-1 ring-rose-100' : 'border-slate-200/90'
                     }`}
                   >
-                    {/* Post Header */}
-                    <div className="p-4 flex items-start justify-between border-b border-slate-100 gap-3 relative">
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                    {/* Clean Post Header */}
+                    <div className="px-4 pt-4 pb-3 sm:px-5 sm:pt-5 flex items-start justify-between gap-3 relative">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs select-none shrink-0 ${
+                          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs select-none shrink-0 shadow-xs ${
                             isUrgent
                               ? 'bg-rose-600 text-white'
                               : isAnnouncement
                               ? 'bg-[#5C0612] text-[#D4AF37]'
-                              : 'bg-slate-700 text-white'
+                              : 'bg-slate-800 text-white'
                           }`}
                         >
                           {isUrgent ? <Siren className="w-5 h-5" /> : initials}
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {!isEditing ? (
-                              <h4 className="font-bold text-slate-900 text-sm tracking-tight leading-snug break-words">
-                                {item.title}
-                              </h4>
-                            ) : (
-                              <span className="text-[11px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md font-semibold">
-                                Editing Post
-                              </span>
-                            )}
-                            <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border shrink-0 ${
-                                isUrgent
-                                  ? 'bg-rose-600 text-white border-rose-700'
-                                  : isAnnouncement
-                                  ? 'bg-amber-50 text-amber-900 border-amber-300'
-                                  : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                              }`}
-                            >
-                              {isUrgent && <Siren className="w-3 h-3 shrink-0" />}
-                              <span>{(item.badge_text || '').replace('🚨', '').trim()}</span>
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span className="font-bold text-slate-900 truncate">{authorName}</span>
+                            <span className="text-slate-300">&bull;</span>
+                            <span className="text-[11px] text-slate-400 shrink-0">
+                              {formattedTimestamp}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-1 flex-wrap">
-                            <span className="truncate max-w-[180px] font-medium text-slate-600">
-                              {item.author_tag}
+                          {/* Calm Tag + Location Sub-row */}
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide border shrink-0 ${
+                                isUrgent
+                                  ? 'bg-rose-600 text-white border-rose-700'
+                                  : isAnnouncement
+                                  ? 'bg-amber-50 text-amber-900 border-amber-200'
+                                  : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              }`}
+                            >
+                              {isUrgent && <Siren className="w-2.5 h-2.5 shrink-0" />}
+                              <span>{(item.badge_text || '').replace('🚨', '').trim()}</span>
                             </span>
-                            <span>&bull;</span>
-                            <span className="shrink-0">{formattedTimestamp}</span>
+
                             {item.meta_details && (
-                              <>
-                                <span>&bull;</span>
-                                <span className="inline-flex items-center gap-1 text-slate-600">
-                                  <MapPin className="w-3 h-3 text-[#5C0612] shrink-0" />
-                                  <span className="truncate max-w-[200px]">{item.meta_details}</span>
+                              <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-200/70 max-w-full">
+                                <MapPin className="w-3 h-3 text-[#5C0612] shrink-0" />
+                                <span className="truncate max-w-[180px] sm:max-w-[260px]">
+                                  {item.meta_details}
                                 </span>
-                              </>
+                              </span>
                             )}
                           </div>
                         </div>
@@ -558,7 +678,7 @@ export default function NewsfeedView({ session }) {
                             onClick={() =>
                               setActiveDropdownId(activeDropdownId === item.feed_id ? null : item.feed_id)
                             }
-                            className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors"
+                            className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-800 transition-colors"
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
@@ -593,12 +713,31 @@ export default function NewsfeedView({ session }) {
                       )}
                     </div>
 
-                    {/* Post Body */}
-                    <div className="px-4 sm:px-5 py-4 bg-white">
+                    {/* Spacious Post Body */}
+                    <div className="px-4 sm:px-5 pb-4 space-y-3">
                       {!isEditing ? (
-                        <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">
-                          {item.body}
-                        </p>
+                        <div className="space-y-1.5">
+                          <h4 className="font-extrabold text-slate-900 text-sm sm:text-[15px] tracking-tight leading-snug break-words">
+                            {item.title}
+                          </h4>
+                          <p className="text-[13px] sm:text-sm text-slate-600 leading-relaxed whitespace-pre-wrap break-words">
+                            {displayedBody}
+                          </p>
+                          {isLongBody && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedBodies((prev) => ({
+                                  ...prev,
+                                  [item.feed_id]: !prev[item.feed_id],
+                                }))
+                              }
+                              className="text-xs font-bold text-[#5C0612] hover:underline"
+                            >
+                              {isBodyExpanded ? 'Show less' : 'Read more'}
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         <div className="space-y-3 bg-slate-50 p-4 border border-amber-300 rounded-xl">
                           <div>
@@ -648,12 +787,12 @@ export default function NewsfeedView({ session }) {
                         <button
                           type="button"
                           onClick={() => setLightboxImg(imgSrc)}
-                          className="mt-3.5 w-full rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer group flex items-center justify-center relative"
+                          className="w-full rounded-xl overflow-hidden border border-slate-200/80 bg-slate-100 cursor-pointer group flex items-center justify-center relative"
                         >
                           <img
                             src={imgSrc}
                             alt={item.title || 'Campus update'}
-                            className="w-full max-h-[460px] h-auto object-cover sm:object-contain transition-transform duration-200 group-hover:scale-[1.01]"
+                            className="w-full max-h-[340px] sm:max-h-[440px] h-auto object-cover sm:object-contain transition-transform duration-200 group-hover:scale-[1.01]"
                             loading="lazy"
                           />
                           <span className="absolute bottom-2.5 right-2.5 bg-black/65 backdrop-blur-sm text-white text-[11px] px-2.5 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
@@ -663,25 +802,31 @@ export default function NewsfeedView({ session }) {
                       )}
                     </div>
 
-                    {/* Engagement Bar */}
-                    <div className="px-4 sm:px-5 py-2.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+                    {/* Touch-Friendly Engagement Footer */}
+                    <div className="px-2 py-1.5 bg-slate-50/70 border-t border-slate-100 grid grid-cols-2 gap-1 text-xs text-slate-600">
                       <button
                         type="button"
                         onClick={() => handleLikeToggle(item.feed_id)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-colors font-medium ${
+                        className={`min-h-[40px] inline-flex items-center justify-center gap-2 rounded-xl transition-colors font-semibold ${
                           item.is_liked_by_me
-                            ? 'text-rose-600 bg-rose-50 font-semibold'
+                            ? 'text-rose-600 bg-rose-50'
                             : 'hover:bg-slate-100 text-slate-600'
                         }`}
                       >
                         <Heart className={`w-4 h-4 ${item.is_liked_by_me ? 'fill-current' : ''}`} />
-                        <span>{item.likes_count || 0}</span>
+                        <span>
+                          {item.likes_count || 0} {item.likes_count === 1 ? 'Like' : 'Likes'}
+                        </span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => toggleCommentsDrawer(item.feed_id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-slate-100 text-slate-600 font-medium transition-colors"
+                        className={`min-h-[40px] inline-flex items-center justify-center gap-2 rounded-xl transition-colors font-semibold ${
+                          isCommentsOpen
+                            ? 'bg-slate-200/70 text-slate-900'
+                            : 'hover:bg-slate-100 text-slate-600'
+                        }`}
                       >
                         <MessageSquare className="w-4 h-4 text-slate-400" />
                         <span>
@@ -691,13 +836,13 @@ export default function NewsfeedView({ session }) {
                       </button>
                     </div>
 
-                    {/* Comments Section */}
+                    {/* Comments Drawer */}
                     {isCommentsOpen && (
-                      <div className="bg-slate-50 p-4 border-t border-slate-100 space-y-3">
-                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                      <div className="bg-slate-50/90 p-3.5 sm:p-4 border-t border-slate-100 space-y-3">
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                           {(item.comments || []).length === 0 ? (
                             <p className="text-slate-400 text-xs text-center py-2">
-                              No comments yet. Start the conversation below.
+                              No comments yet. Be the first to reply.
                             </p>
                           ) : (
                             item.comments.map((comment, cIdx) => {
@@ -713,13 +858,13 @@ export default function NewsfeedView({ session }) {
                               return (
                                 <div
                                   key={resolvedCommentId ?? cIdx}
-                                  className="bg-white p-3 rounded-xl border border-slate-200 text-xs space-y-1.5"
+                                  className="bg-white p-3 rounded-xl border border-slate-200/80 text-xs space-y-1.5"
                                 >
                                   <div className="flex justify-between items-center text-[11px] text-slate-400 gap-2 flex-wrap">
-                                    <span className="font-semibold text-slate-700 truncate">
-                                      {comment.user_email}
+                                    <span className="font-bold text-slate-800 truncate">
+                                      {formatAuthorName(comment.user_email)}
                                     </span>
-                                    <div className="flex items-center gap-2 shrink-0">
+                                    <div className="flex items-center gap-2.5 shrink-0">
                                       <span>
                                         {formatCommentTime(
                                           comment.timestamp || comment.created_at || item.timestamp
@@ -816,14 +961,14 @@ export default function NewsfeedView({ session }) {
                             }
                             placeholder="Write a comment..."
                             maxLength={1000}
-                            className="flex-1 min-w-0 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-base sm:text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#5C0612]/20"
+                            className="flex-1 min-w-0 px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-base sm:text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#5C0612]/20"
                           />
                           <button
                             type="submit"
                             disabled={postingCommentId === item.feed_id}
-                            className="px-4 py-2 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-colors shrink-0"
+                            className="px-4 py-2.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-colors shrink-0"
                           >
-                            {postingCommentId === item.feed_id ? 'Sending...' : 'Send'}
+                            {postingCommentId === item.feed_id ? '...' : 'Send'}
                           </button>
                         </form>
                       </div>
@@ -842,7 +987,7 @@ export default function NewsfeedView({ session }) {
                 disabled={safeCurrentPage === 1}
                 onClick={() => setCurrentPage(Math.max(safeCurrentPage - 1, 1))}
                 aria-label="Previous page"
-                className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-35 text-slate-700 font-bold"
+                className="px-3.5 py-2 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-35 text-slate-700 font-bold"
               >
                 &lt;
               </button>
@@ -852,7 +997,7 @@ export default function NewsfeedView({ session }) {
                   key={pageNumber}
                   type="button"
                   onClick={() => setCurrentPage(pageNumber)}
-                  className={`px-3 py-1.5 border rounded-xl font-bold transition-colors ${
+                  className={`px-3.5 py-2 border rounded-xl font-bold transition-colors ${
                     safeCurrentPage === pageNumber
                       ? 'bg-[#5C0612] border-[#5C0612] text-white'
                       : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
@@ -867,7 +1012,7 @@ export default function NewsfeedView({ session }) {
                 disabled={safeCurrentPage === totalPagesCount}
                 onClick={() => setCurrentPage(Math.min(safeCurrentPage + 1, totalPagesCount))}
                 aria-label="Next page"
-                className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-35 text-slate-700 font-bold"
+                className="px-3.5 py-2 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-35 text-slate-700 font-bold"
               >
                 &gt;
               </button>
@@ -875,8 +1020,8 @@ export default function NewsfeedView({ session }) {
           )}
         </div>
 
-        {/* Right Sidebar: Campus Overview & Guidelines */}
-        <aside className="lg:col-span-5 xl:col-span-4 space-y-4 w-full text-left lg:sticky lg:top-4">
+        {/* Desktop-Only Right Sidebar (hidden on mobile to keep mobile feed completely uncluttered) */}
+        <aside className="hidden lg:block lg:col-span-5 xl:col-span-4 space-y-4 w-full text-left lg:sticky lg:top-4">
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-[#5C0612]">
@@ -925,7 +1070,7 @@ export default function NewsfeedView({ session }) {
             <ul className="space-y-2.5 text-slate-600 border-t border-slate-100 pt-3">
               <li>
                 <strong className="text-slate-800 block">1. Include Specific Landmarks</strong>
-                Share building names or floor levels so responders can find animals quickly.
+                Share building names (GLE, NGE, RTL, SAL, P.E Area) so responders find animals quickly.
               </li>
               <li>
                 <strong className="text-slate-800 block">2. Keep Discussions Helpful</strong>

@@ -8,11 +8,12 @@ import {
   Search,
   RefreshCw,
   AlertCircle,
+  Edit3,
   Syringe,
   X,
   List,
 } from 'lucide-react';
-import { apiGet, apiPost } from '../lib/api';
+import { apiGet, apiPost, apiPut } from '../lib/api';
 import { parseLocalDate, computeQuarantineReleaseDate } from '../lib/dates';
 import { safeImageUrl, getVaccinationBadgeStyles } from '../lib/pets';
 
@@ -93,6 +94,10 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [logsError, setLogsError] = useState('');
   const [submittingMed, setSubmittingMed] = useState(false);
+  const [editingMedLog, setEditingMedLog] = useState(null);
+  const [editingVacLog, setEditingVacLog] = useState(null);
+  const [savingRecordEdit, setSavingRecordEdit] = useState(false);
+  const [editRecordError, setEditRecordError] = useState('');
   const [submittingVac, setSubmittingVac] = useState(false);
 
   const [workspaceView, setWorkspaceView] = useState('patient');
@@ -1311,6 +1316,27 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
                               <span>
                                 Clinician: <strong className="text-slate-800">{log.veterinarian || 'Staff Vet'}</strong>
                               </span>
+                              {log.record_id && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditRecordError('');
+                                    setEditingMedLog({
+                                      record_id: log.record_id,
+                                      log_date: log.log_date || '',
+                                      next_followup_date: log.next_followup_date || '',
+                                      notes: log.notes || '',
+                                      medication_prescribed: log.medication_prescribed || '',
+                                      weight_at_log: log.weight_at_log || '',
+                                      veterinarian: log.veterinarian || '',
+                                    });
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-900 font-sans font-semibold transition-colors"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                  <span>Edit</span>
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -1521,7 +1547,30 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
                               Given: {vac.administered_date}
                             </span>
                           </div>
-                          {getVaccineDueBadge(vac.next_due_date)}
+                          <div className="flex items-center gap-1.5">
+                            {getVaccineDueBadge(vac.next_due_date)}
+                            {vac.log_id && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditRecordError('');
+                                  setEditingVacLog({
+                                    log_id: vac.log_id,
+                                    vaccine_name: vac.vaccine_name || '',
+                                    administered_date: vac.administered_date || '',
+                                    next_due_date: vac.next_due_date || '',
+                                    batch_lot_number: vac.batch_lot_number || '',
+                                    weight_at_vaccination: vac.weight_at_vaccination || '',
+                                    administered_by: vac.administered_by || '',
+                                  });
+                                }}
+                                aria-label="Edit vaccination log"
+                                className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-amber-50 hover:border-amber-300 text-slate-600 hover:text-amber-900 transition-colors"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-500 pt-1 border-t border-slate-200/50">
@@ -1988,6 +2037,271 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Edit Medical Record Modal */}
+      {editingMedLog && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !savingRecordEdit && setEditingMedLog(null)}
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+        >
+          <form
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (savingRecordEdit) return;
+              setEditRecordError('');
+              setSavingRecordEdit(true);
+              const res = await apiPut(
+                `/medical/record/${encodeURIComponent(editingMedLog.record_id)}/`,
+                {
+                  log_date: editingMedLog.log_date,
+                  next_followup_date: editingMedLog.next_followup_date || null,
+                  notes: editingMedLog.notes,
+                  medication_prescribed: editingMedLog.medication_prescribed,
+                  weight_at_log: editingMedLog.weight_at_log,
+                  veterinarian: editingMedLog.veterinarian,
+                }
+              );
+              setSavingRecordEdit(false);
+              if (res.ok) {
+                setEditingMedLog(null);
+                fetchMedicalLogsForTarget(selectedMedicalPetId);
+                if (onRefresh) onRefresh();
+              } else {
+                setEditRecordError(res.error || 'Unable to update medical record.');
+              }
+            }}
+            className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-md w-full p-5 space-y-3.5 text-left animate-scale-up"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <h3 className="font-bold text-slate-900 text-sm">Edit Clinical Record #{editingMedLog.record_id}</h3>
+              <button
+                type="button"
+                onClick={() => setEditingMedLog(null)}
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editRecordError && (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs">
+                {editRecordError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Log Date</label>
+                <input
+                  type="date"
+                  value={editingMedLog.log_date}
+                  onChange={(e) => setEditingMedLog((p) => ({ ...p, log_date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Next Follow-Up</label>
+                <input
+                  type="date"
+                  value={editingMedLog.next_followup_date}
+                  onChange={(e) => setEditingMedLog((p) => ({ ...p, next_followup_date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Weight</label>
+                <input
+                  type="text"
+                  value={editingMedLog.weight_at_log}
+                  onChange={(e) => setEditingMedLog((p) => ({ ...p, weight_at_log: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Clinician</label>
+                <input
+                  type="text"
+                  value={editingMedLog.veterinarian}
+                  onChange={(e) => setEditingMedLog((p) => ({ ...p, veterinarian: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Medication Prescribed</label>
+              <input
+                type="text"
+                value={editingMedLog.medication_prescribed}
+                onChange={(e) => setEditingMedLog((p) => ({ ...p, medication_prescribed: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Clinical Notes</label>
+              <textarea
+                rows="3"
+                required
+                value={editingMedLog.notes}
+                onChange={(e) => setEditingMedLog((p) => ({ ...p, notes: e.target.value }))}
+                className="w-full p-3 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white resize-none"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingMedLog(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingRecordEdit}
+                className="px-4 py-2 rounded-xl bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-50 text-white font-semibold text-xs"
+              >
+                {savingRecordEdit ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Edit Vaccination Log Modal */}
+      {editingVacLog && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !savingRecordEdit && setEditingVacLog(null)}
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+        >
+          <form
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (savingRecordEdit) return;
+              setEditRecordError('');
+              setSavingRecordEdit(true);
+              const res = await apiPut(
+                `/vaccinations/record/${encodeURIComponent(editingVacLog.log_id)}/`,
+                {
+                  vaccine_name: editingVacLog.vaccine_name,
+                  administered_date: editingVacLog.administered_date,
+                  next_due_date: editingVacLog.next_due_date || null,
+                  batch_lot_number: editingVacLog.batch_lot_number,
+                  weight_at_vaccination: editingVacLog.weight_at_vaccination,
+                  administered_by: editingVacLog.administered_by,
+                }
+              );
+              setSavingRecordEdit(false);
+              if (res.ok) {
+                setEditingVacLog(null);
+                fetchMedicalLogsForTarget(selectedMedicalPetId);
+                fetchAllVaccinations();
+                if (onRefresh) onRefresh();
+              } else {
+                setEditRecordError(res.error || 'Unable to update vaccination record.');
+              }
+            }}
+            className="bg-white border border-slate-200 shadow-2xl rounded-2xl max-w-md w-full p-5 space-y-3.5 text-left animate-scale-up"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <h3 className="font-bold text-slate-900 text-sm">Edit Vaccination Log #{editingVacLog.log_id}</h3>
+              <button
+                type="button"
+                onClick={() => setEditingVacLog(null)}
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editRecordError && (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs">
+                {editRecordError}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Vaccine Name</label>
+              <input
+                type="text"
+                required
+                value={editingVacLog.vaccine_name}
+                onChange={(e) => setEditingVacLog((p) => ({ ...p, vaccine_name: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Date Given</label>
+                <input
+                  type="date"
+                  value={editingVacLog.administered_date}
+                  onChange={(e) => setEditingVacLog((p) => ({ ...p, administered_date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Next Booster Due</label>
+                <input
+                  type="date"
+                  value={editingVacLog.next_due_date}
+                  onChange={(e) => setEditingVacLog((p) => ({ ...p, next_due_date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Batch / Lot #</label>
+                <input
+                  type="text"
+                  value={editingVacLog.batch_lot_number}
+                  onChange={(e) => setEditingVacLog((p) => ({ ...p, batch_lot_number: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Administered By</label>
+                <input
+                  type="text"
+                  value={editingVacLog.administered_by}
+                  onChange={(e) => setEditingVacLog((p) => ({ ...p, administered_by: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingVacLog(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingRecordEdit}
+                className="px-4 py-2 rounded-xl bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-50 text-white font-semibold text-xs"
+              >
+                {savingRecordEdit ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

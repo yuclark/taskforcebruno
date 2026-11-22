@@ -16,16 +16,61 @@ export const PUBLIC_APP_URL = (
 const DEFAULT_TIMEOUT_MS = 45000;
 
 export const UNAUTHORIZED_EVENT = 'tfb:unauthorized';
+export const SESSION_REFRESHED_EVENT = 'tfb:session-refreshed';
 
-function getStoredAccessToken() {
+let activeRefreshPromise = null;
+
+function getStoredSessionObj() {
   try {
     const raw = localStorage.getItem('tfb_session');
-    if (!raw) return '';
-    const parsed = JSON.parse(raw);
-    return typeof parsed?.access_token === 'string' ? parsed.access_token.trim() : '';
+    if (!raw) return null;
+    return JSON.parse(raw);
   } catch {
-    return '';
+    return null;
   }
+}
+
+function getStoredAccessToken() {
+  const parsed = getStoredSessionObj();
+  return typeof parsed?.access_token === 'string' ? parsed.access_token.trim() : '';
+}
+
+async function tryRefreshSessionToken() {
+  if (activeRefreshPromise) return activeRefreshPromise;
+
+  const current = getStoredSessionObj();
+  const refreshToken = typeof current?.refresh_token === 'string' ? current.refresh_token.trim() : '';
+  if (!refreshToken) return null;
+
+  activeRefreshPromise = (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      if (!data?.session?.access_token) return null;
+
+      const updated = {
+        ...current,
+        ...data.session,
+        lastActiveAt: Date.now(),
+      };
+      localStorage.setItem('tfb_session', JSON.stringify(updated));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(SESSION_REFRESHED_EVENT, { detail: updated }));
+      }
+      return updated.access_token;
+    } catch {
+      return null;
+    } finally {
+      activeRefreshPromise = null;
+    }
+  })();
+
+  return activeRefreshPromise;
 }
 
 export function extractErrorMessage(data, fallback = 'Request failed. Please try again.', statusCode = 0) {
@@ -57,7 +102,7 @@ export function extractErrorMessage(data, fallback = 'Request failed. Please try
 
 /**
  * Centralized fetch wrapper with automatic Bearer token injection,
- * timeout handling, JSON parsing, and 401 session-expiry notification.
+ * silent JWT refresh retry on 401, timeout handling, and JSON parsing.
  */
 export async function apiRequest(path, options = {}) {
   const {
@@ -67,6 +112,7 @@ export async function apiRequest(path, options = {}) {
     auth = true,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     signal: externalSignal,
+    _retried = false,
   } = options;
 
   const url = path.startsWith('http')
@@ -118,8 +164,25 @@ export async function apiRequest(path, options = {}) {
       }
     }
 
-    if (response.status === 401 && auth && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+    if (response.status === 401 && auth) {
+      // Attempt silent refresh once before expiring the session
+      if (!_retried && !String(path).includes('/auth/refresh')) {
+        const refreshedToken = await tryRefreshSessionToken();
+        if (refreshedToken) {
+          return apiRequest(path, {
+            ...options,
+            headers: {
+              ...customHeaders,
+              Authorization: `Bearer ${refreshedToken}`,
+            },
+            _retried: true,
+          });
+        }
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+      }
     }
 
     return {

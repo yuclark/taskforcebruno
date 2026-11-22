@@ -8,12 +8,12 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { apiGet, apiPut } from '../lib/api';
+import { apiDelete, apiGet, apiPut } from '../lib/api';
 
 function normalizeVolunteerList(rawList) {
   return rawList.map((item, idx) => ({
     ...item,
-    application_id: item.application_id || item.id || `VOL-${idx + 1}`,
+    application_id: item.application_id || item.id || idx + 1,
     full_name: item.full_name || item.name || 'Student Applicant',
     student_id: item.student_id || item.studentId || 'N/A',
     contact_number: item.contact_number || item.contactNum || 'N/A',
@@ -23,19 +23,6 @@ function normalizeVolunteerList(rawList) {
     status: item.status || 'Pending',
     created_at: item.created_at || item.submittedAt || new Date().toISOString(),
   }));
-}
-
-function loadVolunteerApplications() {
-  try {
-    const raw = localStorage.getItem('tfb_volunteer_applications');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return normalizeVolunteerList(parsed);
-    }
-  } catch {
-    // Ignore malformed volunteer storage
-  }
-  return [];
 }
 
 export default function PendingApplications({ onRefresh }) {
@@ -52,7 +39,9 @@ export default function PendingApplications({ onRefresh }) {
     petId: null,
   });
 
-  const [volunteerApplications, setVolunteerApplications] = useState(loadVolunteerApplications);
+  const [volunteerApplications, setVolunteerApplications] = useState([]);
+  const [loadingVolunteers, setLoadingVolunteers] = useState(true);
+  const [updatingVolunteer, setUpdatingVolunteer] = useState(false);
   const [volunteerFilter, setVolunteerFilter] = useState('all');
   const [volunteerModal, setVolunteerModal] = useState({
     isOpen: false,
@@ -68,31 +57,55 @@ export default function PendingApplications({ onRefresh }) {
     setTimeout(() => setToastMessage({ type: 'success', text: '' }), 4500);
   };
 
+  const fetchVolunteerApplications = useCallback(async () => {
+    setLoadingVolunteers(true);
+    const res = await apiGet('/volunteers/');
+    if (res.ok && Array.isArray(res.data)) {
+      setVolunteerApplications(normalizeVolunteerList(res.data));
+    }
+    setLoadingVolunteers(false);
+  }, []);
+
   const fetchActiveApplicationsQueue = useCallback(async () => {
     setLoadingAdoptions(true);
     setLoadError('');
-    const res = await apiGet('/pets/applications/');
-    if (res.ok && Array.isArray(res.data)) {
-      setAdoptionApplications(res.data);
-    } else if (!res.aborted) {
-      setLoadError(res.error || 'Unable to load adoption applications.');
+    const [adoptRes, volRes] = await Promise.all([
+      apiGet('/pets/applications/'),
+      apiGet('/volunteers/'),
+    ]);
+    if (adoptRes.ok && Array.isArray(adoptRes.data)) {
+      setAdoptionApplications(adoptRes.data);
+    } else if (!adoptRes.aborted) {
+      setLoadError(adoptRes.error || 'Unable to load adoption applications.');
+    }
+    if (volRes.ok && Array.isArray(volRes.data)) {
+      setVolunteerApplications(normalizeVolunteerList(volRes.data));
     }
     setLoadingAdoptions(false);
+    setLoadingVolunteers(false);
   }, []);
 
   useEffect(() => {
     const controller = new AbortController();
     const init = async () => {
       setLoadingAdoptions(true);
+      setLoadingVolunteers(true);
       setLoadError('');
-      const res = await apiGet('/pets/applications/', { signal: controller.signal });
+      const [res, volRes] = await Promise.all([
+        apiGet('/pets/applications/', { signal: controller.signal }),
+        apiGet('/volunteers/', { signal: controller.signal }),
+      ]);
       if (controller.signal.aborted) return;
       if (res.ok && Array.isArray(res.data)) {
         setAdoptionApplications(res.data);
       } else {
         setLoadError(res.error || 'Unable to load adoption applications.');
       }
+      if (volRes.ok && Array.isArray(volRes.data)) {
+        setVolunteerApplications(normalizeVolunteerList(volRes.data));
+      }
       setLoadingAdoptions(false);
+      setLoadingVolunteers(false);
     };
     init();
     return () => controller.abort();
@@ -102,13 +115,13 @@ export default function PendingApplications({ onRefresh }) {
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
         if (!submittingDecision) setDecisionModal({ isOpen: false, appId: null, status: null, petId: null });
-        setVolunteerModal({ isOpen: false, appId: null, status: null, name: null });
+        if (!updatingVolunteer) setVolunteerModal({ isOpen: false, appId: null, status: null, name: null });
         setIsClearModalOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [submittingDecision]);
+  }, [submittingDecision, updatingVolunteer]);
 
   const confirmTriage = async () => {
     if (submittingDecision) return;
@@ -124,7 +137,7 @@ export default function PendingApplications({ onRefresh }) {
       setDecisionModal({ isOpen: false, appId: null, status: null, petId: null });
       showToast(`Application #${appId} marked as ${status}.`, 'success');
       fetchActiveApplicationsQueue();
-      if (status === 'Approved' && onRefresh) onRefresh();
+      if (onRefresh) onRefresh();
     } else {
       setDecisionModal({ isOpen: false, appId: null, status: null, petId: null });
       showToast(res.error || 'Failed to update application status.', 'error');
@@ -132,25 +145,37 @@ export default function PendingApplications({ onRefresh }) {
     setSubmittingDecision(false);
   };
 
-  const confirmClearAllVolunteers = () => {
-    localStorage.removeItem('tfb_volunteer_applications');
-    setVolunteerApplications([]);
+  const confirmClearAllVolunteers = async () => {
+    if (updatingVolunteer) return;
+    setUpdatingVolunteer(true);
+    const targets = volunteerApplications.filter((v) =>
+      ['Declined', 'Cancelled'].includes(v.status || '')
+    );
+    const toDelete = targets.length > 0 ? targets : volunteerApplications;
+    await Promise.all(
+      toDelete.map((v) => apiDelete(`/volunteers/${encodeURIComponent(v.application_id)}/`))
+    );
     setIsClearModalOpen(false);
-    showToast('Volunteer application records cleared.');
+    setUpdatingVolunteer(false);
+    await fetchVolunteerApplications();
+    if (onRefresh) onRefresh();
+    showToast('Volunteer application records cleared from database.');
   };
 
-  const executeVolunteerStatusChange = (appId, newStatus) => {
-    setVolunteerApplications((prevList) => {
-      const updatedList = prevList.map((vol) =>
-        vol.application_id === appId || vol.id === appId
-          ? { ...vol, status: newStatus, reviewed_at: new Date().toISOString() }
-          : vol
-      );
-      localStorage.setItem('tfb_volunteer_applications', JSON.stringify(updatedList));
-      return updatedList;
-    });
+  const executeVolunteerStatusChange = async (appId, newStatus) => {
+    if (updatingVolunteer) return;
+    setUpdatingVolunteer(true);
+    const res = await apiPut(`/volunteers/${encodeURIComponent(appId)}/`, { status: newStatus });
+    setUpdatingVolunteer(false);
     setVolunteerModal({ isOpen: false, appId: null, status: null, name: null });
-    showToast(`Volunteer application marked as ${newStatus}.`);
+
+    if (res.ok) {
+      await fetchVolunteerApplications();
+      if (onRefresh) onRefresh();
+      showToast(`Volunteer application #${appId} marked as ${newStatus}.`);
+    } else {
+      showToast(res.error || 'Failed to update volunteer status.', 'error');
+    }
   };
 
   const pendingAdoptions = adoptionApplications.filter((app) => app.application_status === 'Pending');
@@ -420,7 +445,11 @@ export default function PendingApplications({ onRefresh }) {
             </div>
           </div>
 
-          {filteredVolunteers.length === 0 ? (
+          {loadingVolunteers ? (
+            <div className="w-full p-12 text-center text-xs text-slate-400 bg-white border border-slate-200 rounded-2xl">
+              Loading volunteer applications from Supabase...
+            </div>
+          ) : filteredVolunteers.length === 0 ? (
             <div className="w-full border border-dashed border-slate-300 rounded-2xl p-12 text-center bg-white space-y-2">
               <Users className="w-9 h-9 text-slate-300 mx-auto" />
               <h4 className="text-sm font-bold text-slate-800">No Volunteer Applications</h4>

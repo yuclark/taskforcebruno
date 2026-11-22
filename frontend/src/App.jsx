@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, X } from 'lucide-react';
 import Login from './components/Login';
 import Register from './components/Register';
 import MDCAuthGate from './components/MDCAuthGate';
-import { apiGet, apiPost, UNAUTHORIZED_EVENT } from './lib/api';
+import { apiGet, apiPost, SESSION_REFRESHED_EVENT, UNAUTHORIZED_EVENT } from './lib/api';
 import {
   INACTIVITY_TIMEOUT_MS,
   SESSION_STORAGE_KEY,
@@ -45,8 +45,33 @@ function PageLoadingFallback() {
   );
 }
 
+function getInitialRecoveryToken() {
+  try {
+    const hash = (window.location.hash || '').replace(/^#/, '');
+    if (hash) {
+      const hashParams = new URLSearchParams(hash);
+      const token = hashParams.get('access_token');
+      const type = hashParams.get('type');
+      if (token && type === 'recovery') {
+        window.history.replaceState(null, '', '/reset-password');
+        return token;
+      }
+    }
+    const queryParams = new URLSearchParams(window.location.search);
+    const qToken = queryParams.get('access_token');
+    if (qToken && window.location.pathname.toLowerCase().includes('reset-password')) {
+      window.history.replaceState(null, '', '/reset-password');
+      return qToken;
+    }
+  } catch {
+    return '';
+  }
+  return '';
+}
+
 export default function App() {
   const [publicPetId, setPublicPetId] = useState(getInitialPublicPetId);
+  const [recoveryToken, setRecoveryToken] = useState(getInitialRecoveryToken);
   const [session, setSession] = useState(loadStoredSession);
 
   const [toast, setToast] = useState(() => {
@@ -159,20 +184,29 @@ export default function App() {
     };
   }, [session?.access_token, handleLogout]);
 
-  // Listen for global 401 unauthorized events from the API client
+  // Listen for global 401 unauthorized & silent JWT refresh events from the API client
   useEffect(() => {
     const onUnauthorized = () => {
       if (session) {
         handleLogout('Your session has expired. Please sign in again.', 'error');
       }
     };
+    const onSessionRefreshed = (event) => {
+      if (event?.detail?.access_token) {
+        setSession(event.detail);
+      }
+    };
     window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
-    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+    window.addEventListener(SESSION_REFRESHED_EVENT, onSessionRefreshed);
+    return () => {
+      window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+      window.removeEventListener(SESSION_REFRESHED_EVENT, onSessionRefreshed);
+    };
   }, [session, handleLogout]);
 
   // Keep browser URL synchronized with authenticated role & auth screen
   useEffect(() => {
-    if (publicPetId) return;
+    if (publicPetId || recoveryToken) return;
     try {
       const targetPath = !session
         ? isLogin
@@ -188,7 +222,7 @@ export default function App() {
     } catch {
       // Ignore history API errors
     }
-  }, [session, isStaff, isLogin, publicPetId]);
+  }, [session, isStaff, isLogin, publicPetId, recoveryToken]);
 
   // Browser back/forward route sync & /mdc route protection
   useEffect(() => {
@@ -338,6 +372,11 @@ export default function App() {
                 window.history.pushState(null, '', '/register');
               }}
               onScanCollar={(id) => setPublicPetId(id)}
+              recoveryToken={recoveryToken}
+              onClearRecovery={() => {
+                setRecoveryToken('');
+                window.history.replaceState(null, '', '/login');
+              }}
             />
           ) : (
             <Register

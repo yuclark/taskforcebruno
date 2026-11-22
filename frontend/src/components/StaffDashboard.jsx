@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import {
+  BarChart3,
+  ChevronDown,
+  ChevronUp,
   ClipboardCheck,
+  Download,
   LogOut,
+  MapPin,
   Megaphone,
   Menu,
   MoreHorizontal,
@@ -18,6 +23,7 @@ import {
 import EmergencyProtocolModal from './EmergencyProtocolModal';
 import { apiGet } from '../lib/api';
 import { getUserDisplayName, getUserInitials } from '../lib/auth';
+import { downloadCsv } from '../lib/csv';
 
 const NewsfeedView = lazy(() => import('./NewsfeedView'));
 const PendingApplications = lazy(() => import('./PendingApplications'));
@@ -27,9 +33,11 @@ const MedicalLogs = lazy(() => import('./MedicalLogs'));
 const InventoryControl = lazy(() => import('./InventoryControl'));
 const SightingTriage = lazy(() => import('./SightingTriage'));
 const PostAnnouncement = lazy(() => import('./PostAnnouncement'));
+const CampusMap = lazy(() => import('./CampusMap'));
 
 const STAFF_NAV_ITEMS = [
   { key: 'Pet Listings', label: 'Pet Directory', Icon: PawPrint },
+  { key: 'Campus Map', label: 'CIT-U Campus Map', Icon: MapPin },
   { key: 'Pending Applications', label: 'Applications', Icon: ClipboardCheck },
   { key: 'Sighting Reports', label: 'Sighting Reports', Icon: Siren },
   { key: 'Medical Logs', label: 'Medical & Vaccines', Icon: Stethoscope },
@@ -57,16 +65,21 @@ export default function StaffDashboard({ session, onLogout }) {
   });
 
   const [pets, setPets] = useState([]);
+  const [includeArchived, setIncludeArchived] = useState(false);
   const [loadingPets, setLoadingPets] = useState(false);
   const [petsError, setPetsError] = useState('');
 
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isEmergencyOpen, setIsEmergencyOpen] = useState(false);
+  const [showKpiStrip, setShowKpiStrip] = useState(true);
+  const [exportingCsv, setExportingCsv] = useState('');
 
   const [inventoryItems, setInventoryItems] = useState([]);
   const [transactionLedger, setTransactionLedger] = useState([]);
   const [loadingInventory, setLoadingInventory] = useState(false);
   const [inventoryError, setInventoryError] = useState('');
+
+  const [summary, setSummary] = useState(null);
 
   const displayName = getUserDisplayName(session, 'MDC Staff');
   const initials = getUserInitials(session, 'MS');
@@ -76,17 +89,29 @@ export default function StaffDashboard({ session, onLogout }) {
     localStorage.setItem('tfb_staff_tab', activeMenu);
   }, [activeMenu]);
 
-  const fetchAllRegisteredPets = useCallback(async () => {
-    setLoadingPets(true);
-    setPetsError('');
-    const res = await apiGet('/pets/');
-    if (res.ok && Array.isArray(res.data)) {
-      setPets(res.data);
-    } else if (!res.aborted) {
-      setPetsError(res.error || 'Unable to load pet records.');
+  const fetchStaffSummary = useCallback(async (signal) => {
+    const res = await apiGet('/staff/summary/', { signal });
+    if (!signal?.aborted && res.ok && res.data) {
+      setSummary(res.data);
     }
-    setLoadingPets(false);
   }, []);
+
+  const fetchAllRegisteredPets = useCallback(
+    async (withArchived = includeArchived) => {
+      setLoadingPets(true);
+      setPetsError('');
+      const query = withArchived ? '/pets/?include_archived=true' : '/pets/';
+      const res = await apiGet(query);
+      if (res.ok && Array.isArray(res.data)) {
+        setPets(res.data);
+      } else if (!res.aborted) {
+        setPetsError(res.error || 'Unable to load pet records.');
+      }
+      setLoadingPets(false);
+      fetchStaffSummary();
+    },
+    [includeArchived, fetchStaffSummary]
+  );
 
   const fetchInventory = useCallback(async () => {
     setLoadingInventory(true);
@@ -104,17 +129,19 @@ export default function StaffDashboard({ session, onLogout }) {
       setTransactionLedger(ledRes.data);
     }
     setLoadingInventory(false);
-  }, []);
+    fetchStaffSummary();
+  }, [fetchStaffSummary]);
 
   useEffect(() => {
     const controller = new AbortController();
     const loadInitial = async () => {
       setLoadingPets(true);
       setLoadingInventory(true);
-      const [petsRes, invRes, ledRes] = await Promise.all([
+      const [petsRes, invRes, ledRes, sumRes] = await Promise.all([
         apiGet('/pets/', { signal: controller.signal }),
         apiGet('/inventory/', { signal: controller.signal }),
         apiGet('/inventory/transactions/', { signal: controller.signal }),
+        apiGet('/staff/summary/', { signal: controller.signal }),
       ]);
       if (controller.signal.aborted) return;
 
@@ -134,12 +161,25 @@ export default function StaffDashboard({ session, onLogout }) {
         setTransactionLedger(ledRes.data);
       }
 
+      if (sumRes.ok && sumRes.data) {
+        setSummary(sumRes.data);
+      }
+
       setLoadingPets(false);
       setLoadingInventory(false);
     };
     loadInitial();
-    return () => controller.abort();
-  }, []);
+
+    // Poll live operational summary every 60 seconds for urgent sightings & queue alerts
+    const intervalId = setInterval(() => {
+      fetchStaffSummary();
+    }, 60000);
+
+    return () => {
+      controller.abort();
+      clearInterval(intervalId);
+    };
+  }, [fetchStaffSummary]);
 
   useEffect(() => {
     if (!isMobileOpen) return undefined;
@@ -159,7 +199,170 @@ export default function StaffDashboard({ session, onLogout }) {
     if (menu === 'Inventory Control') {
       fetchInventory();
     }
+    fetchStaffSummary();
   };
+
+  const handleToggleArchived = (nextVal) => {
+    setIncludeArchived(nextVal);
+    fetchAllRegisteredPets(nextVal);
+  };
+
+  const handleExportCsv = async (kind) => {
+    if (exportingCsv) return;
+    setExportingCsv(kind);
+    const stamp = new Date().toISOString().slice(0, 10);
+    try {
+      if (kind === 'pets') {
+        const res = await apiGet('/pets/?include_archived=true');
+        const list = res.ok && Array.isArray(res.data) ? res.data : pets;
+        downloadCsv(
+          `tfb-pet-registry-${stamp}.csv`,
+          [
+            'Pet ID',
+            'Name',
+            'Species',
+            'Type',
+            'Breed',
+            'Gender',
+            'Age',
+            'Vaccination Status',
+            'Spayed/Neutered (TNR)',
+            'Adoption Status',
+            'Quarantined',
+            'Campus Zone',
+            'Archived At',
+          ],
+          list.map((p) => [
+            p.pet_id,
+            p.name,
+            p.species,
+            p.pet_type,
+            p.breed || '',
+            p.gender || '',
+            p.age || '',
+            p.vaccination_status || 'Not Vaccinated',
+            p.spayed_neutered ? 'Yes' : 'No',
+            p.adoption_status || '',
+            p.is_quarantined ? `Yes (until ${p.quarantine_until || 'TBD'})` : 'No',
+            p.found_near || '',
+            p.archived_at || '',
+          ])
+        );
+      } else if (kind === 'clinical') {
+        const [medRes, vacRes] = await Promise.all([
+          apiGet('/medical/all/'),
+          apiGet('/vaccinations/all/'),
+        ]);
+        const meds = medRes.ok && Array.isArray(medRes.data) ? medRes.data : [];
+        const vacs = vacRes.ok && Array.isArray(vacRes.data) ? vacRes.data : [];
+        const rows = [
+          ...meds.map((m) => [
+            'Medical Record',
+            m.record_id,
+            m.pet_id,
+            m.record_type,
+            m.log_date,
+            m.next_followup_date || '',
+            m.medication_prescribed || '',
+            m.veterinarian || '',
+            m.notes || '',
+          ]),
+          ...vacs.map((v) => [
+            'Vaccination',
+            v.log_id,
+            v.pet_id,
+            v.vaccine_name,
+            v.administered_date,
+            v.next_due_date || '',
+            v.batch_lot_number || '',
+            v.administered_by || '',
+            `Weight: ${v.weight_at_vaccination || 'N/A'}`,
+          ]),
+        ];
+        downloadCsv(
+          `tfb-ra9482-clinical-report-${stamp}.csv`,
+          [
+            'Entry Category',
+            'Record ID',
+            'Pet ID',
+            'Type / Vaccine',
+            'Date',
+            'Next Follow-up / Due Date',
+            'Medication / Batch',
+            'Attending Clinician',
+            'Clinical Notes',
+          ],
+          rows
+        );
+      } else if (kind === 'inventory') {
+        const res = await apiGet('/inventory/transactions/');
+        const txs = res.ok && Array.isArray(res.data) ? res.data : transactionLedger;
+        downloadCsv(
+          `tfb-inventory-audit-${stamp}.csv`,
+          [
+            'Transaction ID',
+            'Item',
+            'Unit',
+            'Direction',
+            'Quantity Changed',
+            'Reason',
+            'Supplier / Donor',
+            'Logged By',
+            'Timestamp',
+          ],
+          txs.map((t) => [
+            t.transaction_id,
+            t.inventory?.item_name || `Item #${t.item_id}`,
+            t.inventory?.unit || '',
+            t.transaction_type,
+            t.quantity_changed,
+            t.reason || '',
+            t.supplier_donor || '',
+            t.logged_by || 'MDC Staff',
+            t.logged_at || '',
+          ])
+        );
+      }
+    } finally {
+      setExportingCsv('');
+    }
+  };
+
+  const getBadgeForMenu = (key) => {
+    if (!summary) return null;
+    if (key === 'Pending Applications' && summary.pending_applications_total > 0) {
+      return { count: summary.pending_applications_total, urgent: false };
+    }
+    if (key === 'Sighting Reports') {
+      if (summary.urgent_sightings > 0) {
+        return { count: summary.urgent_sightings, urgent: true };
+      }
+      if (summary.pending_sightings > 0) {
+        return { count: summary.pending_sightings, urgent: false };
+      }
+    }
+    if (key === 'Medical Logs') {
+      if (summary.active_quarantines > 0) {
+        return { count: summary.active_quarantines, urgent: true };
+      }
+      if (summary.overdue_vaccines > 0) {
+        return { count: summary.overdue_vaccines, urgent: false };
+      }
+    }
+    if (key === 'Inventory Control' && summary.low_stock_items > 0) {
+      return { count: summary.low_stock_items, urgent: true };
+    }
+    return null;
+  };
+
+  const vaxPct =
+    summary && summary.total_active_pets > 0
+      ? Math.round((summary.fully_vaccinated_pets / summary.total_active_pets) * 100)
+      : 0;
+  const tnrPct =
+    summary && summary.total_active_pets > 0
+      ? Math.round((summary.tnr_certified_pets / summary.total_active_pets) * 100)
+      : 0;
 
   return (
     <div className="h-dvh flex bg-slate-50 text-slate-800 font-sans antialiased relative overflow-hidden">
@@ -212,23 +415,40 @@ export default function StaffDashboard({ session, onLogout }) {
             </span>
             {STAFF_NAV_ITEMS.map(({ key, label, Icon }) => {
               const isActive = activeMenu === key;
+              const badge = getBadgeForMenu(key);
               return (
                 <button
                   key={key}
                   type="button"
                   onClick={() => handleMenuChange(key)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                  className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
                     isActive
                       ? 'bg-white text-[#5C0612] shadow-sm font-semibold'
                       : 'text-stone-200 hover:bg-white/10 hover:text-white'
                   }`}
                 >
-                  <Icon
-                    className={`w-4 h-4 shrink-0 ${
-                      isActive ? 'text-[#5C0612]' : 'text-[#D4AF37]/85'
-                    }`}
-                  />
-                  <span className="truncate">{label}</span>
+                  <span className="flex items-center gap-3 min-w-0">
+                    <Icon
+                      className={`w-4 h-4 shrink-0 ${
+                        isActive ? 'text-[#5C0612]' : 'text-[#D4AF37]/85'
+                      }`}
+                    />
+                    <span className="truncate">{label}</span>
+                  </span>
+
+                  {badge && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold tabular-nums shrink-0 ${
+                        badge.urgent
+                          ? 'bg-rose-500 text-white animate-pulse'
+                          : isActive
+                          ? 'bg-[#5C0612] text-[#D4AF37]'
+                          : 'bg-[#D4AF37] text-[#5C0612]'
+                      }`}
+                    >
+                      {badge.count}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -274,7 +494,7 @@ export default function StaffDashboard({ session, onLogout }) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-dvh overflow-hidden min-w-0 pb-16 md:pb-0">
-        <header className="shrink-0 h-15 sm:h-16 md:h-auto bg-white border-b border-slate-200 flex items-center justify-between gap-3 px-3 sm:px-6 md:px-8 md:py-5 z-10">
+        <header className="shrink-0 h-15 sm:h-16 md:h-auto bg-white border-b border-slate-200 flex items-center justify-between gap-3 px-3 sm:px-6 md:px-8 md:py-4 z-10">
           <div className="flex items-center gap-2.5 min-w-0">
             <button
               type="button"
@@ -303,15 +523,27 @@ export default function StaffDashboard({ session, onLogout }) {
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
+              onClick={() => setShowKpiStrip((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
+              title="Toggle MDC KPI Summary & CSV Exports"
+            >
+              <BarChart3 className="w-3.5 h-3.5 text-[#5C0612] shrink-0" />
+              <span className="hidden sm:inline">KPIs &amp; CSV</span>
+              {showKpiStrip ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+
+            <button
+              type="button"
               onClick={() => setIsEmergencyOpen(true)}
               className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold transition-colors"
               title="Bite Protocol & Rabies Guidelines (RA 9482)"
             >
               <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-              <span className="hidden sm:inline">Bite Protocol (RA 9482)</span>
+              <span className="hidden sm:inline">Bite Protocol</span>
               <span className="sm:hidden">RA 9482</span>
             </button>
-            <div className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700">
+
+            <div className="hidden lg:inline-flex items-center gap-1.5 text-xs font-medium bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span>MDC Staff</span>
             </div>
@@ -327,9 +559,119 @@ export default function StaffDashboard({ session, onLogout }) {
           }}
         />
 
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-7">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-7 space-y-5">
+          {/* Collapsible Live MDC Operations KPI & RA 9482 Export Strip */}
+          {showKpiStrip && summary && (
+            <section className="max-w-7xl mx-auto bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-3 animate-fade-in">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-left">
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                  <span className="text-[10px] font-bold uppercase text-slate-500 block">Active Pets</span>
+                  <span className="text-lg font-black text-slate-900 tabular-nums">
+                    {summary.total_active_pets}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/70">
+                  <span className="text-[10px] font-bold uppercase text-emerald-700 block">Anti-Rabies</span>
+                  <span className="text-lg font-black text-emerald-900 tabular-nums">{vaxPct}%</span>
+                  <span className="text-[10px] text-emerald-700 ml-1">({summary.fully_vaccinated_pets})</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-200/70">
+                  <span className="text-[10px] font-bold uppercase text-indigo-700 block">TNR Rate</span>
+                  <span className="text-lg font-black text-indigo-900 tabular-nums">{tnrPct}%</span>
+                  <span className="text-[10px] text-indigo-700 ml-1">({summary.tnr_certified_pets})</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleMenuChange('Medical Logs')}
+                  className={`p-2.5 rounded-xl border text-left transition-colors ${
+                    summary.active_quarantines > 0
+                      ? 'bg-rose-50 border-rose-300'
+                      : 'bg-slate-50 border-slate-200/70'
+                  }`}
+                >
+                  <span className="text-[10px] font-bold uppercase text-rose-700 block">Quarantine</span>
+                  <span className="text-lg font-black text-rose-900 tabular-nums">
+                    {summary.active_quarantines}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMenuChange('Pending Applications')}
+                  className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-left hover:bg-amber-100/60 transition-colors"
+                >
+                  <span className="text-[10px] font-bold uppercase text-amber-800 block">Pending Queue</span>
+                  <span className="text-lg font-black text-amber-950 tabular-nums">
+                    {summary.pending_applications_total}
+                  </span>
+                  <span className="text-[10px] text-amber-800 ml-1">
+                    ({summary.pending_adoptions}A/{summary.pending_volunteers}V)
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMenuChange('Sighting Reports')}
+                  className={`p-2.5 rounded-xl border text-left transition-colors ${
+                    summary.urgent_sightings > 0
+                      ? 'bg-rose-600 text-white border-rose-700'
+                      : 'bg-slate-50 border-slate-200/70 text-slate-900'
+                  }`}
+                >
+                  <span
+                    className={`text-[10px] font-bold uppercase block ${
+                      summary.urgent_sightings > 0 ? 'text-rose-100' : 'text-slate-500'
+                    }`}
+                  >
+                    Urgent Sightings
+                  </span>
+                  <span className="text-lg font-black tabular-nums">{summary.urgent_sightings}</span>
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                <span className="text-[11px] font-semibold text-slate-500">
+                  RA 9482 &amp; Operations CSV Exports:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    disabled={Boolean(exportingCsv)}
+                    onClick={() => handleExportCsv('pets')}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] font-semibold text-slate-700 transition-colors disabled:opacity-50"
+                  >
+                    <Download className="w-3 h-3 text-[#5C0612]" />
+                    <span>{exportingCsv === 'pets' ? 'Exporting...' : 'Pet Registry CSV'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(exportingCsv)}
+                    onClick={() => handleExportCsv('clinical')}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] font-semibold text-slate-700 transition-colors disabled:opacity-50"
+                  >
+                    <Download className="w-3 h-3 text-[#5C0612]" />
+                    <span>{exportingCsv === 'clinical' ? 'Exporting...' : 'RA 9482 Clinical CSV'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(exportingCsv)}
+                    onClick={() => handleExportCsv('inventory')}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] font-semibold text-slate-700 transition-colors disabled:opacity-50"
+                  >
+                    <Download className="w-3 h-3 text-[#5C0612]" />
+                    <span>{exportingCsv === 'inventory' ? 'Exporting...' : 'Inventory Ledger CSV'}</span>
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+
           <Suspense fallback={<StaffSpinner />}>
             {activeMenu === 'Community Newsfeed' && <NewsfeedView session={session} />}
+            {activeMenu === 'Campus Map' && (
+              <CampusMap
+                mode="explorer"
+                onInspectPet={() => setActiveMenu('Pet Listings')}
+              />
+            )}
             {activeMenu === 'Pending Applications' && (
               <PendingApplications onRefresh={fetchAllRegisteredPets} />
             )}
@@ -338,7 +680,9 @@ export default function StaffDashboard({ session, onLogout }) {
                 pets={pets}
                 loadingPets={loadingPets}
                 loadError={petsError}
-                onRefresh={fetchAllRegisteredPets}
+                onRefresh={() => fetchAllRegisteredPets(includeArchived)}
+                includeArchived={includeArchived}
+                onToggleArchived={handleToggleArchived}
               />
             )}
             {activeMenu === 'Add New Pet' && <AddNewPet onRefresh={fetchAllRegisteredPets} />}
@@ -378,16 +722,28 @@ export default function StaffDashboard({ session, onLogout }) {
             { key: 'Medical Logs', label: 'Medical', Icon: Stethoscope },
           ].map(({ key, label, Icon }) => {
             const isActive = activeMenu === key;
+            const badge = getBadgeForMenu(key);
             return (
               <button
                 key={key}
                 type="button"
                 onClick={() => handleMenuChange(key)}
-                className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-colors ${
+                className={`relative flex flex-col items-center justify-center flex-1 h-full py-1 transition-colors ${
                   isActive ? 'text-[#5C0612] font-bold' : 'text-slate-500 font-medium'
                 }`}
               >
-                <Icon className="w-5 h-5" />
+                <div className="relative">
+                  <Icon className="w-5 h-5" />
+                  {badge && (
+                    <span
+                      className={`absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center ${
+                        badge.urgent ? 'bg-rose-600 text-white' : 'bg-[#D4AF37] text-[#5C0612]'
+                      }`}
+                    >
+                      {badge.count}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] mt-1 tracking-tight">{label}</span>
               </button>
             );
@@ -396,7 +752,7 @@ export default function StaffDashboard({ session, onLogout }) {
             type="button"
             onClick={() => setIsMobileOpen(true)}
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-colors ${
-              ['Add New Pet', 'Inventory Control', 'Community Newsfeed', 'Broadcast Bulletin'].includes(
+              ['Campus Map', 'Add New Pet', 'Inventory Control', 'Community Newsfeed', 'Broadcast Bulletin'].includes(
                 activeMenu
               )
                 ? 'text-[#5C0612] font-bold'

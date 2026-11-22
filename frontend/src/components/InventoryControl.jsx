@@ -1013,7 +1013,10 @@ export default function InventoryControl({
                     </div>
                     <p className="text-xs text-slate-700">{tx.reason}</p>
                     <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-slate-400">
-                      <span>{tx.supplier_donor ? `Source: ${tx.supplier_donor}` : 'Clinic Ledger'}</span>
+                      <span>
+                        {tx.supplier_donor ? `Source: ${tx.supplier_donor}` : 'Clinic Ledger'}
+                        {tx.logged_by ? ` • By ${tx.logged_by}` : ''}
+                      </span>
                       <span>
                         {tx.logged_at && !Number.isNaN(new Date(tx.logged_at).getTime())
                           ? new Date(tx.logged_at).toLocaleString()
@@ -1067,9 +1070,11 @@ export default function InventoryControl({
                         </td>
                         <td className="p-4 font-sans text-slate-700 leading-tight whitespace-normal min-w-[200px] break-words">
                           {tx.reason}
-                          {tx.supplier_donor && (
+                          {(tx.supplier_donor || tx.logged_by) && (
                             <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
-                              Source: {tx.supplier_donor}
+                              {tx.supplier_donor ? `Source: ${tx.supplier_donor}` : ''}
+                              {tx.supplier_donor && tx.logged_by ? ' • ' : ''}
+                              {tx.logged_by ? `Logged by: ${tx.logged_by}` : ''}
                             </span>
                           )}
                         </td>

@@ -603,3 +603,225 @@ class SecurityAndAPITests(TestCase):
                 **self._auth(self.staff_token),
             )
             self.assertEqual(res_ro.status_code, 400)
+
+    def test_volunteer_applications_lifecycle_and_rbac(self):
+        fake_db = FakeDB(tables={
+            "profiles": [
+                {"id": "stu-1", "email": "juan.cruz@cit.edu", "role": "user", "first_name": "Juan", "last_name": "Cruz", "custom_id": "22-1234-567"},
+                {"id": "stf-1", "email": "mdc.nurse@cit.edu", "role": "staff"},
+            ],
+            "volunteer_applications": [
+                {
+                    "application_id": 10,
+                    "full_name": "Other Student",
+                    "student_id": "22-9999-111",
+                    "email": "other.student@cit.edu",
+                    "contact_number": "09170001111",
+                    "program": "BSCS",
+                    "role": "Feeding Patrol",
+                    "availability": "TTH afternoons",
+                    "status": "Pending",
+                },
+                {
+                    "application_id": 11,
+                    "full_name": "Juan Cruz",
+                    "student_id": "22-1234-567",
+                    "email": "juan.cruz@cit.edu",
+                    "contact_number": "09171234567",
+                    "program": "BSIT / CCS",
+                    "role": "Clinic Assistant",
+                    "availability": "Sat mornings",
+                    "status": "Pending",
+                },
+            ],
+        })
+        with (
+            patch("wsapi.authentication.get_db_client", return_value=fake_db),
+            patch("wsapi.views_volunteers.get_db_client", return_value=fake_db),
+        ):
+            # Student creates volunteer application for new role (server binds email from JWT)
+            res_create = self.client.post(
+                "/api/volunteers/",
+                {
+                    "full_name": "Juan Cruz",
+                    "student_id": "22-1234-567",
+                    "contact_number": "09171234567",
+                    "program": "BSIT / CCS",
+                    "role": "Feeding Patrol",
+                    "availability": "MWF 4-6 PM",
+                    "email": "spoofed@cit.edu",
+                },
+                format="json",
+                **self._auth(self.student_token),
+            )
+            self.assertEqual(res_create.status_code, 201)
+            self.assertEqual(res_create.data["email"], "juan.cruz@cit.edu")
+
+            # Duplicate pending application for same role ("Clinic Assistant") blocked with 409
+            res_dup = self.client.post(
+                "/api/volunteers/",
+                {
+                    "full_name": "Juan Cruz",
+                    "student_id": "22-1234-567",
+                    "contact_number": "09171234567",
+                    "program": "BSIT / CCS",
+                    "role": "Clinic Assistant",
+                    "availability": "MWF 4-6 PM",
+                },
+                format="json",
+                **self._auth(self.student_token),
+            )
+            self.assertEqual(res_dup.status_code, 409)
+
+            # Student only sees their own application
+            res_student_list = self.client.get("/api/volunteers/", **self._auth(self.student_token))
+            self.assertEqual(res_student_list.status_code, 200)
+            self.assertEqual(len(res_student_list.data), 1)
+            self.assertEqual(res_student_list.data[0]["email"], "juan.cruz@cit.edu")
+
+            # Student cannot approve someone else's or delete
+            res_forbid = self.client.put(
+                "/api/volunteers/10/",
+                {"status": "Approved"},
+                format="json",
+                **self._auth(self.student_token),
+            )
+            self.assertEqual(res_forbid.status_code, 403)
+            res_del_forbid = self.client.delete("/api/volunteers/10/", **self._auth(self.student_token))
+            self.assertEqual(res_del_forbid.status_code, 403)
+
+            # Staff sees all and approves
+            res_staff_list = self.client.get("/api/volunteers/", **self._auth(self.staff_token))
+            self.assertEqual(res_staff_list.status_code, 200)
+            self.assertEqual(len(res_staff_list.data), 2)
+
+            res_approve = self.client.put(
+                "/api/volunteers/10/",
+                {"status": "Approved"},
+                format="json",
+                **self._auth(self.staff_token),
+            )
+            self.assertEqual(res_approve.status_code, 200)
+            self.assertEqual(res_approve.data["status"], "Approved")
+
+    def test_staff_summary_counts_and_rbac(self):
+        fake_db = FakeDB(tables={
+            "profiles": [
+                {"id": "stu-1", "email": "juan.student@cit.edu", "role": "user"},
+                {"id": "stf-1", "email": "mdc.nurse@cit.edu", "role": "staff"},
+            ],
+            "pets": [
+                {"pet_id": "PET-001", "name": "Bruno", "species": "Dog", "pet_type": "Campus Pet", "adoption_status": "Campus Pet", "spayed_neutered": True},
+                {"pet_id": "PET-002", "name": "Archived", "species": "Cat", "pet_type": "Stray", "adoption_status": "Available", "archived_at": "2026-10-01T00:00:00Z"},
+            ],
+            "medical_records": [],
+            "vaccination_logs": [
+                {"log_id": 1, "pet_id": "PET-001", "vaccine_name": "Anti-Rabies", "administered_date": date.today().strftime("%Y-%m-%d"), "next_due_date": (date.today() + timedelta(days=300)).strftime("%Y-%m-%d")}
+            ],
+            "adoption_applications": [{"application_id": 1, "application_status": "Pending"}],
+            "volunteer_applications": [{"application_id": 1, "status": "Pending"}],
+            "animal_sightings": [{"sighting_id": 1, "status": "Pending", "is_emergency": True, "distinct_features": "[URGENT EMERGENCY] Injured cat"}],
+            "inventory": [{"item_id": 1, "quantity": 2, "min_threshold": 10}],
+        })
+        with (
+            patch("wsapi.authentication.get_db_client", return_value=fake_db),
+            patch("wsapi.views_staff_ops.get_db_client", return_value=fake_db),
+        ):
+            res_stu = self.client.get("/api/staff/summary/", **self._auth(self.student_token))
+            self.assertEqual(res_stu.status_code, 403)
+
+            res_stf = self.client.get("/api/staff/summary/", **self._auth(self.staff_token))
+            self.assertEqual(res_stf.status_code, 200)
+            self.assertEqual(res_stf.data["total_active_pets"], 1)
+            self.assertEqual(res_stf.data["archived_pets"], 1)
+            self.assertEqual(res_stf.data["fully_vaccinated_pets"], 1)
+            self.assertEqual(res_stf.data["pending_adoptions"], 1)
+            self.assertEqual(res_stf.data["pending_volunteers"], 1)
+            self.assertEqual(res_stf.data["urgent_sightings"], 1)
+            self.assertEqual(res_stf.data["low_stock_items"], 1)
+
+    def test_clinical_and_vaccination_record_editing(self):
+        fake_db = FakeDB(tables={
+            "profiles": [{"id": "stf-1", "email": "mdc.nurse@cit.edu", "role": "staff"}],
+            "pets": [{"pet_id": "PET-002", "name": "Muning", "species": "Cat"}],
+            "medical_records": [{"record_id": 5, "pet_id": "PET-002", "record_type": "Check-up", "log_date": "2026-10-01", "notes": "Typo note"}],
+            "vaccination_logs": [{"log_id": 9, "pet_id": "PET-002", "vaccine_name": "FVRCP", "administered_date": "2026-10-01", "next_due_date": "2027-10-01"}],
+        })
+        with (
+            patch("wsapi.authentication.get_db_client", return_value=fake_db),
+            patch("wsapi.views_staff_ops.get_db_client", return_value=fake_db),
+            patch("wsapi.clinical.get_db_client", return_value=fake_db),
+        ):
+            res_med = self.client.put(
+                "/api/medical/record/5/",
+                {"notes": "Corrected wellness exam note"},
+                format="json",
+                **self._auth(self.staff_token),
+            )
+            self.assertEqual(res_med.status_code, 200)
+            self.assertEqual(res_med.data["notes"], "Corrected wellness exam note")
+
+            # Editing cat vaccine to canine vaccine must be blocked
+            res_vac_bad = self.client.put(
+                "/api/vaccinations/record/9/",
+                {"vaccine_name": "Canine 5-in-1 (DHPP)"},
+                format="json",
+                **self._auth(self.staff_token),
+            )
+            self.assertEqual(res_vac_bad.status_code, 400)
+
+            res_vac_ok = self.client.put(
+                "/api/vaccinations/record/9/",
+                {"vaccine_name": "Anti-Rabies", "batch_lot_number": "LOT-99"},
+                format="json",
+                **self._auth(self.staff_token),
+            )
+            self.assertEqual(res_vac_ok.status_code, 200)
+            self.assertEqual(res_vac_ok.data["batch_lot_number"], "LOT-99")
+
+    def test_pet_soft_archive_and_restore(self):
+        fake_db = FakeDB(tables={
+            "profiles": [{"id": "stf-1", "email": "mdc.nurse@cit.edu", "role": "staff"}],
+            "pets": [
+                {"pet_id": "PET-001", "name": "Bruno", "species": "Dog", "pet_type": "Campus Pet", "adoption_status": "Campus Pet"},
+                {"pet_id": "PET-099", "name": "Retired Cat", "species": "Cat", "pet_type": "Campus Pet", "adoption_status": "Campus Pet", "archived_at": "2026-10-01T00:00:00Z"},
+            ],
+            "medical_records": [{"record_id": 1, "pet_id": "PET-001", "record_type": "Check-up", "log_date": "2026-10-01", "notes": "Keep history"}],
+            "vaccination_logs": [],
+        })
+        with (
+            patch("wsapi.authentication.get_db_client", return_value=fake_db),
+            patch("wsapi.views.get_db_client", return_value=fake_db),
+            patch("wsapi.views_staff_ops.get_db_client", return_value=fake_db),
+        ):
+            # Default DELETE soft-archives while preserving medical_records
+            res_arch = self.client.delete("/api/pets/PET-001/", **self._auth(self.staff_token))
+            self.assertEqual(res_arch.status_code, 200)
+            self.assertTrue(res_arch.data.get("archived"))
+            self.assertIsNotNone(res_arch.data["pet"].get("archived_at"))
+            self.assertEqual(len(fake_db.tables["medical_records"]), 1)
+
+            # Public list excludes archived pets
+            res_public = self.client.get("/api/pets/")
+            self.assertEqual(len(res_public.data), 1)
+            self.assertEqual(res_public.data[0]["pet_id"], "PET-001")
+
+            # Staff can see archived pets with include_archived=true
+            res_with_arch = self.client.get("/api/pets/?include_archived=true", **self._auth(self.staff_token))
+            self.assertEqual(len(res_with_arch.data), 2)
+
+            # Restore clears archived_at
+            res_restore = self.client.post("/api/pets/PET-099/restore/", {}, format="json", **self._auth(self.staff_token))
+            self.assertEqual(res_restore.status_code, 200)
+            self.assertIsNone(res_restore.data.get("archived_at"))
+
+    def test_forgot_and_reset_password_validation(self):
+        res_bad_email = self.client.post("/api/auth/forgot-password/", {"email": "outside@gmail.com"}, format="json")
+        self.assertEqual(res_bad_email.status_code, 400)
+
+        res_weak_pw = self.client.post(
+            "/api/auth/reset-password/",
+            {"access_token": "a.b.c", "password": "short"},
+            format="json",
+        )
+        self.assertEqual(res_weak_pw.status_code, 400)
