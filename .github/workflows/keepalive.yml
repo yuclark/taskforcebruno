@@ -1,0 +1,24 @@
+name: Keep Render API Warm (CIT-U Campus Hours)
+
+on:
+  schedule:
+    # Every 10 minutes during CIT-U campus hours:
+    # 6:00 AM - 8:50 PM PHT (UTC+8), Monday through Saturday
+    # = 22:00-23:50 UTC Sun-Fri and 00:00-12:50 UTC Mon-Sat
+    - cron: "*/10 22-23 * * 0-5"
+    - cron: "*/10 0-12 * * 1-6"
+  workflow_dispatch:
+
+jobs:
+  ping-health:
+    name: Ping Render /api/health/
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Wake / Ping Task Force Bruno API
+        run: |
+          echo "Pinging Task Force Bruno Render API at $(date -u)"
+          curl --fail --silent --show-error --retry 2 --retry-delay 5 --max-time 50 \
+            "https://taskforcebruno.onrender.com/api/health/"
+          echo ""
+          echo "API responded healthy."
