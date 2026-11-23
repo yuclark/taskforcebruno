@@ -2,10 +2,12 @@ name: Keep Render API Warm (Backup Ping)
 
 on:
   schedule:
-    # Primary 24/7 keep-alive runs every 6 minutes inside Supabase pg_cron
-    # (`tfb-render-keepalive` using pg_net). This workflow is a lightweight
-    # off-minute 24/7 backup to avoid GitHub Actions' top-of-hour congestion.
-    - cron: "7,27,47 * * * *"
+    # Primary keep-alive runs every 6 minutes inside Supabase pg_cron
+    # (`tfb-render-keepalive` using pg_net) from 6:00 AM to 2:00 AM PHT (UTC+8)
+    # = 22:00-23:59 and 00:00-17:59 UTC (sleeps 2:00 AM - 6:00 AM PHT to save
+    # ~125 free Render hours/month for other services).
+    # This workflow is an off-minute backup matching the exact same window.
+    - cron: "7,27,47 0-17,22-23 * * *"
   workflow_dispatch:
 
 jobs:
