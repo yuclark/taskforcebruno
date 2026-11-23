@@ -14,11 +14,33 @@ export const PUBLIC_APP_URL = (
 ).replace(/\/+$/, '');
 
 const DEFAULT_TIMEOUT_MS = 45000;
+const WARMUP_COOLDOWN_MS = 4 * 60 * 1000;
 
 export const UNAUTHORIZED_EVENT = 'tfb:unauthorized';
 export const SESSION_REFRESHED_EVENT = 'tfb:session-refreshed';
 
 let activeRefreshPromise = null;
+let lastWarmupAt = 0;
+
+/**
+ * Fire-and-forget health ping to pre-warm TLS/backend when the app opens or resumes
+ * (especially helpful on mobile after backgrounding or right after a Render redeploy).
+ * Throttled so it runs at most once every 4 minutes per tab.
+ */
+export function warmUpApi() {
+  if (typeof fetch === 'undefined') return;
+  const now = Date.now();
+  if (now - lastWarmupAt < WARMUP_COOLDOWN_MS) return;
+  lastWarmupAt = now;
+
+  fetch(`${API_BASE_URL}/health/`, {
+    method: 'GET',
+    cache: 'no-store',
+  }).catch(() => {
+    // Allow a retry sooner if the warm-up ping failed while offline or mid-deploy
+    lastWarmupAt = 0;
+  });
+}
 
 function getStoredSessionObj() {
   try {
@@ -112,7 +134,9 @@ export async function apiRequest(path, options = {}) {
     auth = true,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     signal: externalSignal,
+    retryOnTransient = method === 'GET' || method === 'HEAD',
     _retried = false,
+    _transientRetried = false,
   } = options;
 
   const url = path.startsWith('http')
@@ -154,6 +178,21 @@ export async function apiRequest(path, options = {}) {
       signal: controller.signal,
     });
 
+    if (
+      retryOnTransient &&
+      !_transientRetried &&
+      !externalSignal?.aborted &&
+      (response.status === 502 || response.status === 503 || response.status === 504)
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (!externalSignal?.aborted) {
+        return apiRequest(path, {
+          ...options,
+          _transientRetried: true,
+        });
+      }
+    }
+
     const contentType = response.headers.get('content-type') || '';
     let data = null;
     if (contentType.includes('application/json')) {
@@ -193,6 +232,12 @@ export async function apiRequest(path, options = {}) {
     };
   } catch (err) {
     if (err?.name === 'AbortError') {
+      if (retryOnTransient && !_transientRetried && !externalSignal?.aborted) {
+        return apiRequest(path, {
+          ...options,
+          _transientRetried: true,
+        });
+      }
       return {
         ok: false,
         status: 0,

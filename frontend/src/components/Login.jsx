@@ -119,7 +119,7 @@ export default function Login({
       const res = await apiPost(
         '/login/',
         { email: emailClean, password: passwordClean },
-        { auth: false }
+        { auth: false, retryOnTransient: true }
       );
       if (res.ok && res.data?.session) {
         onLoginSuccess(res.data.session);

@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, X } from 'lucide-react';
 import Login from './components/Login';
 import Register from './components/Register';
 import MDCAuthGate from './components/MDCAuthGate';
-import { apiGet, apiPost, SESSION_REFRESHED_EVENT, UNAUTHORIZED_EVENT } from './lib/api';
+import { apiGet, apiPost, SESSION_REFRESHED_EVENT, UNAUTHORIZED_EVENT, warmUpApi } from './lib/api';
 import {
   INACTIVITY_TIMEOUT_MS,
   SESSION_STORAGE_KEY,
@@ -100,6 +100,20 @@ export default function App() {
 
   const showToast = useCallback((text, type = 'info') => {
     setToast({ text, type });
+  }, []);
+
+  // Silently pre-warm the backend API on initial load and when returning to a mobile/browser tab
+  useEffect(() => {
+    warmUpApi();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        warmUpApi();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   // Auto-dismiss notifications after 5 seconds
