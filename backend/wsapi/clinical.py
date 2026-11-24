@@ -1,11 +1,23 @@
 import logging
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from .supabase_client import get_db_client
 from .validators import normalize_date_str, parse_datetime_safe
 
 logger = logging.getLogger(__name__)
+
+MANILA_TZ = timezone(timedelta(hours=8))
+
+
+def manila_now() -> datetime:
+    """Return current timezone-aware datetime in Philippine Time (UTC+8)."""
+    return datetime.now(MANILA_TZ)
+
+
+def manila_today() -> date:
+    """Return current calendar date in Philippine Time (UTC+8)."""
+    return manila_now().date()
 
 NON_VACCINE_KEYWORDS = (
     "deworm", "anthelmintic", "pyrantel", "praziquantel",
@@ -38,7 +50,7 @@ def compute_active_quarantine(pet, med_logs):
     quarantine (expiry date >= today). Expired historical incident records do not
     keep animals permanently quarantined.
     """
-    today = date.today()
+    today = manila_today()
     sorted_logs = sorted(
         med_logs or [],
         key=lambda m: str(m.get("log_date") or m.get("created_at") or ""),
@@ -74,6 +86,10 @@ def compute_active_quarantine(pet, med_logs):
         return True, latest_expiry_date, latest_expiry_iso
 
     conditions = str(pet.get("current_conditions") or "")
+    conditions_lower = conditions.lower()
+    if "cleared" in conditions_lower or "completed" in conditions_lower:
+        return False, None, None
+
     until_match = re.search(r"until\s+(\d{4}-\d{2}-\d{2})", conditions, re.IGNORECASE)
     if until_match:
         cond_dt = parse_datetime_safe(until_match.group(1))
@@ -117,7 +133,7 @@ def compute_vaccination_status(vac_logs) -> str:
     - 'Booster Overdue': prior vaccine logs exist, all expired.
     - 'Not Vaccinated': no qualifying vaccine logs recorded.
     """
-    today = date.today()
+    today = manila_today()
     real_vacs = [
         v for v in (vac_logs or [])
         if not is_deworming_or_non_vaccine(v.get("vaccine_name"))
@@ -239,7 +255,7 @@ def create_condition_medical_log(
     if not is_meaningful_condition(condition_text):
         return
     try:
-        log_dt = normalize_date_str(log_date_str) or date.today().strftime("%Y-%m-%d")
+        log_dt = normalize_date_str(log_date_str) or manila_today().strftime("%Y-%m-%d")
         payload = {
             "pet_id": pet_id,
             "record_type": "Check-up",

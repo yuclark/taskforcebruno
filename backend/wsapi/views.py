@@ -18,6 +18,8 @@ from .clinical import (
     create_condition_medical_log,
     generate_next_pet_id,
     is_meaningful_condition,
+    manila_now,
+    manila_today,
     normalize_pet_classification,
     safe_sync_pet_vaccination_status,
     validate_species_vaccine_compatibility,
@@ -133,10 +135,10 @@ def _build_session_payload(
     app_meta = getattr(supa_user, "app_metadata", None) or {}
     profile = profile_rec or {}
 
+    # Strictly trust server-managed authorization sources only (profiles table -> app_metadata).
     role = (
         str(profile.get("role") or "").strip().lower()
         or str(app_meta.get("role") or "").strip().lower()
-        or str(user_meta.get("role") or "").strip().lower()
     )
     if role == "authenticated":
         role = ""
@@ -574,14 +576,19 @@ class PetDetailAPIView(APIView):
                     pet_data["status"] = "Quarantine / Rabies Observation"
                     if q_until:
                         pet_data["quarantine_until"] = q_until
-                    if q_iso and not pet_data.get("quarantine_expiry_date"):
+                    if q_iso:
                         pet_data["quarantine_expiry_date"] = q_iso
-                elif not pet_data.get("quarantine_expiry_date"):
+                else:
                     pet_data["is_quarantined"] = False
+                    pet_data["quarantine_until"] = None
+                    pet_data["quarantine_expiry_date"] = None
                     if pet_data.get("status") == "Quarantine / Rabies Observation":
                         pet_data["status"] = "Active / Campus Resident"
             except Exception as exc:
                 logger.warning("Clinical enrichment failed for %s: %s", resolved_pet_id, exc)
+
+            if not getattr(request.user, "is_staff", False):
+                pet_data.pop("archived_by", None)
 
             return Response(pet_data, status=status.HTTP_200_OK)
         except Exception as exc:
@@ -653,7 +660,7 @@ class PetDetailAPIView(APIView):
                 create_condition_medical_log(
                     pet_id=pet_id,
                     condition_text=new_conditions,
-                    log_date_str=date.today().strftime("%Y-%m-%d"),
+                    log_date_str=manila_today().strftime("%Y-%m-%d"),
                     weight_str=updated_pet.get("weight"),
                     tag="CONDITION UPDATE",
                 )
@@ -786,7 +793,7 @@ class MedicalRecordsAPIView(APIView):
                 record_type_candidates = [record_type]
             p["record_type"] = record_type
 
-            parsed_log_dt = parse_datetime_safe(p.get("log_date")) or datetime.now()
+            parsed_log_dt = parse_datetime_safe(p.get("log_date")) or manila_now()
             p["log_date"] = parsed_log_dt.strftime("%Y-%m-%d")
             p["next_followup_date"] = normalize_date_str(p.get("next_followup_date"))
 
@@ -2001,14 +2008,18 @@ class PetAISearchAPIView(APIView):
             if not raw_query:
                 return Response({"error": "Please enter a description to search."}, status=status.HTTP_400_BAD_REQUEST)
 
-            all_pets = (
-                get_db_client()
-                .table("pets")
-                .select("pet_id, name, species, breed, about_text, description, primary_image, found_near, current_conditions")
-                .execute()
-                .data
-                or []
-            )
+            all_pets = [
+                p
+                for p in (
+                    get_db_client()
+                    .table("pets")
+                    .select("pet_id, name, species, breed, about_text, description, primary_image, found_near, current_conditions, archived_at")
+                    .execute()
+                    .data
+                    or []
+                )
+                if not p.get("archived_at")
+            ]
 
             raw_negatives = set(re.findall(r"(?:not|no|never|except)\s+(?:a\s+|an\s+)?(\w+)", raw_query))
             negative_tokens = {self.SYNONYMS.get(neg, neg) for neg in raw_negatives}
@@ -2063,7 +2074,7 @@ class PetAISearchAPIView(APIView):
                         score += 3
 
                 if score > 0:
-                    pet_copy = dict(pet)
+                    pet_copy = {k: v for k, v in pet.items() if k != "archived_at"}
                     pet_copy["search_affinity_score"] = score
                     scored_candidates.append(pet_copy)
 

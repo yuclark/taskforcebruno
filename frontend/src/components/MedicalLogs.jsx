@@ -14,7 +14,7 @@ import {
   List,
 } from 'lucide-react';
 import { apiGet, apiPost, apiPut } from '../lib/api';
-import { parseLocalDate, computeQuarantineReleaseDate } from '../lib/dates';
+import { parseLocalDate, computeQuarantineReleaseDate, getLocalTodayIso } from '../lib/dates';
 import { safeImageUrl, getVaccinationBadgeStyles } from '../lib/pets';
 
 function generateVaccineLotCode() {
@@ -111,7 +111,7 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
 
   // Clinical consultation state
   const [medType, setMedType] = useState('Check-up');
-  const [medDate, setMedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [medDate, setMedDate] = useState(() => getLocalTodayIso());
   const [medWeight, setMedWeight] = useState('');
   const [medVet, setMedVet] = useState('');
 
@@ -136,7 +136,7 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
 
   // Vaccine form state
   const [vacName, setVacName] = useState('');
-  const [vacDate, setVacDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [vacDate, setVacDate] = useState(() => getLocalTodayIso());
   const [vacNextDue, setVacNextDue] = useState('');
   const [vacLot, setVacLot] = useState('');
   const [vacWeight, setVacWeight] = useState('');

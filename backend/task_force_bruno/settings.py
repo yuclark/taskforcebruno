@@ -23,7 +23,7 @@ ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
     "testserver",
-    ".onrender.com",
+    "taskforcebruno.onrender.com",
 ]
 render_hostname = (os.getenv("RENDER_EXTERNAL_HOSTNAME") or "").strip()
 if render_hostname and render_hostname not in ALLOWED_HOSTS:

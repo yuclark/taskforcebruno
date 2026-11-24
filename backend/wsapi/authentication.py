@@ -150,11 +150,11 @@ def _build_authenticated_user(
 ) -> AuthenticatedUser:
     profile = _load_profile_row(user_id)
 
-    # Prefer server-managed sources (profiles table -> app_metadata -> user_metadata)
+    # Strictly trust server-managed authorization sources only (profiles table -> app_metadata).
+    # Never fall back to user_metadata for role/authorization because users can edit user_metadata.
     role = (
         str(profile.get("role") or "").strip().lower()
         or str((app_metadata or {}).get("role") or "").strip().lower()
-        or str((user_metadata or {}).get("role") or "").strip().lower()
     )
     if role == "authenticated":
         role = ""

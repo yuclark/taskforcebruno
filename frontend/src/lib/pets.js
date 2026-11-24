@@ -198,11 +198,18 @@ export function isAdoptablePet(pet) {
 
 export function isPetQuarantined(pet) {
   if (!pet) return false;
+  if (typeof pet.is_quarantined === 'boolean') {
+    return pet.is_quarantined;
+  }
+  const conditions = String(pet.current_conditions || '');
+  const conditionsLower = conditions.toLowerCase();
+  if (conditionsLower.includes('cleared') || conditionsLower.includes('completed')) {
+    return false;
+  }
   return Boolean(
-    pet.is_quarantined ||
-      (pet.status || '').includes('Quarantine') ||
-      (pet.current_conditions || '').includes('Observation') ||
-      (pet.current_conditions || '').includes('Quarantine')
+    (pet.status || '').includes('Quarantine') ||
+      conditions.includes('Observation') ||
+      conditions.includes('Quarantine')
   );
 }
 

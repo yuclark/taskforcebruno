@@ -21,12 +21,26 @@ from wsapi.validators import validate_http_url, validate_image_upload
 TEST_JWT_SECRET = "test-super-secret-jwt-signing-key-with-at-least-32-chars"
 
 
-def make_jwt(sub="user-1", email="student@cit.edu", role="user", exp_offset=3600, secret=TEST_JWT_SECRET):
+def make_jwt(
+    sub="user-1",
+    email="student@cit.edu",
+    role="user",
+    exp_offset=3600,
+    secret=TEST_JWT_SECRET,
+    app_role=None,
+    user_meta_role=None,
+):
     payload = {
         "sub": sub,
         "email": email,
         "role": "authenticated",
-        "user_metadata": {"role": role, "first_name": "Juan", "last_name": "Cruz", "custom_id": "22-1234-567"},
+        "app_metadata": {"role": role if app_role is None else app_role},
+        "user_metadata": {
+            "role": role if user_meta_role is None else user_meta_role,
+            "first_name": "Juan",
+            "last_name": "Cruz",
+            "custom_id": "22-1234-567",
+        },
         "exp": int(time.time()) + exp_offset,
     }
     return jwt.encode(payload, secret, algorithm="HS256")
@@ -825,3 +839,85 @@ class SecurityAndAPITests(TestCase):
             format="json",
         )
         self.assertEqual(res_weak_pw.status_code, 400)
+
+    def test_user_metadata_role_cannot_escalate_to_staff(self):
+        # Even if profiles row is missing/empty and attacker sets user_metadata.role = "staff",
+        # server must NEVER trust user_metadata for authorization.
+        tampered_token = make_jwt(
+            sub="attacker-1",
+            email="student.hacker@cit.edu",
+            app_role="",
+            user_meta_role="staff",
+        )
+        fake_db = FakeDB(tables={"profiles": []})
+        with patch("wsapi.authentication.get_db_client", return_value=fake_db), patch("wsapi.views.get_db_client", return_value=fake_db):
+            res_sess = self.client.get("/api/session/", **self._auth(tampered_token))
+            self.assertEqual(res_sess.status_code, 200)
+            self.assertFalse(res_sess.data["user"]["is_staff"])
+
+            res_admin = self.client.post(
+                "/api/medical/log/",
+                {"pet_id": "PET-001", "notes": "unauthorized"},
+                format="json",
+                **self._auth(tampered_token),
+            )
+            self.assertEqual(res_admin.status_code, 403)
+
+    def test_public_pet_passport_clears_expired_quarantine_and_hides_staff_email(self):
+        past_date = (date.today() - timedelta(days=20)).isoformat()
+        fake_db = FakeDB(tables={
+            "pets": [
+                {
+                    "pet_id": "PET-007",
+                    "name": "Bruno",
+                    "species": "Dog",
+                    "status": "Quarantine / Rabies Observation",
+                    "quarantine_expiry_date": f"{past_date}T09:30:00Z",
+                    "current_conditions": f"Under 14-day Rabies Observation (until {past_date})",
+                    "archived_by": "private.nurse@cit.edu",
+                }
+            ],
+            "medical_records": [
+                {"record_id": 1, "pet_id": "PET-007", "record_type": "Bite Incident", "log_date": (date.today() - timedelta(days=34)).isoformat()}
+            ],
+            "vaccination_logs": [],
+            "pet_images": [],
+        })
+        with patch("wsapi.views.get_db_client", return_value=fake_db):
+            res = self.client.get("/api/pets/PET-007/")
+            self.assertEqual(res.status_code, 200)
+            self.assertFalse(res.data["is_quarantined"])
+            self.assertEqual(res.data["status"], "Active / Campus Resident")
+            self.assertIsNone(res.data.get("quarantine_expiry_date"))
+            self.assertNotIn("archived_by", res.data)
+
+    def test_quarantine_cleared_condition_text_does_not_retrigger_quarantine(self):
+        is_q, until, _ = compute_active_quarantine(
+            {
+                "status": "Active / Campus Resident",
+                "current_conditions": "Quarantine Observation Cleared (RA 9482)",
+            },
+            [],
+        )
+        self.assertFalse(is_q)
+        self.assertIsNone(until)
+
+    def test_ai_search_excludes_soft_archived_pets(self):
+        fake_db = FakeDB(tables={
+            "profiles": [{"id": "stu-1", "email": "juan.cruz@cit.edu", "role": "user"}],
+            "pets": [
+                {"pet_id": "PET-001", "name": "Active Calico", "species": "Cat", "breed": "Puspin", "description": "calico near library", "found_near": "Library", "archived_at": None},
+                {"pet_id": "PET-002", "name": "Archived Calico", "species": "Cat", "breed": "Puspin", "description": "calico near library", "found_near": "Library", "archived_at": "2026-10-01T00:00:00Z"},
+            ],
+        })
+        with patch("wsapi.authentication.get_db_client", return_value=fake_db), patch("wsapi.views.get_db_client", return_value=fake_db):
+            res = self.client.post(
+                "/api/pets/ai-search/",
+                {"description": "calico cat near library"},
+                format="json",
+                **self._auth(self.student_token),
+            )
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(len(res.data), 1)
+            self.assertEqual(res.data[0]["pet_id"], "PET-001")
+            self.assertNotIn("archived_at", res.data[0])

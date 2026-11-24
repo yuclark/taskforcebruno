@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Image as ImageIcon, Info, Plus } from 'lucide-react';
 import { apiGet, apiPost } from '../lib/api';
+import { getLocalTodayIso } from '../lib/dates';
 import {
   CAMPUS_LOCATIONS,
   calculateSizeCategory,
@@ -61,7 +62,7 @@ export default function AddNewPet({ onRefresh }) {
     found_near: initialHandoff
       ? normalizeCampusLocation(initialHandoff.found_near)
       : CAMPUS_LOCATIONS[0],
-    rescue_date: new Date().toISOString().split('T')[0],
+    rescue_date: getLocalTodayIso(),
     current_conditions: 'None',
     behavior_notes: 'Friendly',
     about_text: initialHandoff?.sighting_id
@@ -207,7 +208,7 @@ export default function AddNewPet({ onRefresh }) {
         weight: '',
         size: 'Small',
         found_near: CAMPUS_LOCATIONS[0],
-        rescue_date: new Date().toISOString().split('T')[0],
+        rescue_date: getLocalTodayIso(),
         current_conditions: 'None',
         behavior_notes: 'Friendly',
         about_text: '',
