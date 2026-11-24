@@ -360,7 +360,7 @@ export default function AdoptionGallery({ session }) {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 text-xs">
               <div className="space-y-1.5">
                 <span className="text-slate-500 text-[11px] font-semibold block">Species</span>
                 <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
@@ -372,7 +372,7 @@ export default function AdoptionGallery({ session }) {
                         setSpeciesFilter(sp);
                         setCurrentIndex(0);
                       }}
-                      className={`flex-1 py-1.5 px-2 rounded-lg transition-colors font-semibold text-xs text-center ${
+                      className={`flex-1 py-1.5 px-2 rounded-lg transition-colors font-semibold text-xs text-center whitespace-nowrap ${
                         speciesFilter === sp
                           ? 'bg-[#5C0612] text-white shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
@@ -386,7 +386,7 @@ export default function AdoptionGallery({ session }) {
 
               <div className="space-y-1.5">
                 <span className="text-slate-500 text-[11px] font-semibold block">Size</span>
-                <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
+                <div className="flex flex-wrap items-center bg-slate-100 p-1 rounded-xl gap-1">
                   {['All', 'Small', 'Medium', 'Large'].map((sz) => (
                     <button
                       key={sz}
@@ -395,7 +395,7 @@ export default function AdoptionGallery({ session }) {
                         setSizeFilter(sz);
                         setCurrentIndex(0);
                       }}
-                      className={`flex-1 py-1.5 px-1 rounded-lg transition-colors font-semibold text-xs text-center truncate ${
+                      className={`flex-1 min-w-[56px] py-1.5 px-2 rounded-lg transition-colors font-semibold text-xs text-center whitespace-nowrap ${
                         sizeFilter === sz
                           ? 'bg-[#5C0612] text-white shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'

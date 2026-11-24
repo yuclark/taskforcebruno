@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   RefreshCw,
   CheckCircle2,
@@ -11,7 +12,7 @@ import { apiGet, apiPut } from '../lib/api';
 import { isUrgentSightingText, stripUrgentPrefix, safeImageUrl } from '../lib/pets';
 import { formatRelativeTime } from '../lib/dates';
 
-export default function SightingTriage({ session, onAdmitStray }) {
+export default function SightingTriage({ session, onAdmitStray, onSummaryRefresh }) {
   const [reports, setReports] = useState([]);
   const [filter, setFilter] = useState('Active');
   const [loading, setLoading] = useState(true);
@@ -86,6 +87,7 @@ export default function SightingTriage({ session, onAdmitStray }) {
       if (res.ok) {
         setTriageModal({ isOpen: false, reportId: null, targetStatus: null });
         fetchActiveReports();
+        if (onSummaryRefresh) onSummaryRefresh();
       } else {
         setStatusError(res.error || 'Failed to update sighting status.');
       }
@@ -176,7 +178,7 @@ export default function SightingTriage({ session, onAdmitStray }) {
       )}
 
       {/* Filter Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-1 font-mono text-[11px] font-bold">
+      <div className="flex flex-wrap gap-2 pb-1 font-mono text-[11px] font-bold">
         {[
           { key: 'Active', label: 'Active Queue' },
           { key: 'Urgent', label: `Urgent Only (${urgentCount})` },
@@ -373,44 +375,46 @@ export default function SightingTriage({ session, onAdmitStray }) {
       )}
 
       {/* Confirmation Modal */}
-      {triageModal.isOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
-        >
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full border border-slate-100 text-center space-y-4 shadow-2xl animate-scale-up">
-            <h3 className="text-sm font-black text-slate-900 tracking-tight">Confirm Status Update</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Update Sighting Report <strong>#{triageModal.reportId}</strong> to{' '}
-              <strong className="text-[#5C0612] uppercase font-bold">{triageModal.targetStatus}</strong>?
-            </p>
-            {statusError && (
-              <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-[11px] font-medium">
-                {statusError}
+      {triageModal.isOpen &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-[90] animate-fade-in"
+          >
+            <div className="bg-white rounded-3xl p-6 max-w-sm w-full border border-slate-100 text-center space-y-4 shadow-2xl animate-scale-up">
+              <h3 className="text-sm font-black text-slate-900 tracking-tight">Confirm Status Update</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Update Sighting Report <strong>#{triageModal.reportId}</strong> to{' '}
+                <strong className="text-[#5C0612] uppercase font-bold">{triageModal.targetStatus}</strong>?
+              </p>
+              {statusError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-[11px] font-medium">
+                  {statusError}
+                </div>
+              )}
+              <div className="flex gap-2.5 font-sans font-bold pt-2">
+                <button
+                  type="button"
+                  onClick={() => setTriageModal({ isOpen: false, reportId: null, targetStatus: null })}
+                  disabled={submittingStatus}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 rounded-xl text-[11px] uppercase transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStatusMutation}
+                  disabled={submittingStatus}
+                  className="flex-1 py-2.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-50 text-white rounded-xl text-[11px] uppercase shadow-md border-b-2 border-[#D4AF37] transition-all"
+                >
+                  {submittingStatus ? 'Updating...' : 'Confirm'}
+                </button>
               </div>
-            )}
-            <div className="flex gap-2.5 font-sans font-bold pt-2">
-              <button
-                type="button"
-                onClick={() => setTriageModal({ isOpen: false, reportId: null, targetStatus: null })}
-                disabled={submittingStatus}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 rounded-xl text-[11px] uppercase transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleStatusMutation}
-                disabled={submittingStatus}
-                className="flex-1 py-2.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-50 text-white rounded-xl text-[11px] uppercase shadow-md border-b-2 border-[#D4AF37] transition-all"
-              >
-                {submittingStatus ? 'Updating...' : 'Confirm'}
-              </button>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       <div className="bg-slate-50 border border-slate-200/60 p-3 rounded-2xl font-mono text-[10px] text-slate-400 text-left">
         Signed in as:{' '}

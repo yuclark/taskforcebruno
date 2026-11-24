@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ShieldCheck,
   User,
@@ -337,7 +338,7 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
             : 'Clinical record saved to patient medical history.',
         });
         fetchMedicalLogsForTarget(effectivePetId);
-        if ((isBiteOrScratch || isSpayNeuter) && onRefresh) {
+        if (onRefresh) {
           onRefresh();
         }
       } else if (res.status === 403) {
@@ -2041,13 +2042,14 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
       )}
 
       {/* Edit Medical Record Modal */}
-      {editingMedLog && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={() => !savingRecordEdit && setEditingMedLog(null)}
-          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
-        >
+      {editingMedLog &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={() => !savingRecordEdit && setEditingMedLog(null)}
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4 animate-fade-in"
+          >
           <form
             onClick={(e) => e.stopPropagation()}
             onSubmit={async (e) => {
@@ -2174,17 +2176,19 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
               </button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Edit Vaccination Log Modal */}
-      {editingVacLog && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={() => !savingRecordEdit && setEditingVacLog(null)}
-          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
-        >
+      {editingVacLog &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={() => !savingRecordEdit && setEditingVacLog(null)}
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4 animate-fade-in"
+          >
           <form
             onClick={(e) => e.stopPropagation()}
             onSubmit={async (e) => {
@@ -2302,7 +2306,8 @@ export default function MedicalLogs({ pets = [], onRefresh }) {
               </button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

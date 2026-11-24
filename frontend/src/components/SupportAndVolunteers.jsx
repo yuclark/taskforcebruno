@@ -335,11 +335,11 @@ export default function SupportAndVolunteers({ session }) {
                   {lowStockNeeds.map((item) => (
                     <div
                       key={item.id}
-                      className="p-3 rounded-xl bg-white border border-rose-200/80 flex items-center justify-between gap-2"
+                      className="p-3 rounded-xl bg-white border border-rose-200/80 flex items-start justify-between gap-2"
                     >
-                      <div className="min-w-0">
-                        <p className="font-bold text-slate-900 text-xs truncate">{item.name}</p>
-                        <p className="text-[11px] text-slate-500">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-900 text-xs leading-snug break-words">{item.name}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
                           {item.category} &bull; Only{' '}
                           <strong className="text-rose-700">
                             {item.quantity} {item.unit}
@@ -347,7 +347,7 @@ export default function SupportAndVolunteers({ session }) {
                           left
                         </p>
                       </div>
-                      <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white text-[9px] font-mono font-bold uppercase shrink-0">
+                      <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white text-[9px] font-mono font-bold uppercase shrink-0 mt-0.5">
                         {item.tier}
                       </span>
                     </div>
@@ -368,10 +368,10 @@ export default function SupportAndVolunteers({ session }) {
                       <Icon className={`w-4 h-4 ${item.color}`} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-1">
-                        <h4 className="font-bold text-slate-800 text-xs truncate">{item.name}</h4>
+                      <div className="flex items-start justify-between gap-1.5">
+                        <h4 className="font-bold text-slate-800 text-xs leading-snug">{item.name}</h4>
                         <span
-                          className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider shrink-0 ${
+                          className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider shrink-0 mt-0.5 ${
                             item.tier === 'Urgent'
                               ? 'bg-rose-100 text-rose-800'
                               : item.tier === 'High'

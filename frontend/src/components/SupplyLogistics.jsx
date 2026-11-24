@@ -86,6 +86,22 @@ export default function SupplyLogistics() {
     { cat: {}, dog: {} }
   );
 
+  const medicalUnits = inventory.reduce((acc, item) => {
+    if (item.category === 'Medical') {
+      const unitNormal = item.unit ? item.unit.toLowerCase().trim() : 'units';
+      acc[unitNormal] = (acc[unitNormal] || 0) + (Number(item.quantity) || 0);
+    }
+    return acc;
+  }, {});
+
+  const suppliesUnits = inventory.reduce((acc, item) => {
+    if (item.category === 'Supplies') {
+      const unitNormal = item.unit ? item.unit.toLowerCase().trim() : 'pcs';
+      acc[unitNormal] = (acc[unitNormal] || 0) + (Number(item.quantity) || 0);
+    }
+    return acc;
+  }, {});
+
   const categoryMetrics = {
     'Cat Food': {
       skus: inventory.filter(
@@ -107,27 +123,11 @@ export default function SupplyLogistics() {
     },
     Medical: {
       skus: inventory.filter((i) => i.category === 'Medical').length,
-      vials: inventory
-        .filter(
-          (i) =>
-            i.category === 'Medical' &&
-            (i.unit?.toLowerCase() === 'vials' || i.unit?.toLowerCase() === 'doses')
-        )
-        .reduce((sum, i) => sum + (Number(i.quantity) || 0), 0),
-      items: inventory
-        .filter(
-          (i) =>
-            i.category === 'Medical' &&
-            i.unit?.toLowerCase() !== 'vials' &&
-            i.unit?.toLowerCase() !== 'doses'
-        )
-        .reduce((sum, i) => sum + (Number(i.quantity) || 0), 0),
+      summary: formatUnitTotals(medicalUnits, '0 units'),
     },
     Supplies: {
       skus: inventory.filter((i) => i.category === 'Supplies').length,
-      items: inventory
-        .filter((i) => i.category === 'Supplies')
-        .reduce((sum, i) => sum + (Number(i.quantity) || 0), 0),
+      summary: formatUnitTotals(suppliesUnits, '0 items'),
     },
   };
 
@@ -166,7 +166,7 @@ export default function SupplyLogistics() {
         <button
           type="button"
           onClick={() => fetchLiveLogistics()}
-          className="inline-flex items-center gap-2 px-4 py-2 border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 bg-white shadow-sm rounded-xl transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 bg-white shadow-sm rounded-xl transition-colors shrink-0 whitespace-nowrap"
         >
           <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
           <span>Refresh Stock</span>
@@ -400,17 +400,14 @@ export default function SupplyLogistics() {
                 name: 'Medical & Clinical',
                 key: 'Medical',
                 color: 'bg-blue-600',
-                summary:
-                  categoryMetrics.Medical.vials > 0
-                    ? `${categoryMetrics.Medical.vials} vials`
-                    : `${categoryMetrics.Medical.items} supplies`,
+                summary: categoryMetrics.Medical.summary,
                 skus: categoryMetrics.Medical.skus,
               },
               {
                 name: 'General Supplies',
                 key: 'Supplies',
                 color: 'bg-slate-700',
-                summary: `${categoryMetrics.Supplies.items} items`,
+                summary: categoryMetrics.Supplies.summary,
                 skus: categoryMetrics.Supplies.skus,
               },
             ].map((cat) => {

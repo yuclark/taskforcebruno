@@ -540,7 +540,7 @@ export default function CampusMap({
           </div>
 
           {/* Mobile-Friendly Quick Building Chip Selector */}
-          <div className="px-3 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <div className="px-3 py-2.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center gap-1.5">
             {CITU_CAMPUS_ZONES.map((zone) => {
               const bucket = zoneBuckets[zone.id];
               const isSelected = activeZone.id === zone.id;
@@ -630,8 +630,8 @@ export default function CampusMap({
                                 className="w-11 h-11 rounded-xl object-cover shrink-0 border border-slate-200 bg-white"
                               />
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-slate-900 text-xs truncate">
+                                <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                                  <span className="font-bold text-slate-900 text-xs leading-snug">
                                     {pet.name}
                                   </span>
                                   <span className="text-[10px] font-mono text-slate-400 shrink-0">

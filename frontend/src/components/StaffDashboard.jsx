@@ -101,14 +101,13 @@ export default function StaffDashboard({ session, onLogout }) {
       setLoadingPets(true);
       setPetsError('');
       const query = withArchived ? '/pets/?include_archived=true' : '/pets/';
-      const res = await apiGet(query);
+      const [res] = await Promise.all([apiGet(query), fetchStaffSummary()]);
       if (res.ok && Array.isArray(res.data)) {
         setPets(res.data);
       } else if (!res.aborted) {
         setPetsError(res.error || 'Unable to load pet records.');
       }
       setLoadingPets(false);
-      fetchStaffSummary();
     },
     [includeArchived, fetchStaffSummary]
   );
@@ -702,6 +701,7 @@ export default function StaffDashboard({ session, onLogout }) {
               <SightingTriage
                 session={session}
                 onAdmitStray={() => setActiveMenu('Add New Pet')}
+                onSummaryRefresh={fetchStaffSummary}
               />
             )}
             {activeMenu === 'Broadcast Bulletin' && <PostAnnouncement session={session} />}

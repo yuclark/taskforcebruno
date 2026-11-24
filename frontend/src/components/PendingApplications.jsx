@@ -682,7 +682,7 @@ export default function PendingApplications({ onRefresh }) {
           >
             <h3 className="text-base font-bold text-slate-900">Clear All Volunteer Records?</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              This removes all locally stored volunteer applications from this browser.
+              This permanently removes all volunteer applications from the clinic database.
             </p>
             <div className="flex gap-2.5">
               <button

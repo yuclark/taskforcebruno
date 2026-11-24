@@ -827,42 +827,42 @@ export default function PetListings({
               <thead>
                 <tr className="bg-slate-50/70 text-slate-500 border-b border-slate-200 uppercase tracking-wider font-semibold text-[10px] select-none">
                   <th
-                    className="p-3.5 w-32 cursor-pointer hover:bg-slate-100"
+                    className="px-3 py-3 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => requestSortAction('pet_id')}
                   >
                     Pet ID {renderSortArrow('pet_id')}
                   </th>
                   <th
-                    className="p-3.5 cursor-pointer hover:bg-slate-100"
+                    className="px-3 py-3 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => requestSortAction('name')}
                   >
                     Name {renderSortArrow('name')}
                   </th>
                   <th
-                    className="p-3.5 cursor-pointer hover:bg-slate-100"
+                    className="px-3 py-3 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => requestSortAction('pet_type')}
                   >
                     Classification {renderSortArrow('pet_type')}
                   </th>
                   <th
-                    className="p-3.5 cursor-pointer hover:bg-slate-100"
+                    className="px-3 py-3 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => requestSortAction('species')}
                   >
                     Species / Breed {renderSortArrow('species')}
                   </th>
                   <th
-                    className="p-3.5 cursor-pointer hover:bg-slate-100"
+                    className="px-3 py-3 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => requestSortAction('weight')}
                   >
                     Weight {renderSortArrow('weight')}
                   </th>
                   <th
-                    className="p-3.5 cursor-pointer hover:bg-slate-100"
+                    className="px-3 py-3 cursor-pointer hover:bg-slate-100 whitespace-nowrap"
                     onClick={() => requestSortAction('found_near')}
                   >
                     Campus Zone {renderSortArrow('found_near')}
                   </th>
-                  <th className="p-3.5 text-center">Health Status</th>
+                  <th className="px-3 py-3 text-center whitespace-nowrap">Health Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -874,7 +874,7 @@ export default function PetListings({
                         expandedPetId === pet.pet_id ? 'bg-slate-50' : 'hover:bg-slate-50/70'
                       }`}
                     >
-                      <td className="p-3.5 font-mono font-bold text-[#5C0612] whitespace-nowrap">
+                      <td className="px-3 py-3 font-mono font-bold text-[#5C0612] whitespace-nowrap">
                         <span className="inline-flex items-center gap-1.5">
                           <ChevronRight
                             className={`w-3.5 h-3.5 text-slate-400 transition-transform ${
@@ -884,22 +884,24 @@ export default function PetListings({
                           {pet.pet_id}
                         </span>
                       </td>
-                      <td className="p-3.5 font-semibold text-slate-900 text-sm">{pet.name}</td>
-                      <td className="p-3.5">{renderClassificationBadge(pet)}</td>
-                      <td className="p-3.5 text-slate-600">
+                      <td className="px-3 py-3 font-semibold text-slate-900 text-sm whitespace-nowrap">{pet.name}</td>
+                      <td className="px-3 py-3 whitespace-nowrap">{renderClassificationBadge(pet)}</td>
+                      <td className="px-3 py-3 text-slate-600">
                         {pet.species} &bull; {pet.breed || 'Mix'}
                       </td>
-                      <td className="p-3.5 font-mono text-slate-600">{pet.weight || 'N/A'}</td>
-                      <td className="p-3.5 text-slate-600 truncate max-w-[160px]">
+                      <td className="px-3 py-3 font-mono text-slate-600 whitespace-nowrap">{pet.weight || 'N/A'}</td>
+                      <td className="px-3 py-3 text-slate-600 truncate max-w-[140px]">
                         {normalizeCampusLocation(pet.found_near, pet.pet_id)}
                       </td>
-                      <td className="p-3.5 text-center">{renderStatusBadge(pet)}</td>
+                      <td className="px-3 py-3 text-center whitespace-nowrap">{renderStatusBadge(pet)}</td>
                     </tr>
 
                     {expandedPetId === pet.pet_id && (
                       <tr className="bg-slate-50/60">
-                        <td colSpan={7} className="p-5 border-b border-slate-200">
-                          {renderExpandedDetails(pet)}
+                        <td colSpan={7} className="p-4 border-b border-slate-200 max-w-0">
+                          <div className="w-full min-w-0 overflow-hidden">
+                            {renderExpandedDetails(pet)}
+                          </div>
                         </td>
                       </tr>
                     )}

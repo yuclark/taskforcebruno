@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Package,
   AlertTriangle,
@@ -732,12 +733,12 @@ export default function InventoryControl({
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 uppercase tracking-wider font-semibold text-[10px]">
-                      <th className="p-4 w-1/3">Item</th>
-                      <th className="p-4">Category</th>
-                      <th className="p-4">Stock Level</th>
-                      <th className="p-4">Supplier / Donor</th>
-                      <th className="p-4">Expiration</th>
-                      <th className="p-4 text-center">Actions</th>
+                      <th className="px-3.5 py-3">Item</th>
+                      <th className="px-3 py-3">Category</th>
+                      <th className="px-3 py-3">Stock Level</th>
+                      <th className="px-3 py-3 hidden xl:table-cell">Supplier / Donor</th>
+                      <th className="px-3 py-3">Expiration</th>
+                      <th className="px-3.5 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -746,13 +747,20 @@ export default function InventoryControl({
                       return (
                         <React.Fragment key={item.item_id}>
                           <tr className="hover:bg-slate-50/50 font-medium text-xs transition-colors">
-                            <td className="p-4">
-                              <div className="font-bold text-slate-900 text-sm">{item.item_name}</div>
-                              <span className="text-[10px] font-mono text-slate-400">SKU #{item.item_id}</span>
+                            <td className="px-3.5 py-3 max-w-[240px]">
+                              <div className="font-bold text-slate-900 text-xs sm:text-sm leading-snug break-words">
+                                {item.item_name}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-2 text-[10px] font-mono text-slate-400 mt-0.5">
+                                <span>SKU #{item.item_id}</span>
+                                <span className="xl:hidden font-sans truncate max-w-[160px]">
+                                  &bull; {item.supplier_donor || 'Campus General Fund'}
+                                </span>
+                              </div>
                             </td>
-                            <td className="p-4">
+                            <td className="px-3 py-3 whitespace-nowrap">
                               <span
-                                className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold font-mono border ${
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold font-mono border ${
                                   item.category === 'Food'
                                     ? 'bg-amber-50 text-amber-800 border-amber-200'
                                     : item.category === 'Medical'
@@ -763,46 +771,47 @@ export default function InventoryControl({
                                 {item.category}
                               </span>
                             </td>
-                            <td className="p-4">
-                              <div className="flex items-center gap-2">
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              <div className="flex flex-wrap items-center gap-1.5">
                                 <span className="font-mono font-bold text-slate-900 text-sm">{item.quantity}</span>
                                 <span className="text-[11px] text-slate-400 font-sans">{item.unit}</span>
                                 {isLow && (
                                   <span className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-rose-50 text-rose-700 border border-rose-200">
-                                    LOW STOCK (&le;{item.min_threshold ?? 10})
+                                    LOW
                                   </span>
                                 )}
                               </div>
                               <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
-                                Threshold: &le;{item.min_threshold ?? 10} {item.unit}
+                                Min: &le;{item.min_threshold ?? 10} {item.unit}
                               </span>
                             </td>
-                            <td className="p-4 text-slate-600 text-xs">
+                            <td className="px-3 py-3 text-slate-600 text-xs hidden xl:table-cell max-w-[160px] truncate">
                               {item.supplier_donor || 'Campus General Fund'}
                             </td>
-                            <td className="p-4 font-mono text-slate-500 text-[11px]">
+                            <td className="px-3 py-3 font-mono text-slate-500 text-[11px] whitespace-nowrap">
                               {item.expiration_date || 'Non-perishable'}
                             </td>
-                            <td className="p-4">
-                              <div className="flex gap-2 justify-center items-center">
+                            <td className="px-3.5 py-3">
+                              <div className="flex gap-1.5 justify-end items-center flex-nowrap">
                                 <button
                                   type="button"
                                   onClick={() => openStockDrawer(item, 'OUT')}
-                                  className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-xl text-[10px] shadow-sm whitespace-nowrap transition-colors"
+                                  className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-xl text-[10px] shadow-xs whitespace-nowrap transition-colors"
+                                  title="Log Disbursement (OUTFLOW)"
                                 >
-                                  Log Disbursement (OUTFLOW)
+                                  Disburse
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => openStockDrawer(item, 'IN')}
-                                  className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 font-bold rounded-xl text-[11px] text-slate-700 shadow-sm whitespace-nowrap transition-colors"
+                                  className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 font-bold rounded-xl text-[10px] text-slate-700 shadow-xs whitespace-nowrap transition-colors"
                                 >
                                   {selectedActionItemId === item.item_id ? 'Close' : 'Adjust Stock'}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => openDeleteModal(item)}
-                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
                                   title="Remove item"
                                   aria-label={`Remove ${item.item_name}`}
                                 >
@@ -814,7 +823,7 @@ export default function InventoryControl({
 
                           {selectedActionItemId === item.item_id && (
                             <tr className="bg-slate-50/80">
-                              <td colSpan={6} className="p-5 border-y border-slate-200">
+                              <td colSpan={6} className="p-4 border-y border-slate-200">
                                 {renderAdjustmentDrawer(item)}
                               </td>
                             </tr>
@@ -1089,12 +1098,14 @@ export default function InventoryControl({
       )}
 
       {/* Confirmation Modal: Stock Deduction */}
-      {deductionModal.isOpen && deductionModal.item && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
-        >
+      {deductionModal.isOpen &&
+        deductionModal.item &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-[90] animate-fade-in"
+          >
           <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 text-center space-y-4 animate-scale-up">
             <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 text-rose-600">
               <MinusCircle className="w-6 h-6" />
@@ -1157,16 +1168,18 @@ export default function InventoryControl({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Confirmation Modal: Delete Item */}
-      {deleteModal.isOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
-        >
+      {deleteModal.isOpen &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-[90] animate-fade-in"
+          >
           <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 text-center space-y-4 animate-scale-up">
             <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 text-rose-600">
               <Trash2 className="w-6 h-6" />
@@ -1198,7 +1211,8 @@ export default function InventoryControl({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Floating Status Toast */}

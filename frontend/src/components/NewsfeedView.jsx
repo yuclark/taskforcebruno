@@ -411,13 +411,13 @@ export default function NewsfeedView({ session }) {
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3 sm:p-3.5 space-y-3">
             {/* Top Row: Compact Snapshot + Quick Action Buttons */}
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 sm:gap-3 text-xs min-w-0">
-                <span className="inline-flex items-center gap-1.5 font-bold text-slate-800 shrink-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 sm:gap-3 text-xs min-w-0">
+                <span className="inline-flex items-center gap-1.5 font-bold text-slate-800 whitespace-nowrap">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
                   <span>{roamingPetsCount} On Campus</span>
                 </span>
-                <span className="text-slate-300">&bull;</span>
-                <span className="font-semibold text-amber-800 truncate">
+                <span className="text-slate-300 hidden xs:inline">&bull;</span>
+                <span className="font-semibold text-amber-800 whitespace-nowrap">
                   {petsAwaitingHomeCount} Adoptable
                 </span>
               </div>
@@ -498,8 +498,8 @@ export default function NewsfeedView({ session }) {
               </div>
             )}
 
-            {/* Filter Chips: Clean Horizontal Pill Bar */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar -mx-0.5 px-0.5">
+            {/* Filter Chips: Clean Wrapped Pill Bar */}
+            <div className="flex flex-wrap items-center gap-1.5">
               {filterTabs.map((tab) => {
                 const isActive = feedFilter === tab.key;
                 return (
