@@ -921,3 +921,170 @@ class SecurityAndAPITests(TestCase):
             self.assertEqual(len(res.data), 1)
             self.assertEqual(res.data[0]["pet_id"], "PET-001")
             self.assertNotIn("archived_at", res.data[0])
+
+    def test_profile_edit_allows_safe_fields_and_blocks_protected_credentials(self):
+        fake_db = FakeDB(tables={
+            "profiles": [
+                {
+                    "id": "stu-1",
+                    "email": "juan.cruz@cit.edu",
+                    "role": "user",
+                    "first_name": "Juan",
+                    "last_name": "Cruz",
+                    "custom_id": "22-1234-567",
+                    "contact_number": "",
+                    "department": "",
+                    "bio": "",
+                    "avatar_url": "",
+                },
+                {
+                    "id": "stf-1",
+                    "email": "mdc.nurse@cit.edu",
+                    "role": "staff",
+                    "first_name": "Maria",
+                    "last_name": "Santos",
+                    "custom_id": "19-0042-100",
+                    "contact_number": "",
+                    "department": "MDC Clinic",
+                    "bio": "",
+                    "avatar_url": "",
+                },
+            ]
+        })
+        with patch("wsapi.authentication.get_db_client", return_value=fake_db), patch("wsapi.views.get_db_client", return_value=fake_db):
+            # Unauthenticated access blocked
+            self.assertEqual(self.client.get("/api/profile/").status_code, 401)
+            self.assertEqual(self.client.put("/api/profile/", {"first_name": "Hack"}, format="json").status_code, 401)
+
+            # Student can view own profile
+            res_get = self.client.get("/api/profile/", **self._auth(self.student_token))
+            self.assertEqual(res_get.status_code, 200)
+            self.assertEqual(res_get.data["user"]["email"], "juan.cruz@cit.edu")
+            self.assertEqual(res_get.data["user"]["custom_id"], "22-1234-567")
+
+            # Student can update safe personal info
+            res_stu_ok = self.client.put(
+                "/api/profile/",
+                {
+                    "first_name": "Juan Carlos",
+                    "last_name": "Dela Cruz",
+                    "contact_number": "09171234567",
+                    "department": "BSIT / CCS",
+                    "bio": "Campus cat volunteer near GLE.",
+                },
+                format="json",
+                **self._auth(self.student_token),
+            )
+            self.assertEqual(res_stu_ok.status_code, 200)
+            self.assertEqual(res_stu_ok.data["user"]["first_name"], "Juan Carlos")
+            self.assertEqual(res_stu_ok.data["user"]["last_name"], "Dela Cruz")
+            self.assertEqual(res_stu_ok.data["user"]["contact_number"], "09171234567")
+            self.assertEqual(res_stu_ok.data["user"]["department"], "BSIT / CCS")
+            self.assertEqual(res_stu_ok.data["user"]["bio"], "Campus cat volunteer near GLE.")
+            # Protected fields remain unchanged
+            self.assertEqual(res_stu_ok.data["user"]["email"], "juan.cruz@cit.edu")
+            self.assertEqual(res_stu_ok.data["user"]["role"], "user")
+            self.assertFalse(res_stu_ok.data["user"]["is_staff"])
+            self.assertEqual(res_stu_ok.data["user"]["custom_id"], "22-1234-567")
+
+            # Staff can also update safe personal info
+            res_stf_ok = self.client.patch(
+                "/api/profile/",
+                {
+                    "first_name": "Nurse Maria",
+                    "department": "CIT-U Medical-Dental Clinic",
+                    "bio": "Animal welfare coordinator.",
+                },
+                format="json",
+                **self._auth(self.staff_token),
+            )
+            self.assertEqual(res_stf_ok.status_code, 200)
+            self.assertEqual(res_stf_ok.data["user"]["first_name"], "Nurse Maria")
+            self.assertTrue(res_stf_ok.data["user"]["is_staff"])
+
+            # Attempts to change protected/important fields are strictly rejected
+            for forbidden_payload in (
+                {"role": "staff"},
+                {"is_staff": True},
+                {"email": "other@cit.edu"},
+                {"custom_id": "99-9999-999"},
+                {"student_id": "99-9999-999"},
+                {"id": "stf-1"},
+            ):
+                res_forbid = self.client.put(
+                    "/api/profile/",
+                    forbidden_payload,
+                    format="json",
+                    **self._auth(self.student_token),
+                )
+                self.assertEqual(res_forbid.status_code, 400, f"Expected 400 for {forbidden_payload}")
+
+            # Invalid phone & blank name rejected
+            self.assertEqual(
+                self.client.put("/api/profile/", {"contact_number": "not-a-phone"}, format="json", **self._auth(self.student_token)).status_code,
+                400,
+            )
+            self.assertEqual(
+                self.client.put("/api/profile/", {"first_name": "   "}, format="json", **self._auth(self.student_token)).status_code,
+                400,
+            )
+
+    def test_profile_avatar_upload_validation_and_removal(self):
+        fake_db = FakeDB(tables={
+            "profiles": [
+                {
+                    "id": "stu-1",
+                    "email": "juan.cruz@cit.edu",
+                    "role": "user",
+                    "first_name": "Juan",
+                    "last_name": "Cruz",
+                    "custom_id": "22-1234-567",
+                    "avatar_url": "https://example.supabase.co/storage/v1/object/public/avatars/old.png",
+                }
+            ]
+        })
+        fake_bucket = MagicMock()
+        fake_bucket.get_public_url.return_value = "https://example.supabase.co/storage/v1/object/public/avatars/avatar_stu-1_new.png"
+        fake_db.storage = MagicMock()
+        fake_db.storage.from_.return_value = fake_bucket
+
+        with (
+            patch("wsapi.authentication.get_db_client", return_value=fake_db),
+            patch("wsapi.views.get_db_client", return_value=fake_db),
+        ):
+            # Spoofed HTML file disguised as PNG is rejected
+            bad_avatar = SimpleUploadedFile("evil.png", b"<html><script>alert(1)</script></html>", content_type="image/png")
+            res_bad = self.client.put(
+                "/api/profile/",
+                {"avatar": bad_avatar},
+                format="multipart",
+                **self._auth(self.student_token),
+            )
+            self.assertEqual(res_bad.status_code, 400)
+
+            # Genuine PNG upload succeeds and cleans up old avatar
+            png_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+            good_avatar = SimpleUploadedFile("me.png", png_bytes, content_type="image/png")
+            res_ok = self.client.put(
+                "/api/profile/",
+                {"avatar": good_avatar, "bio": "Updated with photo"},
+                format="multipart",
+                **self._auth(self.student_token),
+            )
+            self.assertEqual(res_ok.status_code, 200)
+            self.assertEqual(
+                res_ok.data["user"]["avatar_url"],
+                "https://example.supabase.co/storage/v1/object/public/avatars/avatar_stu-1_new.png",
+            )
+            fake_bucket.upload.assert_called_once()
+            fake_bucket.remove.assert_called_once_with(["old.png"])
+
+            # Removing avatar clears avatar_url
+            res_rm = self.client.put(
+                "/api/profile/",
+                {"remove_avatar": "true"},
+                format="json",
+                **self._auth(self.student_token),
+            )
+            self.assertEqual(res_rm.status_code, 200)
+            self.assertEqual(res_rm.data["user"]["avatar_url"], "")

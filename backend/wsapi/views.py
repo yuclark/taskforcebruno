@@ -80,6 +80,24 @@ ALLOWED_INVENTORY_CATEGORIES = frozenset({"Food", "Medical", "Supplies"})
 ALLOWED_SIGHTING_STATUSES = frozenset({"Pending", "Investigated", "Resolved"})
 ALLOWED_ANIMAL_TYPES = frozenset({"Cat", "Dog", "Others"})
 
+ALLOWED_PROFILE_UPDATE_FIELDS = frozenset({
+    "first_name",
+    "last_name",
+    "contact_number",
+    "department",
+    "bio",
+})
+
+PROTECTED_PROFILE_FIELDS = frozenset({
+    "id",
+    "user_id",
+    "email",
+    "role",
+    "is_staff",
+    "custom_id",
+    "student_id",
+})
+
 URGENT_MARKERS = ("[URGENT EMERGENCY]", "[🚨 URGENT EMERGENCY]")
 
 
@@ -166,6 +184,10 @@ def _build_session_payload(
         "full_name": f"{first_name} {last_name}".strip(),
         "custom_id": custom_id,
         "student_id": custom_id,
+        "contact_number": str(profile.get("contact_number") or "").strip(),
+        "department": str(profile.get("department") or "").strip(),
+        "bio": str(profile.get("bio") or "").strip(),
+        "avatar_url": str(profile.get("avatar_url") or "").strip(),
     }
     if refresh_token:
         payload["refresh_token"] = refresh_token
@@ -319,9 +341,7 @@ class LoginView(APIView):
 
             profile_rec = {}
             try:
-                p = get_db_client().table("profiles").select(
-                    "id, custom_id, first_name, last_name, email, role"
-                ).eq("id", response.user.id).execute()
+                p = get_db_client().table("profiles").select("*").eq("id", response.user.id).execute()
                 if p.data:
                     profile_rec = p.data[0] or {}
             except Exception as exc:
@@ -355,6 +375,212 @@ class SessionView(APIView):
 
     def get(self, request):
         return Response({"user": request.user.to_profile_dict()}, status=status.HTTP_200_OK)
+
+
+class ProfileAPIView(APIView):
+    """
+    Allows authenticated students and MDC staff to view and update ONLY their safe
+    personal profile info (first_name, last_name, contact_number, department, bio)
+    and profile picture (avatar_url).
+    Important institutional/security fields (id, email, custom_id/student_id, role, is_staff)
+    are strictly read-only and rejected if modification is attempted.
+    """
+    permission_classes = [IsAuthenticatedUser]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    @staticmethod
+    def _compose_profile_response(user, row: dict | None) -> dict:
+        rec = row or {}
+        first_name = str(rec.get("first_name") if rec.get("first_name") is not None else user.first_name).strip()
+        last_name = str(rec.get("last_name") if rec.get("last_name") is not None else user.last_name).strip()
+        contact_number = str(rec.get("contact_number") or "").strip()
+        department = str(rec.get("department") or "").strip()
+        bio = str(rec.get("bio") or "").strip()
+        avatar_url = str(rec.get("avatar_url") or "").strip()
+
+        return {
+            "id": user.id,
+            "email": user.email,
+            "role": user.role,
+            "is_staff": user.is_staff,
+            "first_name": first_name,
+            "last_name": last_name,
+            "full_name": f"{first_name} {last_name}".strip(),
+            "custom_id": user.custom_id,
+            "student_id": user.custom_id,
+            "contact_number": contact_number,
+            "department": department,
+            "bio": bio,
+            "avatar_url": avatar_url,
+        }
+
+    @staticmethod
+    def _try_remove_old_avatar(db, old_avatar_url: str | None) -> None:
+        raw = str(old_avatar_url or "").strip()
+        marker = "/storage/v1/object/public/avatars/"
+        if marker not in raw:
+            return
+        object_path = raw.split(marker, 1)[1].split("?", 1)[0].strip("/")
+        if not object_path:
+            return
+        try:
+            db.storage.from_("avatars").remove([object_path])
+        except Exception as exc:
+            logger.debug("Best-effort old avatar cleanup skipped for %s: %s", object_path, exc)
+
+    def get(self, request):
+        try:
+            db = get_db_client()
+            res = db.table("profiles").select("*").eq("id", request.user.id).execute()
+            row = res.data[0] if res.data else None
+            return Response(
+                {"user": self._compose_profile_response(request.user, row)},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as exc:
+            logger.exception("Failed to fetch user profile for %s: %s", request.user.id, exc)
+            return Response(
+                {"error": "Unable to load your profile right now."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def patch(self, request):
+        return self.put(request)
+
+    def put(self, request):
+        try:
+            d = request.data
+            attempted_protected = sorted(
+                k for k in d.keys() if k in PROTECTED_PROFILE_FIELDS
+            )
+            if attempted_protected:
+                return Response(
+                    {
+                        "error": (
+                            "Protected institutional credentials (email, student/employee ID, and account role) "
+                            "cannot be modified."
+                        ),
+                        "protected_fields": attempted_protected,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            update_payload = {}
+
+            if "first_name" in d:
+                first_name = clean_text(d.get("first_name"), 80)
+                if not first_name:
+                    return Response(
+                        {"error": "First name cannot be empty."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                update_payload["first_name"] = first_name
+
+            if "last_name" in d:
+                last_name = clean_text(d.get("last_name"), 80)
+                if not last_name:
+                    return Response(
+                        {"error": "Last name cannot be empty."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                update_payload["last_name"] = last_name
+
+            if "contact_number" in d:
+                contact_raw = clean_text(d.get("contact_number"), 30)
+                if contact_raw:
+                    normalized_phone = re.sub(r"[\s-]+", "", contact_raw)
+                    if not PHONE_PATTERN.match(normalized_phone):
+                        return Response(
+                            {"error": "Please enter a valid Philippine mobile or landline number (e.g., 09171234567)."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    update_payload["contact_number"] = contact_raw
+                else:
+                    update_payload["contact_number"] = None
+
+            if "department" in d:
+                dept = clean_text(d.get("department"), 120)
+                update_payload["department"] = dept or None
+
+            if "bio" in d:
+                bio = clean_text(d.get("bio"), 240)
+                update_payload["bio"] = bio or None
+
+            db = get_db_client()
+            existing_res = db.table("profiles").select("*").eq("id", request.user.id).execute()
+            existing_row = existing_res.data[0] if existing_res.data else None
+            old_avatar_url = (existing_row or {}).get("avatar_url") or request.user.avatar_url
+
+            avatar_file = request.FILES.get("avatar")
+            remove_avatar = str(d.get("remove_avatar", "")).strip().lower() in ("true", "1", "yes")
+            avatar_changed = False
+
+            if avatar_file:
+                try:
+                    safe_uid = re.sub(r"[^a-zA-Z0-9_-]", "", str(request.user.id))[:36] or "user"
+                    new_avatar_url = _upload_image_to_bucket(avatar_file, "avatars", f"avatar_{safe_uid}")
+                except ValueError as val_err:
+                    return Response({"error": str(val_err)}, status=status.HTTP_400_BAD_REQUEST)
+                update_payload["avatar_url"] = new_avatar_url
+                avatar_changed = True
+            elif remove_avatar:
+                update_payload["avatar_url"] = None
+                avatar_changed = True
+
+            if not update_payload:
+                return Response(
+                    {"error": "No valid editable profile fields were provided."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            update_payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+            if existing_row:
+                save_res = (
+                    db.table("profiles")
+                    .update(update_payload)
+                    .eq("id", request.user.id)
+                    .execute()
+                )
+            else:
+                upsert_payload = {
+                    "id": request.user.id,
+                    "email": request.user.email,
+                    "custom_id": request.user.custom_id or "00-0000-000",
+                    "role": request.user.role,
+                    "first_name": update_payload.get("first_name") or request.user.first_name or "CIT-U",
+                    "last_name": update_payload.get("last_name") or request.user.last_name or "Member",
+                    **update_payload,
+                }
+                save_res = db.table("profiles").upsert(upsert_payload).execute()
+
+            if not save_res.data:
+                return Response(
+                    {"error": "Unable to save profile changes right now."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if avatar_changed and old_avatar_url and old_avatar_url != update_payload.get("avatar_url"):
+                self._try_remove_old_avatar(db, old_avatar_url)
+
+            token = getattr(request, "auth", None)
+            if isinstance(token, str) and token:
+                invalidate_cached_token(token)
+
+            updated_row = save_res.data[0] or {}
+            return Response(
+                {
+                    "message": "Profile updated successfully.",
+                    "user": self._compose_profile_response(request.user, updated_row),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as exc:
+            logger.exception("Failed to update profile for %s: %s", request.user.id, exc)
+            return Response(
+                {"error": "Unable to update your profile right now. Please try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class LogoutView(APIView):
@@ -1609,6 +1835,20 @@ class UnifiedNewsfeedAPIView(APIView):
             all_likes = db.table("feed_likes").select("*").execute().data or []
             all_comments = db.table("feed_comments").select("*").order("created_at", desc=False).execute().data or []
 
+            profiles_by_email = {}
+            try:
+                all_profiles = db.table("profiles").select("email, first_name, last_name, avatar_url").execute().data or []
+                for prof in all_profiles:
+                    em = (prof.get("email") or "").strip().lower()
+                    if em:
+                        full = f"{(prof.get('first_name') or '').strip()} {(prof.get('last_name') or '').strip()}".strip()
+                        profiles_by_email[em] = {
+                            "full_name": full,
+                            "avatar_url": (prof.get("avatar_url") or "").strip(),
+                        }
+            except Exception as exc:
+                logger.debug("Skipping profile avatar enrichment in newsfeed: %s", exc)
+
             likes_map = {}
             user_liked_set = set()
             for like in all_likes:
@@ -1625,10 +1865,14 @@ class UnifiedNewsfeedAPIView(APIView):
                 if not fid:
                     continue
                 resolved_cid = comment.get("comment_id") if comment.get("comment_id") is not None else comment.get("id")
+                c_email = (comment.get("user_email") or "").strip().lower()
+                c_prof = profiles_by_email.get(c_email, {})
                 comments_map.setdefault(fid, []).append({
                     "comment_id": resolved_cid,
                     "id": resolved_cid,
                     "user_email": comment.get("user_email"),
+                    "user_name": c_prof.get("full_name") or "",
+                    "user_avatar": c_prof.get("avatar_url") or "",
                     "comment_text": comment.get("comment_text"),
                     "timestamp": comment.get("created_at"),
                     "created_at": comment.get("created_at"),
@@ -1646,6 +1890,8 @@ class UnifiedNewsfeedAPIView(APIView):
                 fid = f"sighting_{s.get('sighting_id')}"
                 clean_features = _strip_urgent_marker(raw_features) or "See attached photo"
                 badge = "URGENT EMERGENCY" if is_urgent else ("Verified Sighting" if status_val == "Investigated" else status_val)
+                rep_email = (s.get("reporter_email") or "").strip().lower()
+                rep_prof = profiles_by_email.get(rep_email, {})
                 unified_feed.append({
                     "feed_id": fid,
                     "item_type": "sighting",
@@ -1657,6 +1903,8 @@ class UnifiedNewsfeedAPIView(APIView):
                     "campus_zone": s.get("campus_zone") or "",
                     "image_url": s.get("image_url"),
                     "author_tag": s.get("reporter_email") or "Campus Reporter",
+                    "author_name": rep_prof.get("full_name") or "",
+                    "author_avatar": rep_prof.get("avatar_url") or "",
                     "timestamp": s.get("logged_at") or "",
                     "likes_count": likes_map.get(fid, 0),
                     "is_liked_by_me": fid in user_liked_set,
@@ -1682,6 +1930,8 @@ class UnifiedNewsfeedAPIView(APIView):
                     "meta_details": colony_str,
                     "image_url": p.get("primary_image"),
                     "author_tag": "CIT-U MDC Operations",
+                    "author_name": "CIT-U MDC Operations",
+                    "author_avatar": "",
                     "timestamp": pet_timestamp,
                     "likes_count": likes_map.get(fid, 0),
                     "is_liked_by_me": fid in user_liked_set,
@@ -1692,6 +1942,8 @@ class UnifiedNewsfeedAPIView(APIView):
             announcements = db.table("campus_announcements").select("*").execute().data or []
             for a in announcements:
                 fid = f"announcement_{a.get('announcement_id')}"
+                ann_email = (a.get("author_email") or "").strip().lower()
+                ann_prof = profiles_by_email.get(ann_email, {})
                 unified_feed.append({
                     "feed_id": fid,
                     "item_type": "announcement",
@@ -1702,6 +1954,8 @@ class UnifiedNewsfeedAPIView(APIView):
                     "meta_details": "MDC Bulletin",
                     "image_url": a.get("image_url"),
                     "author_tag": a.get("author_email") or "mdc.staff@cit.edu",
+                    "author_name": ann_prof.get("full_name") or "",
+                    "author_avatar": ann_prof.get("avatar_url") or "",
                     "timestamp": a.get("created_at") or "",
                     "likes_count": likes_map.get(fid, 0),
                     "is_liked_by_me": fid in user_liked_set,

@@ -40,6 +40,10 @@ class AuthenticatedUser:
     first_name: str = ""
     last_name: str = ""
     custom_id: str = ""
+    contact_number: str = ""
+    department: str = ""
+    bio: str = ""
+    avatar_url: str = ""
 
     @property
     def pk(self) -> str:
@@ -69,6 +73,10 @@ class AuthenticatedUser:
             "full_name": self.full_name,
             "custom_id": self.custom_id,
             "student_id": self.custom_id,
+            "contact_number": self.contact_number,
+            "department": self.department,
+            "bio": self.bio,
+            "avatar_url": self.avatar_url,
         }
 
 
@@ -132,9 +140,7 @@ def _load_profile_row(user_id: str) -> dict:
     if not user_id:
         return {}
     try:
-        res = get_db_client().table("profiles").select(
-            "id, custom_id, first_name, last_name, email, role"
-        ).eq("id", user_id).execute()
+        res = get_db_client().table("profiles").select("*").eq("id", user_id).execute()
         if res.data:
             return res.data[0] or {}
     except Exception as exc:
@@ -168,6 +174,10 @@ def _build_authenticated_user(
         or (user_metadata or {}).get("user_id")
         or ""
     ).strip()
+    contact_number = str(profile.get("contact_number") or "").strip()
+    department = str(profile.get("department") or "").strip()
+    bio = str(profile.get("bio") or "").strip()
+    avatar_url = str(profile.get("avatar_url") or "").strip()
 
     is_staff = resolve_is_staff(role, resolved_email)
     canonical_role = role or ("staff" if is_staff else "user")
@@ -180,6 +190,10 @@ def _build_authenticated_user(
         first_name=first_name,
         last_name=last_name,
         custom_id=custom_id,
+        contact_number=contact_number,
+        department=department,
+        bio=bio,
+        avatar_url=avatar_url,
     )
 
 

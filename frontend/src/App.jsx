@@ -162,6 +162,53 @@ export default function App() {
     [showToast]
   );
 
+  const handleProfileUpdated = useCallback(
+    (updatedUser) => {
+      if (!updatedUser) return;
+      setSession((prev) => {
+        if (!prev) return null;
+        const synced = saveStoredSession({
+          ...prev,
+          first_name: updatedUser.first_name ?? prev.first_name,
+          last_name: updatedUser.last_name ?? prev.last_name,
+          full_name:
+            updatedUser.full_name ||
+            `${updatedUser.first_name ?? prev.first_name ?? ''} ${updatedUser.last_name ?? prev.last_name ?? ''}`.trim(),
+          contact_number: updatedUser.contact_number ?? '',
+          department: updatedUser.department ?? '',
+          bio: updatedUser.bio ?? '',
+          avatar_url: updatedUser.avatar_url ?? '',
+        });
+        try {
+          const emailKey = (synced.email || '').trim().toLowerCase();
+          if (emailKey) {
+            localStorage.setItem(
+              `tfb_user_profile_${emailKey}`,
+              JSON.stringify({
+                id: synced.custom_id || synced.student_id || '',
+                student_id: synced.student_id || synced.custom_id || '',
+                custom_id: synced.custom_id || synced.student_id || '',
+                first_name: synced.first_name || '',
+                last_name: synced.last_name || '',
+                full_name: synced.full_name || '',
+                email: emailKey,
+                contact_number: synced.contact_number || '',
+                department: synced.department || '',
+                bio: synced.bio || '',
+                avatar_url: synced.avatar_url || '',
+              })
+            );
+          }
+        } catch {
+          // Ignore storage quota errors
+        }
+        return synced;
+      });
+      showToast('Your profile has been updated.', 'success');
+    },
+    [showToast]
+  );
+
   // Verify cached session token against the backend on mount to sync authoritative role & profile
   useEffect(() => {
     if (!session?.access_token) return undefined;
@@ -184,6 +231,10 @@ export default function App() {
             full_name: serverUser.full_name || prev.full_name,
             custom_id: serverUser.custom_id || prev.custom_id,
             student_id: serverUser.student_id || prev.student_id,
+            contact_number: serverUser.contact_number ?? prev.contact_number ?? '',
+            department: serverUser.department ?? prev.department ?? '',
+            bio: serverUser.bio ?? prev.bio ?? '',
+            avatar_url: serverUser.avatar_url ?? prev.avatar_url ?? '',
           });
           return synced;
         });
@@ -415,6 +466,7 @@ export default function App() {
               key={`staff-${session.email}`}
               session={session}
               onLogout={() => handleLogout()}
+              onProfileUpdated={handleProfileUpdated}
             />
           </Suspense>
         </MDCAuthGate>
@@ -424,6 +476,7 @@ export default function App() {
             key={`user-${session.email}`}
             session={session}
             onLogout={() => handleLogout()}
+            onProfileUpdated={handleProfileUpdated}
           />
         </Suspense>
       )}

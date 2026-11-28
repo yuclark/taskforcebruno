@@ -53,7 +53,7 @@ export default function AdoptionGallery({ session }) {
   const [applicationForm, setApplicationForm] = useState(() => ({
     fullName: verifiedFullName,
     email: sessionEmail,
-    contactNum: '',
+    contactNum: (session?.contact_number || '').trim(),
     address: '',
     experience: 'Beginner',
     housingType: 'Owned House',
@@ -495,6 +495,11 @@ export default function AdoptionGallery({ session }) {
                       setErrorMessage('');
                       setFieldErrors({});
                       setSuccessMessage('');
+                      setApplicationForm((prev) => ({
+                        ...prev,
+                        fullName: verifiedFullName || prev.fullName,
+                        contactNum: prev.contactNum || (session?.contact_number || '').trim(),
+                      }));
                       setShowApplyForm(true);
                     }}
                     className="w-full py-3 bg-[#5C0612] hover:bg-[#42040B] text-white font-semibold rounded-xl border-b-2 border-[#D4AF37] shadow-sm transition-colors text-xs"

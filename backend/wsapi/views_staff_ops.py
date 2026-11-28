@@ -64,7 +64,7 @@ class RefreshTokenView(APIView):
                 p = (
                     get_db_client()
                     .table("profiles")
-                    .select("id, custom_id, first_name, last_name, email, role")
+                    .select("*")
                     .eq("id", supa_user.id)
                     .execute()
                 )

@@ -18,6 +18,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../lib/api';
 import { isStaffSession } from '../lib/auth';
 import { formatCommentTime, formatFeedDate } from '../lib/dates';
 import { isAdoptablePet, safeImageUrl } from '../lib/pets';
+import UserAvatar from './UserAvatar';
 
 function formatAuthorName(rawTag) {
   const s = String(rawTag || '').trim();
@@ -593,8 +594,8 @@ export default function NewsfeedView({ session }) {
               </div>
             ) : (
               paginatedFeedItems.map((item) => {
-                const authorName = formatAuthorName(item.author_tag);
-                const initials = getAuthorInitials(item.author_tag);
+                const authorName = (item.author_name || '').trim() || formatAuthorName(item.author_tag);
+                const initials = getAuthorInitials(authorName);
                 const formattedTimestamp = formatFeedDate(item.timestamp);
                 const isAnnouncement = item.item_type === 'announcement';
                 const isUrgent =
@@ -622,17 +623,25 @@ export default function NewsfeedView({ session }) {
                     {/* Clean Post Header */}
                     <div className="px-4 pt-4 pb-3 sm:px-5 sm:pt-5 flex items-start justify-between gap-3 relative">
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs select-none shrink-0 shadow-xs ${
-                            isUrgent
-                              ? 'bg-rose-600 text-white'
-                              : isAnnouncement
-                              ? 'bg-[#5C0612] text-[#D4AF37]'
-                              : 'bg-slate-800 text-white'
-                          }`}
-                        >
-                          {isUrgent ? <Siren className="w-5 h-5" /> : initials}
-                        </div>
+                        {isUrgent ? (
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs select-none shrink-0 shadow-xs bg-rose-600 text-white">
+                            <Siren className="w-5 h-5" />
+                          </div>
+                        ) : (
+                          <UserAvatar
+                            src={item.author_avatar}
+                            initials={initials}
+                            name={authorName}
+                            size="lg"
+                            roundedClass="rounded-full"
+                            fallbackClassName={
+                              isAnnouncement
+                                ? 'bg-[#5C0612] text-[#D4AF37]'
+                                : 'bg-slate-800 text-white'
+                            }
+                            className="shadow-xs"
+                          />
+                        )}
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 text-xs">
@@ -861,8 +870,20 @@ export default function NewsfeedView({ session }) {
                                   className="bg-white p-3 rounded-xl border border-slate-200/80 text-xs space-y-1.5"
                                 >
                                   <div className="flex justify-between items-center text-[11px] text-slate-400 gap-2 flex-wrap">
-                                    <span className="font-bold text-slate-800 truncate">
-                                      {formatAuthorName(comment.user_email)}
+                                    <span className="flex items-center gap-2 min-w-0">
+                                      <UserAvatar
+                                        src={comment.user_avatar}
+                                        initials={getAuthorInitials(
+                                          (comment.user_name || '').trim() || comment.user_email
+                                        )}
+                                        name={(comment.user_name || '').trim() || formatAuthorName(comment.user_email)}
+                                        size="xs"
+                                        roundedClass="rounded-full"
+                                        fallbackClassName="bg-slate-200 text-slate-700"
+                                      />
+                                      <span className="font-bold text-slate-800 truncate">
+                                        {(comment.user_name || '').trim() || formatAuthorName(comment.user_email)}
+                                      </span>
                                     </span>
                                     <div className="flex items-center gap-2.5 shrink-0">
                                       <span>

@@ -293,4 +293,229 @@ test.describe('Task Force Bruno — Pre-Defense E2E Verification', () => {
     await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
     expect(pageErrors).toEqual([]);
   });
+
+  test('Students and staff can edit safe profile info and photo while important credentials stay locked', async ({ page }) => {
+    const pageErrors = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+
+    let studentProfile = {
+      id: 'stu-1',
+      access_token: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdHUtMSJ9.sig',
+      refresh_token: 'mock-refresh',
+      email: 'juan.cruz@cit.edu',
+      role: 'user',
+      is_staff: false,
+      first_name: 'Juan',
+      last_name: 'Cruz',
+      full_name: 'Juan Cruz',
+      custom_id: '22-1234-567',
+      student_id: '22-1234-567',
+      contact_number: '',
+      department: '',
+      bio: '',
+      avatar_url: '',
+    };
+
+    const avatarDataUrl =
+      'https://example.supabase.co/storage/v1/object/public/avatars/avatar_stu-1_test.png';
+
+    const tinyPng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2dIAAAAASUVORK5CYII=',
+      'base64'
+    );
+    await page.route(avatarDataUrl, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'image/png',
+        body: tinyPng,
+      })
+    );
+
+    await attachMockApi(page, {
+      '/api/login/': (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ session: studentProfile }),
+        }),
+      '/api/session/': (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ user: studentProfile }),
+        }),
+      '/api/profile/': (route, method) => {
+        if (method === 'GET') {
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ user: studentProfile }),
+          });
+        }
+        studentProfile = {
+          ...studentProfile,
+          first_name: 'Juan Carlos',
+          last_name: 'Dela Cruz',
+          full_name: 'Juan Carlos Dela Cruz',
+          contact_number: '09171234567',
+          department: 'BSIT / CCS',
+          bio: 'Campus cat volunteer.',
+          avatar_url: avatarDataUrl,
+        };
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            message: 'Profile updated successfully.',
+            user: studentProfile,
+          }),
+        });
+      },
+    });
+
+    await page.goto('/login');
+    await page.getByLabel('Institutional Email').fill('juan.cruz@cit.edu');
+    await page.getByLabel('Password', { exact: true }).fill('Password123');
+    await page.getByRole('button', { name: 'Sign In' }).click();
+
+    await expect(page).toHaveURL(/\/student\/dashboard$/);
+    await page.getByRole('button', { name: /Close guide/i }).click();
+
+    // Open Edit Profile modal
+    await page.getByRole('button', { name: /Edit Profile/i }).first().click();
+    const dialog = page.getByRole('dialog', { name: /Edit Profile & Photo/i });
+    await expect(dialog).toBeVisible();
+
+    // Important institutional fields must be disabled / read-only
+    await expect(dialog.getByLabel('Institutional Email (Locked)')).toBeDisabled();
+    await expect(dialog.getByLabel('Institutional Email (Locked)')).toHaveValue('juan.cruz@cit.edu');
+    await expect(dialog.getByLabel('Student or Employee ID (Locked)')).toBeDisabled();
+    await expect(dialog.getByLabel('Student or Employee ID (Locked)')).toHaveValue('22-1234-567');
+    await expect(dialog).toContainText('Read-Only');
+
+    // Update editable info & upload a valid PNG avatar
+    await dialog.getByLabel('First Name *').fill('Juan Carlos');
+    await dialog.getByLabel('Last Name *').fill('Dela Cruz');
+    await dialog.getByLabel('Contact Number').fill('09171234567');
+    await dialog.getByLabel('Department / Program').fill('BSIT / CCS');
+    await dialog.getByLabel('Short Bio').fill('Campus cat volunteer.');
+
+    const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+    await dialog.locator('input[type="file"]').setInputFiles({
+      name: 'avatar.png',
+      mimeType: 'image/png',
+      buffer: pngHeader,
+    });
+
+    await dialog.getByRole('button', { name: 'Save Changes' }).click();
+    await expect(dialog).toBeHidden({ timeout: 5000 });
+    await expect(page.getByText('Juan Carlos Dela Cruz').first()).toBeVisible();
+    await expect(page.locator(`img[src="${avatarDataUrl}"]`).first()).toBeVisible();
+    expect(pageErrors).toEqual([]);
+  });
+
+  test('MDC Staff portal exposes Edit Profile with locked employee credentials', async ({ page }) => {
+    const pageErrors = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+
+    let staffProfile = {
+      id: 'stf-1',
+      access_token: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdGYtMSJ9.sig',
+      refresh_token: 'mock-refresh',
+      email: 'mdc.nurse@cit.edu',
+      role: 'staff',
+      is_staff: true,
+      first_name: 'Maria',
+      last_name: 'Santos',
+      full_name: 'Maria Santos',
+      custom_id: '19-0042-100',
+      student_id: '19-0042-100',
+      contact_number: '09181112222',
+      department: 'Medical-Dental Clinic',
+      bio: 'Clinic nurse',
+      avatar_url: '',
+    };
+
+    await attachMockApi(page, {
+      '/api/login/': (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ session: staffProfile }),
+        }),
+      '/api/session/': (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ user: staffProfile }),
+        }),
+      '/api/staff/summary/': (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            total_active_pets: 2,
+            archived_pets: 0,
+            fully_vaccinated_pets: 2,
+            overdue_vaccines: 0,
+            tnr_certified_pets: 1,
+            active_quarantines: 0,
+            adopted_pets: 0,
+            adoptable_pets: 1,
+            pending_adoptions: 0,
+            pending_volunteers: 0,
+            pending_applications_total: 0,
+            pending_sightings: 0,
+            urgent_sightings: 0,
+            low_stock_items: 0,
+            total_inventory_items: 4,
+          }),
+        }),
+      '/api/profile/': (route, method) => {
+        if (method === 'GET') {
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ user: staffProfile }),
+          });
+        }
+        staffProfile = {
+          ...staffProfile,
+          first_name: 'Nurse Maria',
+          full_name: 'Nurse Maria Santos',
+          bio: 'Lead TNR coordinator',
+        };
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            message: 'Profile updated successfully.',
+            user: staffProfile,
+          }),
+        });
+      },
+    });
+
+    await page.goto('/login');
+    await page.getByLabel('Institutional Email').fill('mdc.nurse@cit.edu');
+    await page.getByLabel('Password', { exact: true }).fill('Password123');
+    await page.getByRole('button', { name: 'Sign In' }).click();
+
+    await expect(page).toHaveURL(/\/mdc\/dashboard$/);
+    await page.getByRole('button', { name: /Edit Profile/i }).first().click();
+
+    const dialog = page.getByRole('dialog', { name: /Edit Profile & Photo/i });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('Institutional Email (Locked)')).toBeDisabled();
+    await expect(dialog.getByLabel('Student or Employee ID (Locked)')).toBeDisabled();
+    await expect(dialog).toContainText('MDC Staff (Verified Personnel)');
+
+    await dialog.getByLabel('First Name *').fill('Nurse Maria');
+    await dialog.getByLabel('Short Bio').fill('Lead TNR coordinator');
+    await dialog.getByRole('button', { name: 'Save Changes' }).click();
+
+    await expect(dialog).toBeHidden({ timeout: 5000 });
+    await expect(page.getByText('Nurse Maria Santos').first()).toBeVisible();
+    expect(pageErrors).toEqual([]);
+  });
 });

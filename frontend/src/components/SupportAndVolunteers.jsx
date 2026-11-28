@@ -121,12 +121,14 @@ export default function SupportAndVolunteers({ session }) {
   const [volunteerForm, setVolunteerForm] = useState(() => ({
     name: initialIdentity.name,
     studentId: initialIdentity.studentId,
-    contactNum: '',
-    program: '',
+    contactNum: (session?.contact_number || '').trim(),
+    program: (session?.department || '').trim(),
     role: 'Feeding Patrol',
     availability: '',
     notes: '',
   }));
+
+  const effectiveVolunteerName = hasVerifiedName ? initialIdentity.name : volunteerForm.name;
 
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -214,7 +216,7 @@ export default function SupportAndVolunteers({ session }) {
     if (submitting) return;
     setError('');
 
-    const trimmedName = volunteerForm.name.trim();
+    const trimmedName = effectiveVolunteerName.trim();
     const trimmedId = volunteerForm.studentId.trim();
     const trimmedContact = volunteerForm.contactNum.trim().replace(/[-\s]/g, '');
     const trimmedProgram = volunteerForm.program.trim();
@@ -518,7 +520,7 @@ export default function SupportAndVolunteers({ session }) {
                     readOnly={hasVerifiedName}
                     required
                     placeholder="e.g. Juan Dela Cruz"
-                    value={volunteerForm.name}
+                    value={effectiveVolunteerName}
                     onChange={(e) => setVolunteerForm((prev) => ({ ...prev, name: e.target.value }))}
                     className={`w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-slate-700 font-semibold text-base sm:text-xs focus:outline-none ${
                       hasVerifiedName
