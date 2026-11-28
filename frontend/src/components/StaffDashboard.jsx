@@ -382,7 +382,7 @@ export default function StaffDashboard({ session, onLogout, onProfileUpdated }) 
       : 0;
 
   return (
-    <div className="h-dvh flex bg-[#F3EFE9] dark:bg-[#0E0C14] text-slate-800 dark:text-slate-100 font-sans antialiased relative overflow-hidden">
+    <div className="h-dvh flex bg-[#F3EFE9] dark:bg-[#0E0E10] text-slate-800 dark:text-zinc-100 font-sans antialiased relative overflow-hidden">
       {/* Mobile Drawer Backdrop */}
       {isMobileOpen && (
         <div
@@ -395,7 +395,7 @@ export default function StaffDashboard({ session, onLogout, onProfileUpdated }) 
       <aside
         aria-label="Staff navigation"
         className={`
-          w-72 max-w-[85vw] bg-[#5C0612] text-white flex flex-col justify-between border-r-4 border-[#D4AF37] shrink-0
+          w-72 max-w-[85vw] bg-[#5C0612] dark:bg-[#141416] text-white flex flex-col justify-between border-r-4 border-[#D4AF37] dark:border-r dark:border-zinc-800 shrink-0
           fixed md:sticky top-0 h-dvh z-40 shadow-2xl md:shadow-none transition-transform duration-250 ease-out
           ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
@@ -440,14 +440,14 @@ export default function StaffDashboard({ session, onLogout, onProfileUpdated }) 
                   onClick={() => handleMenuChange(key)}
                   className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
                     isActive
-                      ? 'bg-white text-[#5C0612] dark:bg-[#D4AF37] dark:text-[#3B030B] shadow-sm font-semibold'
-                      : 'text-stone-200 hover:bg-white/10 hover:text-white'
+                      ? 'bg-white text-[#5C0612] dark:bg-white/[0.09] dark:text-white dark:ring-1 dark:ring-white/10 shadow-sm font-semibold'
+                      : 'text-stone-200 dark:text-zinc-400 hover:bg-white/10 dark:hover:bg-white/[0.05] hover:text-white'
                   }`}
                 >
                   <span className="flex items-center gap-3 min-w-0">
                     <Icon
                       className={`w-4 h-4 shrink-0 ${
-                        isActive ? 'text-[#5C0612] dark:text-[#3B030B]' : 'text-[#D4AF37]/85'
+                        isActive ? 'text-[#5C0612] dark:text-[#DFBE6F]' : 'text-[#D4AF37]/85 dark:text-zinc-500'
                       }`}
                     />
                     <span className="truncate">{label}</span>
@@ -459,8 +459,8 @@ export default function StaffDashboard({ session, onLogout, onProfileUpdated }) 
                         badge.urgent
                           ? 'bg-rose-500 text-white animate-pulse'
                           : isActive
-                          ? 'bg-[#5C0612] text-[#D4AF37]'
-                          : 'bg-[#D4AF37] text-[#5C0612]'
+                          ? 'bg-[#5C0612] text-[#D4AF37] dark:bg-white/15 dark:text-[#DFBE6F]'
+                          : 'bg-[#D4AF37] text-[#5C0612] dark:bg-white/10 dark:text-zinc-200'
                       }`}
                     >
                       {badge.count}
@@ -470,16 +470,16 @@ export default function StaffDashboard({ session, onLogout, onProfileUpdated }) 
               );
             })}
 
-            <div className="pt-3 border-t border-white/10 mt-3">
+            <div className="pt-3 border-t border-white/10 dark:border-zinc-800/80 mt-3">
               <button
                 type="button"
                 onClick={() => {
                   setIsEmergencyOpen(true);
                   setIsMobileOpen(false);
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-100 hover:text-white bg-rose-950/50 hover:bg-rose-900/70 border border-rose-400/30 transition-colors text-left"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-100 hover:text-white bg-rose-950/50 hover:bg-rose-900/70 dark:bg-rose-500/10 dark:hover:bg-rose-500/15 border border-rose-400/30 dark:border-rose-500/20 dark:text-rose-200 transition-colors text-left"
               >
-                <ShieldAlert className="w-4 h-4 text-rose-300 shrink-0" />
+                <ShieldAlert className="w-4 h-4 text-rose-300 dark:text-rose-400 shrink-0" />
                 <span>Bite Protocol (RA 9482)</span>
               </button>
             </div>
@@ -522,7 +522,7 @@ export default function StaffDashboard({ session, onLogout, onProfileUpdated }) 
                 setIsProfileOpen(true);
                 setIsMobileOpen(false);
               }}
-              className="py-2 bg-white/10 hover:bg-white/20 text-[#D4AF37] hover:text-white rounded-xl text-xs font-semibold border border-[#D4AF37]/25 transition-colors inline-flex items-center justify-center gap-1.5"
+              className="py-2 bg-white/10 hover:bg-white/20 dark:bg-white/[0.06] dark:hover:bg-white/[0.11] text-[#D4AF37] dark:text-zinc-200 hover:text-white rounded-xl text-xs font-semibold border border-[#D4AF37]/25 dark:border-white/10 transition-colors inline-flex items-center justify-center gap-1.5"
             >
               <Pencil className="w-3.5 h-3.5 shrink-0" />
               <span>Edit Profile</span>
@@ -531,7 +531,7 @@ export default function StaffDashboard({ session, onLogout, onProfileUpdated }) 
             <button
               type="button"
               onClick={onLogout}
-              className="py-2 bg-white/10 hover:bg-rose-950/60 text-stone-200 hover:text-white rounded-xl text-xs font-medium border border-white/10 transition-colors inline-flex items-center justify-center gap-1.5"
+              className="py-2 bg-white/10 hover:bg-rose-950/60 dark:bg-white/[0.04] dark:hover:bg-rose-500/15 text-stone-200 dark:text-zinc-300 hover:text-white rounded-xl text-xs font-medium border border-white/10 transition-colors inline-flex items-center justify-center gap-1.5"
             >
               <LogOut className="w-3.5 h-3.5 shrink-0" />
               <span>Sign Out</span>
@@ -630,7 +630,7 @@ export default function StaffDashboard({ session, onLogout, onProfileUpdated }) 
           }}
         />
 
-        <div className="flex-1 relative min-h-0 bg-[#F3EFE9] dark:bg-[#0E0C14] overflow-hidden">
+        <div className="flex-1 relative min-h-0 bg-[#F3EFE9] dark:bg-[#0E0E10] overflow-hidden">
           <PageBackdrop variant={STAFF_BACKDROP_MAP[activeMenu] || 'pet-listings'} />
           <div className="relative z-10 h-full overflow-y-auto p-3 sm:p-5 md:p-7 space-y-5">
           {/* Collapsible Live MDC Operations KPI & RA 9482 Export Strip */}

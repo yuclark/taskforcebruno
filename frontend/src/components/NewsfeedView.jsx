@@ -515,7 +515,7 @@ export default function NewsfeedView({ session }) {
                       isActive
                         ? tab.urgent
                           ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
-                          : 'bg-[#5C0612] text-white border-[#5C0612] shadow-xs'
+                          : 'bg-[#5C0612] text-white border-[#5C0612] dark:bg-[#7A1121] dark:border-[#8F192B] shadow-xs'
                         : tab.urgent
                         ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
                         : 'bg-slate-50 text-slate-600 border-slate-200/90 hover:bg-slate-100'

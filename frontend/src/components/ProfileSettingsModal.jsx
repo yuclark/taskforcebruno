@@ -227,7 +227,7 @@ function ProfileSettingsDialog({ onClose, session, onProfileUpdated }) {
         className="bg-white w-full max-w-xl rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92dvh] text-left animate-scale-up"
       >
         {/* Maroon Institutional Header */}
-        <div className="bg-[#5C0612] px-5 sm:px-6 py-4 border-b-2 border-[#D4AF37] flex items-center justify-between gap-3 text-white shrink-0">
+        <div className="bg-[#5C0612] dark:bg-[#1B1416] px-5 sm:px-6 py-4 border-b-2 border-[#D4AF37] dark:border-b dark:border-zinc-800 flex items-center justify-between gap-3 text-white shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-white/10 border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37] shrink-0">
               <User className="w-5 h-5" />
@@ -475,14 +475,14 @@ function ProfileSettingsDialog({ onClose, session, onProfileUpdated }) {
             </div>
 
             {/* Locked / Protected Important Credentials */}
-            <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-3">
+            <div className="p-4 rounded-2xl bg-amber-50/60 dark:bg-[#111113] border border-amber-200/80 dark:border-[#26262A] space-y-3">
               <div className="flex items-start gap-2">
-                <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <Lock className="w-4 h-4 text-amber-700 dark:text-[#DFBE6F] shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-amber-900">
+                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-amber-900 dark:text-zinc-200">
                     Protected Institutional Credentials (Locked)
                   </h3>
-                  <p className="text-[11px] text-amber-800/90 mt-0.5 leading-snug">
+                  <p className="text-[11px] text-amber-800 dark:text-zinc-400 mt-0.5 leading-snug">
                     Important account records verified by CIT-U cannot be edited here. Contact the MDC administrator if a correction is needed.
                   </p>
                 </div>
@@ -559,7 +559,7 @@ function ProfileSettingsDialog({ onClose, session, onProfileUpdated }) {
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-60 text-white rounded-xl text-xs font-semibold border-b-2 border-[#D4AF37] shadow-sm transition-colors inline-flex items-center gap-2"
+              className="px-5 py-2.5 bg-[#5C0612] hover:bg-[#42040B] dark:bg-[#7A1121] dark:hover:bg-[#8E1628] disabled:opacity-60 text-white rounded-xl text-xs font-semibold border-b-2 border-[#D4AF37] dark:border-b-0 dark:ring-1 dark:ring-white/10 shadow-sm transition-colors inline-flex items-center gap-2"
             >
               {saving ? (
                 <>

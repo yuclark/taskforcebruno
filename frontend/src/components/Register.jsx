@@ -132,11 +132,11 @@ export default function Register({ togglePage, onRegisterSuccess }) {
   };
 
   return (
-    <div className="min-h-dvh flex flex-col md:flex-row-reverse bg-[#F3EFE9] dark:bg-[#0E0C14] text-slate-800 dark:text-slate-100">
+    <div className="min-h-dvh flex flex-col md:flex-row-reverse bg-[#F3EFE9] dark:bg-[#0E0E10] text-slate-800 dark:text-zinc-100">
       {/* Desktop Right Branding Column */}
-      <div className="hidden md:flex md:w-1/2 bg-gradient-to-bl from-[#6D0A19] via-[#5C0612] to-[#38030A] p-10 lg:p-16 flex-col justify-between relative overflow-hidden border-l-4 border-[#D4AF37]">
-        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#D4AF37]/10 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-32 -left-24 w-96 h-96 rounded-full bg-black/30 blur-3xl pointer-events-none" />
+      <div className="hidden md:flex md:w-1/2 bg-gradient-to-bl from-[#6D0A19] via-[#5C0612] to-[#38030A] dark:from-[#26080E] dark:via-[#1C060B] dark:to-[#120508] p-10 lg:p-16 flex-col justify-between relative overflow-hidden border-l-4 border-[#D4AF37] dark:border-l dark:border-zinc-800">
+        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#D4AF37]/10 blur-3xl pointer-events-none dark:hidden" />
+        <div className="absolute -bottom-32 -left-24 w-96 h-96 rounded-full bg-black/30 blur-3xl pointer-events-none dark:hidden" />
 
         <div className="relative z-10 flex items-center justify-end gap-3">
           <span className="text-[#D4AF37] tracking-[0.2em] text-[11px] font-semibold uppercase">
@@ -225,12 +225,12 @@ export default function Register({ togglePage, onRegisterSuccess }) {
       </div>
 
       {/* Registration Form Column */}
-      <div className="flex-1 relative overflow-hidden bg-[#F3EFE9] dark:bg-[#0E0C14] flex items-center justify-center p-4 sm:p-8 md:p-12 pb-12">
+      <div className="flex-1 relative overflow-hidden bg-[#F3EFE9] dark:bg-[#0E0E10] flex items-center justify-center p-4 sm:p-8 md:p-12 pb-12">
         <PageBackdrop variant="auth" />
         <div className="hidden md:block absolute top-5 left-5 z-20">
           <ThemeToggle variant="compact" />
         </div>
-        <div className="relative z-10 w-full max-w-md bg-white/95 dark:bg-[#191522]/95 backdrop-blur-xs p-6 sm:p-8 rounded-2xl shadow-lg shadow-slate-200/70 dark:shadow-black/50 border border-slate-200/80 dark:border-[#2D273B]">
+        <div className="relative z-10 w-full max-w-md bg-white/95 dark:bg-[#161618] backdrop-blur-xs p-6 sm:p-8 rounded-2xl shadow-lg shadow-slate-200/70 dark:shadow-2xl dark:shadow-black/50 border border-slate-200/80 dark:border-[#26262A]">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Create an Account</h2>
             <p className="text-xs text-slate-500 mt-1">
@@ -382,7 +382,7 @@ export default function Register({ togglePage, onRegisterSuccess }) {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-60 text-white font-semibold rounded-xl text-sm shadow-md transition-colors border-b-4 border-[#D4AF37] mt-2 flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-[#5C0612] hover:bg-[#42040B] dark:bg-[#7A1121] dark:hover:bg-[#8E1628] disabled:opacity-60 text-white font-semibold rounded-xl text-sm shadow-md transition-colors border-b-4 border-[#D4AF37] dark:border-b-0 dark:ring-1 dark:ring-white/10 mt-2 flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>

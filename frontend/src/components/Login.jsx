@@ -137,11 +137,11 @@ export default function Login({
   };
 
   return (
-    <div className="min-h-dvh flex flex-col md:flex-row bg-[#F3EFE9] dark:bg-[#0E0C14] text-slate-800 dark:text-slate-100">
+    <div className="min-h-dvh flex flex-col md:flex-row bg-[#F3EFE9] dark:bg-[#0E0E10] text-slate-800 dark:text-zinc-100">
       {/* Desktop Left Branding Panel */}
-      <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-[#6D0A19] via-[#5C0612] to-[#38030A] p-10 lg:p-16 flex-col justify-between relative overflow-hidden border-r-4 border-[#D4AF37]">
-        <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-[#D4AF37]/10 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-32 -right-24 w-96 h-96 rounded-full bg-black/30 blur-3xl pointer-events-none" />
+      <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-[#6D0A19] via-[#5C0612] to-[#38030A] dark:from-[#26080E] dark:via-[#1C060B] dark:to-[#120508] p-10 lg:p-16 flex-col justify-between relative overflow-hidden border-r-4 border-[#D4AF37] dark:border-r dark:border-zinc-800">
+        <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-[#D4AF37]/10 blur-3xl pointer-events-none dark:hidden" />
+        <div className="absolute -bottom-32 -right-24 w-96 h-96 rounded-full bg-black/30 blur-3xl pointer-events-none dark:hidden" />
 
         <div className="relative z-10 flex items-center gap-3">
           <span className="h-0.5 w-8 bg-[#D4AF37]" />
@@ -230,12 +230,12 @@ export default function Login({
       </div>
 
       {/* Interactive Sign-In Column */}
-      <div className="flex-1 relative overflow-hidden bg-[#F3EFE9] dark:bg-[#0E0C14] flex items-center justify-center p-4 sm:p-8 md:p-12 lg:p-16 pb-12">
+      <div className="flex-1 relative overflow-hidden bg-[#F3EFE9] dark:bg-[#0E0E10] flex items-center justify-center p-4 sm:p-8 md:p-12 lg:p-16 pb-12">
         <PageBackdrop variant="auth" />
         <div className="hidden md:block absolute top-5 right-5 z-20">
           <ThemeToggle variant="compact" />
         </div>
-        <div className="relative z-10 w-full max-w-md bg-white/95 dark:bg-[#191522]/95 backdrop-blur-xs p-6 sm:p-8 rounded-2xl shadow-lg shadow-slate-200/70 dark:shadow-black/50 border border-slate-200/80 dark:border-[#2D273B]">
+        <div className="relative z-10 w-full max-w-md bg-white/95 dark:bg-[#161618] backdrop-blur-xs p-6 sm:p-8 rounded-2xl shadow-lg shadow-slate-200/70 dark:shadow-2xl dark:shadow-black/50 border border-slate-200/80 dark:border-[#26262A]">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
               {authMode === 'forgot'
@@ -260,17 +260,17 @@ export default function Login({
 
           {/* Public Collar QR Quick Action */}
           {authMode === 'login' && (
-          <div className="mb-6 p-3.5 bg-amber-50/70 rounded-xl border border-[#D4AF37]/40 flex items-center justify-between gap-3">
+          <div className="mb-6 p-3.5 bg-amber-50/70 dark:bg-[#1C1C20] rounded-xl border border-[#D4AF37]/40 dark:border-[#2A2A30] flex items-center justify-between gap-3">
             <div className="text-left min-w-0">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#5C0612] block">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#5C0612] dark:text-[#DFBE6F] block">
                 Found a Campus Pet?
               </span>
-              <span className="text-xs text-slate-600 block leading-snug mt-0.5">Scan its collar tag—no sign-in needed</span>
+              <span className="text-xs text-slate-600 dark:text-zinc-400 block leading-snug mt-0.5">Scan its collar tag—no sign-in needed</span>
             </div>
             <button
               type="button"
               onClick={() => setShowScanner(true)}
-              className="px-3.5 py-2.5 bg-[#5C0612] hover:bg-[#42040B] text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm shrink-0"
+              className="px-3.5 py-2.5 bg-[#5C0612] hover:bg-[#42040B] dark:bg-[#7A1121] dark:hover:bg-[#8E1628] text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm shrink-0"
             >
               <QrCode className="w-4 h-4 text-[#D4AF37]" />
               <span>Scan Tag</span>
@@ -464,7 +464,7 @@ export default function Login({
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3.5 bg-[#5C0612] hover:bg-[#42040B] disabled:opacity-60 text-white font-semibold rounded-xl text-sm shadow-md transition-colors border-b-4 border-[#D4AF37] flex items-center justify-center gap-2 mt-2"
+              className="w-full py-3.5 bg-[#5C0612] hover:bg-[#42040B] dark:bg-[#7A1121] dark:hover:bg-[#8E1628] disabled:opacity-60 text-white font-semibold rounded-xl text-sm shadow-md transition-colors border-b-4 border-[#D4AF37] dark:border-b-0 dark:ring-1 dark:ring-white/10 flex items-center justify-center gap-2 mt-2"
             >
               {isLoading ? (
                 <>

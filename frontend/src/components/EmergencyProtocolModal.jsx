@@ -57,7 +57,7 @@ export default function EmergencyProtocolModal({ isOpen, onClose, onNavigateToRe
         onClick={(e) => e.stopPropagation()}
       >
         {/* Maroon Institutional Header */}
-        <div className="bg-[#5C0612] px-5 sm:px-6 py-4 border-b-2 border-[#D4AF37] flex items-center justify-between gap-3 text-white shrink-0">
+        <div className="bg-[#5C0612] dark:bg-[#1B1416] px-5 sm:px-6 py-4 border-b-2 border-[#D4AF37] dark:border-b dark:border-zinc-800 flex items-center justify-between gap-3 text-white shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-white/10 border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37] shrink-0">
               <ShieldAlert className="w-5 h-5" />

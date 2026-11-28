@@ -38,7 +38,7 @@ export function applyThemeToDocument(resolved) {
 
   const themeColorMeta = document.querySelector('meta[name="theme-color"]');
   if (themeColorMeta) {
-    themeColorMeta.setAttribute('content', isDark ? '#140C12' : '#5C0612');
+    themeColorMeta.setAttribute('content', isDark ? '#0E0E10' : '#5C0612');
   }
 }
 

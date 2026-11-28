@@ -144,7 +144,7 @@ export default function DashboardContainer({ session, onLogout, onProfileUpdated
   };
 
   return (
-    <div className="h-dvh bg-[#F3EFE9] dark:bg-[#0E0C14] flex text-slate-800 dark:text-slate-100 font-sans antialiased relative overflow-hidden">
+    <div className="h-dvh bg-[#F3EFE9] dark:bg-[#0E0E10] flex text-slate-800 dark:text-zinc-100 font-sans antialiased relative overflow-hidden">
       <UserGuideModal isOpen={isGuideOpen} onClose={handleCloseGuide} />
 
       <EmergencyProtocolModal
@@ -172,7 +172,7 @@ export default function DashboardContainer({ session, onLogout, onProfileUpdated
       <aside
         aria-label="Main navigation"
         className={`
-          w-72 max-w-[85vw] bg-[#5C0612] text-white flex flex-col justify-between border-r-4 border-[#D4AF37] shrink-0
+          w-72 max-w-[85vw] bg-[#5C0612] dark:bg-[#141416] text-white flex flex-col justify-between border-r-4 border-[#D4AF37] dark:border-r dark:border-zinc-800 shrink-0
           fixed md:sticky top-0 h-dvh z-40 shadow-2xl md:shadow-none transition-transform duration-250 ease-out
           ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
@@ -219,13 +219,13 @@ export default function DashboardContainer({ session, onLogout, onProfileUpdated
                   onClick={() => navigateTo(key)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
                     isActive
-                      ? 'bg-white text-[#5C0612] dark:bg-[#D4AF37] dark:text-[#3B030B] font-semibold shadow-sm'
-                      : 'text-stone-200 hover:bg-white/10 hover:text-white'
+                      ? 'bg-white text-[#5C0612] dark:bg-white/[0.09] dark:text-white dark:ring-1 dark:ring-white/10 font-semibold shadow-sm'
+                      : 'text-stone-200 dark:text-zinc-400 hover:bg-white/10 dark:hover:bg-white/[0.05] hover:text-white'
                   }`}
                 >
                   <Icon
                     className={`w-4 h-4 shrink-0 ${
-                      isActive ? 'text-[#5C0612] dark:text-[#3B030B]' : 'text-[#D4AF37]/85'
+                      isActive ? 'text-[#5C0612] dark:text-[#DFBE6F]' : 'text-[#D4AF37]/85 dark:text-zinc-500'
                     }`}
                   />
                   <span className="truncate">{label}</span>
@@ -233,16 +233,16 @@ export default function DashboardContainer({ session, onLogout, onProfileUpdated
               );
             })}
 
-            <div className="pt-3 border-t border-white/10 mt-3 space-y-1.5">
+            <div className="pt-3 border-t border-white/10 dark:border-zinc-800/80 mt-3 space-y-1.5">
               <button
                 type="button"
                 onClick={() => {
                   setIsEmergencyOpen(true);
                   setIsMobileOpen(false);
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-100 hover:text-white bg-rose-950/50 hover:bg-rose-900/70 border border-rose-400/30 transition-colors text-left"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-100 hover:text-white bg-rose-950/50 hover:bg-rose-900/70 dark:bg-rose-500/10 dark:hover:bg-rose-500/15 border border-rose-400/30 dark:border-rose-500/20 dark:text-rose-200 transition-colors text-left"
               >
-                <ShieldAlert className="w-4 h-4 text-rose-300 shrink-0" />
+                <ShieldAlert className="w-4 h-4 text-rose-300 dark:text-rose-400 shrink-0" />
                 <span>Bite &amp; Emergency Guide</span>
               </button>
 
@@ -252,9 +252,9 @@ export default function DashboardContainer({ session, onLogout, onProfileUpdated
                   setIsGuideOpen(true);
                   setIsMobileOpen(false);
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-[#D4AF37] hover:bg-white/10 transition-colors text-left"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-[#D4AF37] dark:text-zinc-300 hover:bg-white/10 dark:hover:bg-white/[0.05] dark:hover:text-white transition-colors text-left"
               >
-                <BookOpen className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                <BookOpen className="w-4 h-4 text-[#D4AF37] dark:text-zinc-400 shrink-0" />
                 <span>Getting Started Guide</span>
               </button>
             </div>
@@ -298,7 +298,7 @@ export default function DashboardContainer({ session, onLogout, onProfileUpdated
                 setIsProfileOpen(true);
                 setIsMobileOpen(false);
               }}
-              className="py-2 bg-white/10 hover:bg-white/20 text-[#D4AF37] hover:text-white rounded-xl text-xs font-semibold border border-[#D4AF37]/25 transition-colors inline-flex items-center justify-center gap-1.5"
+              className="py-2 bg-white/10 hover:bg-white/20 dark:bg-white/[0.06] dark:hover:bg-white/[0.11] text-[#D4AF37] dark:text-zinc-200 hover:text-white rounded-xl text-xs font-semibold border border-[#D4AF37]/25 dark:border-white/10 transition-colors inline-flex items-center justify-center gap-1.5"
             >
               <Pencil className="w-3.5 h-3.5 shrink-0" />
               <span>Edit Profile</span>
@@ -307,7 +307,7 @@ export default function DashboardContainer({ session, onLogout, onProfileUpdated
             <button
               type="button"
               onClick={onLogout}
-              className="py-2 bg-white/10 hover:bg-rose-950/60 text-stone-200 hover:text-white rounded-xl text-xs font-medium border border-white/10 transition-colors inline-flex items-center justify-center gap-1.5"
+              className="py-2 bg-white/10 hover:bg-rose-950/60 dark:bg-white/[0.04] dark:hover:bg-rose-500/15 text-stone-200 dark:text-zinc-300 hover:text-white rounded-xl text-xs font-medium border border-white/10 transition-colors inline-flex items-center justify-center gap-1.5"
             >
               <LogOut className="w-3.5 h-3.5 shrink-0" />
               <span>Sign Out</span>
@@ -357,9 +357,9 @@ export default function DashboardContainer({ session, onLogout, onProfileUpdated
             <button
               type="button"
               onClick={() => setIsGuideOpen(true)}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[#5C0612] rounded-xl text-xs font-semibold transition-colors"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[#5C0612] dark:bg-[#1E1E22] dark:hover:bg-[#27272C] dark:border-[#2E2E34] dark:text-zinc-200 rounded-xl text-xs font-semibold transition-colors"
             >
-              <BookOpen className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <BookOpen className="w-3.5 h-3.5 text-amber-700 dark:text-zinc-400 shrink-0" />
               <span>User Guide</span>
             </button>
 
@@ -384,7 +384,7 @@ export default function DashboardContainer({ session, onLogout, onProfileUpdated
         </header>
 
         {/* Active View Surface with Ambient Page Backdrop */}
-        <div className="flex-1 relative min-h-0 bg-[#F3EFE9] dark:bg-[#0E0C14] overflow-hidden">
+        <div className="flex-1 relative min-h-0 bg-[#F3EFE9] dark:bg-[#0E0E10] overflow-hidden">
           <PageBackdrop variant={currentTab} />
           <div className="relative z-10 h-full overflow-y-auto">
             {currentTab === 'newsfeed' && (

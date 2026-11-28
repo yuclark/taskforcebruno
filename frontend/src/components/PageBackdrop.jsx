@@ -278,16 +278,16 @@ export default function PageBackdrop({ variant = 'newsfeed', className = '' }) {
   return (
     <div
       aria-hidden="true"
-      className={`pointer-events-none select-none absolute inset-0 overflow-hidden z-0 ${className}`}
+      className={`pointer-events-none select-none absolute inset-0 overflow-hidden z-0 dark:hidden ${className}`}
     >
-      {/* Layer 1: Eye-friendly warm parchment (light) / deep plum-obsidian (dark) corner washes */}
-      <div className="absolute -top-36 -left-32 w-[460px] h-[460px] rounded-full bg-[#5C0612]/[0.055] dark:bg-[#9E162B]/[0.16] blur-3xl" />
-      <div className="absolute top-1/3 -right-32 w-[440px] h-[440px] rounded-full bg-[#D4AF37]/[0.10] dark:bg-[#D4AF37]/[0.075] blur-3xl" />
-      <div className="absolute -bottom-36 left-1/4 w-[480px] h-[480px] rounded-full bg-[#8B1A2B]/[0.045] dark:bg-[#5C0612]/[0.18] blur-3xl" />
+      {/* Layer 1: Soft warm parchment corner washes (Light mode only — Dark mode stays crisp & matte) */}
+      <div className="absolute -top-36 -left-32 w-[460px] h-[460px] rounded-full bg-[#5C0612]/[0.05] blur-3xl" />
+      <div className="absolute top-1/3 -right-32 w-[440px] h-[440px] rounded-full bg-[#D4AF37]/[0.09] blur-3xl" />
+      <div className="absolute -bottom-36 left-1/4 w-[480px] h-[480px] rounded-full bg-[#8B1A2B]/[0.04] blur-3xl" />
 
       {/* Layer 2: Seamless low-contrast paw-print & architectural dot pattern */}
       <svg
-        className="absolute inset-0 w-full h-full text-[#5C0612] dark:text-[#D4AF37] opacity-[0.042] dark:opacity-[0.048]"
+        className="absolute inset-0 w-full h-full text-[#5C0612] opacity-[0.038]"
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>

@@ -20,7 +20,7 @@ export default function ThemeToggle({ variant = 'compact', className = '' }) {
       <div
         role="group"
         aria-label="Appearance theme"
-        className={`grid grid-cols-3 gap-1 p-1 rounded-xl bg-black/25 border border-white/10 ${className}`}
+        className={`grid grid-cols-3 gap-1 p-1 rounded-xl bg-black/25 dark:bg-white/[0.04] border border-white/10 dark:border-white/[0.08] ${className}`}
       >
         {options.map(({ key, label, Icon }) => {
           const active = theme === key;
@@ -33,8 +33,8 @@ export default function ThemeToggle({ variant = 'compact', className = '' }) {
               title={`Switch to ${label} theme`}
               className={`flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-[11px] font-semibold transition-all ${
                 active
-                  ? 'bg-[#D4AF37] text-[#3B030B] shadow-xs'
-                  : 'text-stone-300/85 hover:text-white hover:bg-white/10'
+                  ? 'bg-[#D4AF37] text-[#3B030B] dark:bg-white/[0.14] dark:text-white shadow-xs'
+                  : 'text-stone-300/85 dark:text-zinc-400 hover:text-white hover:bg-white/10 dark:hover:bg-white/[0.06]'
               }`}
             >
               <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -67,10 +67,10 @@ export default function ThemeToggle({ variant = 'compact', className = '' }) {
       onClick={toggleTheme}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-      className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all shrink-0 bg-stone-100/90 hover:bg-stone-200/80 border-stone-200/90 text-slate-700 dark:bg-[#231E2E] dark:hover:bg-[#2D273B] dark:border-[#3A324B] dark:text-amber-300 ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all shrink-0 bg-stone-100/90 hover:bg-stone-200/80 border-stone-200/90 text-slate-700 dark:bg-[#1E1E22] dark:hover:bg-[#27272C] dark:border-[#2E2E34] dark:text-zinc-200 ${className}`}
     >
       {isDark ? (
-        <Sun className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+        <Sun className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
       ) : (
         <Moon className="w-3.5 h-3.5 text-[#5C0612] shrink-0" />
       )}

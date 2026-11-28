@@ -26,8 +26,8 @@
   }
 
   html.dark body {
-    background-color: #0E0C14;
-    color: #EDE9F5;
+    background-color: #0E0E10;
+    color: #E4E4E7;
   }
 
   /* Smooth theme transition only during active toggle */
@@ -35,7 +35,7 @@
   html.theme-transition *::before,
   html.theme-transition *::after {
     transition-property: background-color, border-color, color, fill, stroke !important;
-    transition-duration: 200ms !important;
+    transition-duration: 180ms !important;
     transition-timing-function: ease-out !important;
   }
 
@@ -64,8 +64,8 @@
   /* Native dropdown option readability in dark mode */
   html.dark select,
   html.dark option {
-    background-color: #1D1827;
-    color: #F3F0F9;
+    background-color: #18181B;
+    color: #F4F4F5;
   }
 
   /* Subtle custom scrollbars across desktop browsers */
@@ -88,70 +88,71 @@
   }
 
   html.dark ::-webkit-scrollbar-thumb {
-    background: rgba(212, 175, 55, 0.22);
+    background: rgba(255, 255, 255, 0.14);
   }
 
   html.dark ::-webkit-scrollbar-thumb:hover {
-    background: rgba(212, 175, 55, 0.42);
+    background: rgba(255, 255, 255, 0.24);
   }
 }
 
 /* ============================================================================
-   Comprehensive Dark Mode Surface & Semantic Palette Layer
-   Uses `:where(...)` so every explicit `dark:*` utility (html.dark & -> 0,2,1)
-   always takes priority, while ensuring zero unstyled white flashes across all
-   26 portal components, tables, forms, modals, and badges.
+   Neutral Graphite Dark Mode Surface & Semantic Palette Layer
+   Clean, matte, institutional zinc/charcoal hierarchy (zero purple tint or
+   neon glow) using `:where(...)` so explicit `dark:*` utilities always win.
    ============================================================================ */
 @layer utilities {
-  /* Light mode softening: slightly warm card glass over the ambient backdrop */
   :root:not(.dark) :where(.tfb-surface-canvas) {
     background-color: #F3EFE9;
   }
 
-  /* Primary elevated surfaces */
+  /* Primary elevated surfaces (crisp matte zinc, no murky translucency) */
   .dark :where(.bg-white:not(.tfb-keep-light)) {
-    background-color: rgba(25, 21, 34, 0.94);
+    background-color: #161618;
   }
   .dark :where(.bg-white\/95:not(.tfb-keep-light)) {
-    background-color: rgba(22, 18, 30, 0.95);
+    background-color: #161618;
   }
   .dark :where(.bg-white\/90:not(.tfb-keep-light)) {
-    background-color: rgba(25, 21, 34, 0.9);
+    background-color: rgba(22, 22, 24, 0.94);
+  }
+  .dark :where(.bg-white\/80:not(.tfb-keep-light)) {
+    background-color: #1C1C1F;
   }
   .dark :where(.bg-white\/60:not(.tfb-keep-light)) {
-    background-color: rgba(34, 29, 46, 0.65);
+    background-color: rgba(32, 32, 36, 0.72);
   }
 
-  /* Secondary / nested muted surfaces */
+  /* Secondary / recessed surfaces (inputs, stat tiles, comment trays) */
   .dark :where(.bg-slate-50:not(.tfb-keep-light)) {
-    background-color: #120F1A;
+    background-color: #111113;
   }
   .dark :where(.bg-slate-50\/90:not(.tfb-keep-light)) {
-    background-color: rgba(18, 15, 26, 0.92);
+    background-color: #121214;
   }
   .dark :where(.bg-slate-50\/80:not(.tfb-keep-light)) {
-    background-color: rgba(22, 18, 31, 0.85);
+    background-color: #121214;
   }
   .dark :where(.bg-slate-50\/70:not(.tfb-keep-light)) {
-    background-color: rgba(24, 20, 34, 0.78);
+    background-color: #121214;
   }
   .dark :where(.bg-slate-50\/60:not(.tfb-keep-light)) {
-    background-color: rgba(24, 20, 34, 0.72);
+    background-color: #111113;
   }
   .dark :where(.bg-slate-50\/50:not(.tfb-keep-light)) {
-    background-color: rgba(24, 20, 34, 0.6);
+    background-color: #121214;
   }
   .dark :where(.bg-slate-100:not(.tfb-keep-light)) {
-    background-color: #211C2D;
+    background-color: #1E1E22;
   }
   .dark :where(.bg-slate-100\/70:not(.tfb-keep-light)) {
-    background-color: rgba(33, 28, 45, 0.8);
+    background-color: rgba(30, 30, 34, 0.85);
   }
   .dark :where(.bg-slate-200:not(.tfb-keep-light)) {
-    background-color: #2D263C;
+    background-color: #27272A;
   }
   .dark :where(.bg-slate-200\/70:not(.tfb-keep-light)) {
-    background-color: rgba(45, 38, 60, 0.8);
+    background-color: rgba(39, 39, 42, 0.85);
   }
 
   /* Interactive hover & focus surface transitions */
@@ -159,100 +160,100 @@
   .dark :where(.hover\:bg-slate-50\/80):hover,
   .dark :where(.hover\:bg-slate-50\/70):hover,
   .dark :where(.hover\:bg-slate-50\/50):hover {
-    background-color: #231D30;
+    background-color: #1F1F23;
   }
   .dark :where(.hover\:bg-slate-100):hover,
   .dark :where(.hover\:bg-slate-100\/60):hover {
-    background-color: #2B243B;
+    background-color: #26262B;
   }
   .dark :where(.hover\:bg-slate-200):hover {
-    background-color: #362E49;
+    background-color: #2F2F35;
   }
   .dark :where(.hover\:bg-white):hover,
   .dark :where(.hover\:bg-white\/60):hover {
-    background-color: #262035;
+    background-color: #222226;
   }
   .dark :where(.focus\:bg-white):focus,
   .dark :where(.focus-within\:bg-white):focus-within {
-    background-color: #1D1829;
+    background-color: #1A1A1E;
   }
 
-  /* Borders & dividers */
+  /* Crisp hairline borders & dividers */
   .dark :where(.border-slate-100:not(.tfb-keep-light)) {
-    border-color: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.06);
   }
   .dark :where(.border-slate-200:not(.tfb-keep-light)),
   .dark :where(.border-slate-200\/90:not(.tfb-keep-light)),
   .dark :where(.border-slate-200\/80:not(.tfb-keep-light)),
   .dark :where(.border-slate-200\/70:not(.tfb-keep-light)),
   .dark :where(.border-slate-200\/60:not(.tfb-keep-light)) {
-    border-color: #2D273B;
+    border-color: #26262A;
   }
   .dark :where(.border-slate-300:not(.tfb-keep-light)),
   .dark :where(.border-slate-300\/80:not(.tfb-keep-light)) {
-    border-color: #3C344E;
+    border-color: #34343A;
   }
   .dark :where(.divide-slate-100 > :not(:last-child)) {
-    border-color: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.06);
   }
   .dark :where(.divide-slate-200 > :not(:last-child)) {
-    border-color: #2D273B;
+    border-color: #26262A;
   }
 
-  /* Typography hierarchy on dark surfaces */
+  /* Neutral high-legibility typography */
   .dark :where(.text-slate-900:not(.tfb-keep-light)) {
-    color: #F5F2FA;
+    color: #F4F4F5;
   }
   .dark :where(.text-slate-800:not(.tfb-keep-light)) {
-    color: #E4DFEE;
+    color: #E4E4E7;
   }
   .dark :where(.text-slate-700:not(.tfb-keep-light)) {
-    color: #CFC8DC;
+    color: #D4D4D8;
   }
   .dark :where(.text-slate-600:not(.tfb-keep-light)) {
-    color: #B2A9C3;
+    color: #A1A1AA;
   }
   .dark :where(.text-slate-500:not(.tfb-keep-light)) {
-    color: #9A90AC;
+    color: #8E8E96;
   }
   .dark :where(.text-slate-400:not(.tfb-keep-light)) {
-    color: #847B97;
+    color: #71717A;
   }
   .dark :where(.placeholder-slate-400)::placeholder {
-    color: #776E8A;
+    color: #63636B;
   }
   .dark :where(.hover\:text-slate-900):hover,
   .dark :where(.hover\:text-slate-800):hover,
   .dark :where(.hover\:text-slate-700):hover {
-    color: #FFFFFF;
+    color: #FAFAFA;
   }
 
-  /* Brand Maroon text & subtle tint badges -> high-contrast warm gold/rose in dark mode */
+  /* Brand Maroon accents -> restrained warm gold/sand on dark surfaces (never neon) */
   .dark :where(.text-\[\#5C0612\]:not(.tfb-keep-light):not(.bg-\[\#D4AF37\])) {
-    color: #F1C967;
+    color: #DFBE6F;
   }
   .dark :where(.bg-\[\#D4AF37\]) {
-    color: #3B030B;
+    color: #2A050A;
   }
   .dark :where(.bg-\[\#D4AF37\] .text-\[\#5C0612\]) {
-    color: #3B030B;
+    color: #2A050A;
   }
   .dark :where(.hover\:text-\[\#5C0612\]):hover {
-    color: #F7D888;
+    color: #EBD18C;
   }
   .dark :where(.bg-\[\#5C0612\]\/10) {
-    background-color: rgba(212, 175, 55, 0.14);
+    background-color: rgba(255, 255, 255, 0.06);
   }
   .dark :where(.bg-\[\#5C0612\]\/5) {
-    background-color: rgba(155, 22, 42, 0.22);
+    background-color: #161618;
   }
   .dark :where(.border-\[\#5C0612\]\/20),
   .dark :where(.border-\[\#5C0612\]\/25),
   .dark :where(.border-\[\#5C0612\]\/15) {
-    border-color: rgba(212, 175, 55, 0.3);
+    border-color: #2A2A2F;
   }
 
-  /* Semantic soft status surfaces (Rose, Amber, Emerald, Blue, Indigo, Purple, Orange, Sky) */
+  /* Restrained, low-glare semantic surfaces (Rose, Amber, Emerald, Blue, Indigo, Purple, Orange) */
   .dark :where(.bg-rose-50),
   .dark :where(.bg-rose-50\/80),
   .dark :where(.bg-rose-50\/70),
@@ -261,28 +262,28 @@
   .dark :where(.bg-rose-50\/30),
   .dark :where(.bg-rose-50\/25),
   .dark :where(.bg-rose-50\/20) {
-    background-color: rgba(136, 19, 55, 0.26);
+    background-color: rgba(225, 29, 72, 0.1);
   }
   .dark :where(.bg-rose-100),
   .dark :where(.bg-rose-100\/80) {
-    background-color: rgba(159, 18, 57, 0.34);
+    background-color: rgba(225, 29, 72, 0.16);
   }
   .dark :where(.bg-rose-200),
   .dark :where(.bg-rose-200\/70) {
-    background-color: rgba(190, 18, 60, 0.42);
+    background-color: rgba(225, 29, 72, 0.22);
   }
   .dark :where(.hover\:bg-rose-100):hover,
   .dark :where(.hover\:bg-rose-50):hover {
-    background-color: rgba(159, 18, 57, 0.42);
+    background-color: rgba(225, 29, 72, 0.18);
   }
   .dark :where(.border-rose-200),
   .dark :where(.border-rose-200\/80),
   .dark :where(.border-rose-300),
   .dark :where(.border-rose-400) {
-    border-color: rgba(244, 63, 94, 0.38);
+    border-color: rgba(244, 63, 94, 0.22);
   }
   .dark :where(.ring-rose-100) {
-    --tw-ring-color: rgba(244, 63, 94, 0.25);
+    --tw-ring-color: rgba(244, 63, 94, 0.18);
   }
   .dark :where(.text-rose-950),
   .dark :where(.text-rose-900),
@@ -300,39 +301,39 @@
   .dark :where(.bg-amber-50\/60),
   .dark :where(.bg-amber-50\/50),
   .dark :where(.bg-amber-50\/40) {
-    background-color: rgba(146, 64, 14, 0.22);
+    background-color: rgba(217, 119, 6, 0.09);
   }
   .dark :where(.bg-amber-100),
   .dark :where(.hover\:bg-amber-100):hover,
   .dark :where(.hover\:bg-amber-100\/60):hover,
   .dark :where(.hover\:bg-amber-50):hover {
-    background-color: rgba(180, 83, 9, 0.3);
+    background-color: rgba(217, 119, 6, 0.15);
   }
   .dark :where(.border-amber-200),
   .dark :where(.border-amber-200\/80),
   .dark :where(.border-amber-200\/70),
   .dark :where(.border-amber-200\/60),
   .dark :where(.border-amber-300) {
-    border-color: rgba(245, 158, 11, 0.35);
+    border-color: rgba(245, 158, 11, 0.2);
   }
   .dark :where(.text-amber-950),
   .dark :where(.text-amber-900),
   .dark :where(.text-amber-800),
   .dark :where(.text-amber-700) {
-    color: #FCD34D;
+    color: #E5C170;
   }
 
   .dark :where(.bg-emerald-50),
   .dark :where(.bg-emerald-50\/70) {
-    background-color: rgba(6, 78, 59, 0.28);
+    background-color: rgba(16, 185, 129, 0.1);
   }
   .dark :where(.bg-emerald-100),
   .dark :where(.hover\:bg-emerald-100):hover {
-    background-color: rgba(6, 95, 70, 0.36);
+    background-color: rgba(16, 185, 129, 0.16);
   }
   .dark :where(.border-emerald-200),
   .dark :where(.border-emerald-200\/70) {
-    border-color: rgba(16, 185, 129, 0.35);
+    border-color: rgba(16, 185, 129, 0.22);
   }
   .dark :where(.text-emerald-950),
   .dark :where(.text-emerald-900),
@@ -346,16 +347,16 @@
 
   .dark :where(.bg-blue-50),
   .dark :where(.bg-sky-50) {
-    background-color: rgba(30, 58, 138, 0.28);
+    background-color: rgba(59, 130, 246, 0.1);
   }
   .dark :where(.bg-blue-100),
   .dark :where(.bg-sky-100) {
-    background-color: rgba(30, 64, 175, 0.36);
+    background-color: rgba(59, 130, 246, 0.16);
   }
   .dark :where(.border-blue-200),
   .dark :where(.border-blue-200\/70),
   .dark :where(.border-sky-200) {
-    border-color: rgba(59, 130, 246, 0.35);
+    border-color: rgba(59, 130, 246, 0.22);
   }
   .dark :where(.text-blue-900),
   .dark :where(.text-blue-800),
@@ -366,14 +367,14 @@
 
   .dark :where(.bg-indigo-50),
   .dark :where(.bg-indigo-50\/70) {
-    background-color: rgba(49, 46, 129, 0.3);
+    background-color: rgba(99, 102, 241, 0.1);
   }
   .dark :where(.bg-indigo-100) {
-    background-color: rgba(55, 48, 163, 0.38);
+    background-color: rgba(99, 102, 241, 0.16);
   }
   .dark :where(.border-indigo-200),
   .dark :where(.border-indigo-200\/70) {
-    border-color: rgba(129, 140, 248, 0.35);
+    border-color: rgba(129, 140, 248, 0.22);
   }
   .dark :where(.text-indigo-900),
   .dark :where(.text-indigo-800),
@@ -384,15 +385,15 @@
   .dark :where(.bg-purple-50),
   .dark :where(.bg-purple-50\/70),
   .dark :where(.bg-purple-50\/40) {
-    background-color: rgba(88, 28, 135, 0.3);
+    background-color: rgba(168, 85, 247, 0.1);
   }
   .dark :where(.bg-purple-100),
   .dark :where(.bg-purple-200) {
-    background-color: rgba(107, 33, 168, 0.38);
+    background-color: rgba(168, 85, 247, 0.16);
   }
   .dark :where(.border-purple-200),
   .dark :where(.border-purple-200\/60) {
-    border-color: rgba(192, 132, 252, 0.35);
+    border-color: rgba(192, 132, 252, 0.22);
   }
   .dark :where(.text-purple-900),
   .dark :where(.text-purple-800),
@@ -401,10 +402,10 @@
   }
 
   .dark :where(.bg-orange-50) {
-    background-color: rgba(154, 52, 18, 0.28);
+    background-color: rgba(249, 115, 22, 0.1);
   }
   .dark :where(.border-orange-200) {
-    border-color: rgba(251, 146, 60, 0.35);
+    border-color: rgba(251, 146, 60, 0.22);
   }
   .dark :where(.text-orange-900),
   .dark :where(.text-orange-800) {
@@ -413,20 +414,20 @@
 
   /* File input button styling in dark mode */
   .dark input[type="file"]::file-selector-button {
-    background-color: #2A2338;
-    color: #EDE9F5;
+    background-color: #27272A;
+    color: #F4F4F5;
   }
   .dark input[type="file"]::file-selector-button:hover {
-    background-color: #362D48;
+    background-color: #323238;
   }
 
-  /* Soften light-mode box shadows in dark mode */
+  /* Clean dark shadows without colored halos */
   .dark :where(.shadow-slate-200\/70) {
     --tw-shadow-color: rgba(0, 0, 0, 0.45);
   }
   .dark :where(.shadow-rose-100),
   .dark :where(.shadow-rose-200) {
-    --tw-shadow-color: rgba(190, 18, 60, 0.25);
+    --tw-shadow-color: rgba(0, 0, 0, 0.35);
   }
 }
 
