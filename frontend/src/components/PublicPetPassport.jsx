@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AlertTriangle, PhoneCall, RotateCw, ShieldAlert, X } from 'lucide-react';
+import ThemeToggle from './ThemeToggle';
 import { apiGet } from '../lib/api';
 import { getVaccinationBadgeStyles, isPetQuarantined, safeImageUrl } from '../lib/pets';
 
@@ -98,16 +99,19 @@ export default function PublicPetPassport({ petId, isLoggedIn = false, onClose, 
             </div>
           </div>
 
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close passport"
-              className="p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-colors shrink-0"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <ThemeToggle variant="on-maroon" />
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close passport"
+                className="p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-colors shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Scrollable Modal Body */}

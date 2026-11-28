@@ -4,7 +4,7 @@
   "description": "CIT-U campus animal registry, RA 9482 veterinary clinical tracking, interactive campus map, sighting triage, and adoption portal.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
+  "background_color": "#F3EFE9",
   "theme_color": "#5C0612",
   "orientation": "portrait-primary",
   "icons": [

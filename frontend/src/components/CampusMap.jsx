@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { apiGet } from '../lib/api';
+import { useTheme } from '../lib/theme';
 import {
   CITU_CAMPUS_ZONES,
   DEFAULT_PET_IMAGE,
@@ -39,6 +40,7 @@ export default function CampusMap({
   onReportAtZone,
   onInspectPet,
 }) {
+  const { isDark } = useTheme();
   const [pets, setPets] = useState([]);
   const [sightings, setSightings] = useState([]);
   const [loading, setLoading] = useState(mode === 'explorer');
@@ -255,7 +257,7 @@ export default function CampusMap({
           </div>
 
           {/* Interactive SVG + Pin Overlay */}
-          <div className="relative w-full aspect-[16/10] sm:aspect-[16/9.5] bg-gradient-to-br from-[#FBF8F3] via-[#F4EFE6] to-[#EAE2D6] select-none overflow-hidden">
+          <div className="relative w-full aspect-[16/10] sm:aspect-[16/9.5] bg-gradient-to-br from-[#FBF8F3] via-[#F4EFE6] to-[#EAE2D6] dark:from-[#16121F] dark:via-[#1C1628] dark:to-[#120E19] select-none overflow-hidden">
             {/* Architectural Isometric SVG faithfully matching CIT-U Campus Locator */}
             <svg
               viewBox="0 0 1000 600"
@@ -265,15 +267,21 @@ export default function CampusMap({
             >
               <defs>
                 <linearGradient id="campusGround" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#FAF6F0" />
-                  <stop offset="100%" stopColor="#EDE4D7" />
+                  <stop offset="0%" stopColor={isDark ? '#181322' : '#FAF6F0'} />
+                  <stop offset="100%" stopColor={isDark ? '#110D18' : '#EDE4D7'} />
                 </linearGradient>
                 <linearGradient id="maroonRoof" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#7C0B1B" />
-                  <stop offset="100%" stopColor="#4A040E" />
+                  <stop offset="0%" stopColor={isDark ? '#9B1429' : '#7C0B1B'} />
+                  <stop offset="100%" stopColor={isDark ? '#5C0612' : '#4A040E'} />
                 </linearGradient>
                 <filter id="bldgShadow" x="-10%" y="-10%" width="130%" height="130%">
-                  <feDropShadow dx="0" dy="6" stdDeviation="6" floodColor="#1E293B" floodOpacity="0.16" />
+                  <feDropShadow
+                    dx="0"
+                    dy="6"
+                    stdDeviation="6"
+                    floodColor={isDark ? '#000000' : '#1E293B'}
+                    floodOpacity={isDark ? '0.45' : '0.16'}
+                  />
                 </filter>
               </defs>
 
@@ -281,7 +289,7 @@ export default function CampusMap({
               <rect width="1000" height="600" fill="url(#campusGround)" />
 
               {/* Subtle grid lines for architectural polish */}
-              <g stroke="#D6CBB8" strokeWidth="1" opacity="0.35">
+              <g stroke={isDark ? '#3B314E' : '#D6CBB8'} strokeWidth="1" opacity={isDark ? '0.45' : '0.35'}>
                 <line x1="0" y1="150" x2="1000" y2="150" />
                 <line x1="0" y1="300" x2="1000" y2="300" />
                 <line x1="0" y1="450" x2="1000" y2="450" />
@@ -293,116 +301,116 @@ export default function CampusMap({
               {/* Main Campus Slab / Courtyard Baseplate */}
               <polygon
                 points="115,275 590,115 895,255 830,365 565,455 345,515 110,365"
-                fill="#E2DCD2"
-                stroke="#C9BFAF"
+                fill={isDark ? '#211B2E' : '#E2DCD2'}
+                stroke={isDark ? '#3D3452' : '#C9BFAF'}
                 strokeWidth="3"
               />
               {/* Open Central Quadrangle & PE Plaza */}
               <polygon
                 points="425,225 635,160 805,245 645,325 460,290"
-                fill="#EFEAE0"
-                stroke="#D4C9B8"
+                fill={isDark ? '#2A223A' : '#EFEAE0'}
+                stroke={isDark ? '#463C5E' : '#D4C9B8'}
                 strokeWidth="2"
               />
 
               {/* Natalio Bacalso Ave (Front Green Lawn Strip & Road) */}
               <polygon
                 points="325,525 535,380 565,398 355,545"
-                fill="#2E7D32"
-                opacity="0.72"
+                fill={isDark ? '#166534' : '#2E7D32'}
+                opacity={isDark ? '0.6' : '0.72'}
               />
               <polygon
                 points="280,565 570,395 605,418 330,590"
-                fill="#CBD5E1"
+                fill={isDark ? '#332C44' : '#CBD5E1'}
                 opacity="0.55"
               />
 
               {/* 1. ALLIED Engineering Building (mid-left rear wing) */}
               <g filter="url(#bldgShadow)">
-                <polygon points="105,270 185,235 220,260 140,296" fill="#F8FAFC" stroke="#94A3B8" strokeWidth="1.5" />
-                <polygon points="105,270 140,296 140,322 105,296" fill="#CBD5E1" />
-                <polygon points="140,296 220,260 220,286 140,322" fill="#E2E8F0" />
+                <polygon points="105,270 185,235 220,260 140,296" fill={isDark ? '#38304B' : '#F8FAFC'} stroke={isDark ? '#60537C' : '#94A3B8'} strokeWidth="1.5" />
+                <polygon points="105,270 140,296 140,322 105,296" fill={isDark ? '#262035' : '#CBD5E1'} />
+                <polygon points="140,296 220,260 220,286 140,322" fill={isDark ? '#302842' : '#E2E8F0'} />
                 <polygon points="111,270 184,239 213,259 140,291" fill="url(#maroonRoof)" opacity="0.88" />
               </g>
 
               {/* 2. RTL Building (Don Rodolfo T. Lizares - Large Quadrangle Rectangle) */}
               <g filter="url(#bldgShadow)">
                 {/* Outer wall */}
-                <polygon points="175,260 320,202 515,305 370,382" fill="#FFFFFF" stroke="#94A3B8" strokeWidth="2" />
+                <polygon points="175,260 320,202 515,305 370,382" fill={isDark ? '#3A324E' : '#FFFFFF'} stroke={isDark ? '#655883' : '#94A3B8'} strokeWidth="2" />
                 {/* Front extruded facades */}
-                <polygon points="175,260 370,382 370,425 175,300" fill="#CBD5E1" stroke="#94A3B8" strokeWidth="1" />
-                <polygon points="370,382 515,305 515,348 370,425" fill="#E2E8F0" stroke="#94A3B8" strokeWidth="1" />
+                <polygon points="175,260 370,382 370,425 175,300" fill={isDark ? '#251F34' : '#CBD5E1'} stroke={isDark ? '#54486E' : '#94A3B8'} strokeWidth="1" />
+                <polygon points="370,382 515,305 515,348 370,425" fill={isDark ? '#2F2742' : '#E2E8F0'} stroke={isDark ? '#54486E' : '#94A3B8'} strokeWidth="1" />
                 {/* Maroon perimeter roof frame */}
                 <polygon points="184,261 320,208 505,305 370,376" fill="none" stroke="url(#maroonRoof)" strokeWidth="10" />
                 {/* Inner open courtyard */}
-                <polygon points="240,266 324,232 442,296 358,338" fill="#E8E3D9" stroke="#94A3B8" strokeWidth="1.5" />
+                <polygon points="240,266 324,232 442,296 358,338" fill={isDark ? '#201A2C' : '#E8E3D9'} stroke={isDark ? '#54486E' : '#94A3B8'} strokeWidth="1.5" />
               </g>
 
               {/* 3. NGE Building (Nicolas G. Escario - Bottom-Left) */}
               <g filter="url(#bldgShadow)">
-                <polygon points="88,435 288,342 355,392 355,442 195,525 88,468" fill="#CBD5E1" stroke="#94A3B8" strokeWidth="1.5" />
-                <polygon points="88,435 288,342 355,392 162,486" fill="#FFFFFF" stroke="#94A3B8" strokeWidth="2" />
-                <polygon points="162,486 355,392 355,442 162,535" fill="#E2E8F0" stroke="#94A3B8" strokeWidth="1" />
+                <polygon points="88,435 288,342 355,392 355,442 195,525 88,468" fill={isDark ? '#251F34' : '#CBD5E1'} stroke={isDark ? '#54486E' : '#94A3B8'} strokeWidth="1.5" />
+                <polygon points="88,435 288,342 355,392 162,486" fill={isDark ? '#3A324E' : '#FFFFFF'} stroke={isDark ? '#655883' : '#94A3B8'} strokeWidth="2" />
+                <polygon points="162,486 355,392 355,442 162,535" fill={isDark ? '#2F2742' : '#E2E8F0'} stroke={isDark ? '#54486E' : '#94A3B8'} strokeWidth="1" />
                 {/* Maroon roof border */}
                 <polygon points="98,434 287,348 346,392 162,479" fill="none" stroke="url(#maroonRoof)" strokeWidth="9" />
                 {/* Center atrium slot */}
-                <polygon points="175,428 265,386 290,405 200,448" fill="#64748B" opacity="0.35" />
+                <polygon points="175,428 265,386 290,405 200,448" fill={isDark ? '#120E1A' : '#64748B'} opacity={isDark ? '0.6' : '0.35'} />
               </g>
 
               {/* 4. LINK Building (Connecting bridge between RTL & SAL) */}
               <g filter="url(#bldgShadow)">
-                <polygon points="348,200 465,160 495,180 378,220" fill="#FFFFFF" stroke="#94A3B8" strokeWidth="1.5" />
-                <polygon points="378,220 495,180 495,212 378,252" fill="#CBD5E1" />
+                <polygon points="348,200 465,160 495,180 378,220" fill={isDark ? '#3A324E' : '#FFFFFF'} stroke={isDark ? '#655883' : '#94A3B8'} strokeWidth="1.5" />
+                <polygon points="378,220 495,180 495,212 378,252" fill={isDark ? '#262035' : '#CBD5E1'} />
                 <polygon points="354,200 464,163 488,179 378,216" fill="url(#maroonRoof)" opacity="0.85" />
               </g>
 
               {/* 5. SAL Building (Don Simplicio A. Lizares - Top Center Long Wing) */}
               <g filter="url(#bldgShadow)">
-                <polygon points="468,158 625,112 655,130 498,178" fill="#FFFFFF" stroke="#94A3B8" strokeWidth="1.5" />
-                <polygon points="498,178 655,130 655,162 498,210" fill="#CBD5E1" />
-                <polygon points="476,158 622,116 646,130 500,172" fill="#64748B" opacity="0.35" />
+                <polygon points="468,158 625,112 655,130 498,178" fill={isDark ? '#3A324E' : '#FFFFFF'} stroke={isDark ? '#655883' : '#94A3B8'} strokeWidth="1.5" />
+                <polygon points="498,178 655,130 655,162 498,210" fill={isDark ? '#262035' : '#CBD5E1'} />
+                <polygon points="476,158 622,116 646,130 500,172" fill={isDark ? '#D4AF37' : '#64748B'} opacity={isDark ? '0.28' : '0.35'} />
               </g>
 
               {/* 6. G-LECROOM & G-PHYSLAB (Inner Courtyard Buildings) */}
               <g filter="url(#bldgShadow)">
                 {/* G-LECROOM */}
-                <polygon points="448,218 525,195 548,212 472,238" fill="#FFFFFF" stroke="#94A3B8" strokeWidth="1.5" />
-                <polygon points="472,238 548,212 548,232 472,258" fill="#CBD5E1" />
+                <polygon points="448,218 525,195 548,212 472,238" fill={isDark ? '#3A324E' : '#FFFFFF'} stroke={isDark ? '#655883' : '#94A3B8'} strokeWidth="1.5" />
+                <polygon points="472,238 548,212 548,232 472,258" fill={isDark ? '#262035' : '#CBD5E1'} />
                 {/* G-PHYSLAB */}
-                <polygon points="468,262 540,242 560,258 488,280" fill="#FFFFFF" stroke="#94A3B8" strokeWidth="1.5" />
-                <polygon points="488,280 560,258 560,278 488,300" fill="#CBD5E1" />
+                <polygon points="468,262 540,242 560,258 488,280" fill={isDark ? '#3A324E' : '#FFFFFF'} stroke={isDark ? '#655883' : '#94A3B8'} strokeWidth="1.5" />
+                <polygon points="488,280 560,258 560,278 488,300" fill={isDark ? '#262035' : '#CBD5E1'} />
               </g>
 
               {/* 7. P.E AREA (Covered Court with Iconic Maroon Roof) */}
               <g filter="url(#bldgShadow)">
                 <polygon points="562,188 648,162 692,190 606,218" fill="url(#maroonRoof)" stroke="#D4AF37" strokeWidth="2" />
-                <polygon points="562,188 606,218 606,232 562,202" fill="#94A3B8" opacity="0.6" />
-                <polygon points="606,218 692,190 692,204 606,232" fill="#CBD5E1" opacity="0.7" />
+                <polygon points="562,188 606,218 606,232 562,202" fill={isDark ? '#3A324E' : '#94A3B8'} opacity="0.65" />
+                <polygon points="606,218 692,190 692,204 606,232" fill={isDark ? '#4B4163' : '#CBD5E1'} opacity="0.7" />
               </g>
 
               {/* 8. Learning Pad 1-10 (Top-Right Pavilion) */}
               <g filter="url(#bldgShadow)">
-                <polygon points="738,142 820,122 855,142 772,165" fill="#FFFFFF" stroke="#94A3B8" strokeWidth="1.5" />
-                <polygon points="772,165 855,142 855,164 772,187" fill="#CBD5E1" />
-                <polygon points="746,143 818,126 845,142 773,160" fill="#D4AF37" opacity="0.7" />
+                <polygon points="738,142 820,122 855,142 772,165" fill={isDark ? '#3A324E' : '#FFFFFF'} stroke={isDark ? '#655883' : '#94A3B8'} strokeWidth="1.5" />
+                <polygon points="772,165 855,142 855,164 772,187" fill={isDark ? '#262035' : '#CBD5E1'} />
+                <polygon points="746,143 818,126 845,142 773,160" fill="#D4AF37" opacity="0.72" />
                 {/* Upper East Classroom Strip */}
-                <polygon points="668,142 775,204 755,218 648,155" fill="#E2E8F0" stroke="#94A3B8" strokeWidth="1.2" />
+                <polygon points="668,142 775,204 755,218 648,155" fill={isDark ? '#312945' : '#E2E8F0'} stroke={isDark ? '#54486E' : '#94A3B8'} strokeWidth="1.2" />
               </g>
 
               {/* 9. ACAD Building (Academic Building - Far Right Angled Wing) */}
               <g filter="url(#bldgShadow)">
-                <polygon points="762,285 812,268 925,355 872,382" fill="#FFFFFF" stroke="#94A3B8" strokeWidth="1.8" />
-                <polygon points="762,285 872,382 872,430 762,332" fill="#CBD5E1" stroke="#94A3B8" strokeWidth="1" />
-                <polygon points="872,382 925,355 925,402 872,430" fill="#E2E8F0" stroke="#94A3B8" strokeWidth="1" />
+                <polygon points="762,285 812,268 925,355 872,382" fill={isDark ? '#3A324E' : '#FFFFFF'} stroke={isDark ? '#655883' : '#94A3B8'} strokeWidth="1.8" />
+                <polygon points="762,285 872,382 872,430 762,332" fill={isDark ? '#251F34' : '#CBD5E1'} stroke={isDark ? '#54486E' : '#94A3B8'} strokeWidth="1" />
+                <polygon points="872,382 925,355 925,402 872,430" fill={isDark ? '#2F2742' : '#E2E8F0'} stroke={isDark ? '#54486E' : '#94A3B8'} strokeWidth="1" />
                 {/* Window bands */}
-                <line x1="775" y1="308" x2="862" y2="386" stroke="#64748B" strokeWidth="2" opacity="0.45" />
-                <line x1="775" y1="322" x2="862" y2="400" stroke="#64748B" strokeWidth="2" opacity="0.45" />
+                <line x1="775" y1="308" x2="862" y2="386" stroke={isDark ? '#F1C967' : '#64748B'} strokeWidth="2" opacity={isDark ? '0.55' : '0.45'} />
+                <line x1="775" y1="322" x2="862" y2="400" stroke={isDark ? '#F1C967' : '#64748B'} strokeWidth="2" opacity={isDark ? '0.55' : '0.45'} />
               </g>
 
               {/* 10. GLE Building (Gregorio L. Escario - Iconic Front-Right Tower with CIT Sign) */}
               <g filter="url(#bldgShadow)">
                 {/* Roof */}
-                <polygon points="545,302 740,224 785,254 590,335" fill="#F8FAFC" stroke="#94A3B8" strokeWidth="2" />
+                <polygon points="545,302 740,224 785,254 590,335" fill={isDark ? '#3A324E' : '#F8FAFC'} stroke={isDark ? '#655883' : '#94A3B8'} strokeWidth="2" />
                 <polygon points="556,302 738,230 774,254 592,328" fill="none" stroke="url(#maroonRoof)" strokeWidth="6" />
                 {/* Maroon CIT front-left face */}
                 <polygon points="545,302 590,335 590,432 545,398" fill="url(#maroonRoof)" stroke="#4A040E" strokeWidth="1.2" />
@@ -419,7 +427,7 @@ export default function CampusMap({
                   CIT
                 </text>
                 {/* Wide windowed facade */}
-                <polygon points="590,335 785,254 785,352 590,432" fill="#E2E8F0" stroke="#94A3B8" strokeWidth="1.5" />
+                <polygon points="590,335 785,254 785,352 590,432" fill={isDark ? '#2B233D' : '#E2E8F0'} stroke={isDark ? '#54486E' : '#94A3B8'} strokeWidth="1.5" />
                 {/* Floor window lines */}
                 {[0, 1, 2, 3, 4].map((floor) => {
                   const dy = floor * 16;
@@ -430,10 +438,10 @@ export default function CampusMap({
                       y1={345 + dy}
                       x2="775"
                       y2={272 + dy}
-                      stroke="#475569"
+                      stroke={isDark ? '#F1C967' : '#475569'}
                       strokeWidth="3"
                       strokeDasharray="10 6"
-                      opacity="0.45"
+                      opacity={isDark ? '0.45' : '0.45'}
                     />
                   );
                 })}
@@ -444,7 +452,7 @@ export default function CampusMap({
                 x="470"
                 y="565"
                 textAnchor="middle"
-                fill="#64748B"
+                fill={isDark ? '#9A90AC' : '#64748B'}
                 fontSize="12"
                 fontWeight="700"
                 letterSpacing="2"

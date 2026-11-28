@@ -233,4 +233,64 @@ test.describe('Task Force Bruno — Pre-Defense E2E Verification', () => {
     await expect(page.getByText(/Juan Cruz/i).first()).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
+
+  test('Dark mode toggle persists across reload and works on login & student dashboard', async ({ page }) => {
+    const pageErrors = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+
+    const mockSession = {
+      access_token: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdHUtMSJ9.sig',
+      refresh_token: 'mock-refresh',
+      email: 'juan.cruz@cit.edu',
+      role: 'user',
+      is_staff: false,
+      first_name: 'Juan',
+      last_name: 'Cruz',
+      full_name: 'Juan Cruz',
+      custom_id: '22-1234-567',
+      student_id: '22-1234-567',
+    };
+
+    await attachMockApi(page, {
+      '/api/login/': (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ session: mockSession }),
+        }),
+      '/api/session/': (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ user: mockSession }),
+        }),
+    });
+
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/login');
+
+    // Toggle to Dark Mode from login screen
+    await page.getByRole('button', { name: /Switch to dark mode/i }).click();
+    await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+    const stored = await page.evaluate(() => localStorage.getItem('tfb_theme'));
+    expect(stored).toBe('dark');
+
+    // Reload and verify zero-FOUC persistence
+    await page.reload();
+    await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+
+    // Sign in and verify dark mode persists on student dashboard + sidebar toggle switches to Light
+    await page.getByLabel('Institutional Email').fill('juan.cruz@cit.edu');
+    await page.getByLabel('Password', { exact: true }).fill('Password123');
+    await page.getByRole('button', { name: 'Sign In' }).click();
+    await expect(page).toHaveURL(/\/student\/dashboard$/);
+    await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+
+    // Dismiss onboarding guide shown on first sign-in
+    await page.getByRole('button', { name: /Close guide/i }).click();
+
+    await page.getByRole('button', { name: /Switch to light mode/i }).click();
+    await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+    expect(pageErrors).toEqual([]);
+  });
 });

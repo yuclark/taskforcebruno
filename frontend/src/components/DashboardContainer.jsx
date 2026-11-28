@@ -19,6 +19,8 @@ import {
 import NewsfeedView from './NewsfeedView';
 import UserGuideModal from './UserGuideModal';
 import EmergencyProtocolModal from './EmergencyProtocolModal';
+import PageBackdrop from './PageBackdrop';
+import ThemeToggle from './ThemeToggle';
 import { apiGet } from '../lib/api';
 import { getUserDisplayName, getUserInitials } from '../lib/auth';
 
@@ -139,7 +141,7 @@ export default function DashboardContainer({ session, onLogout }) {
   };
 
   return (
-    <div className="h-dvh bg-slate-50 flex text-slate-800 font-sans antialiased relative overflow-hidden">
+    <div className="h-dvh bg-[#F3EFE9] dark:bg-[#0E0C14] flex text-slate-800 dark:text-slate-100 font-sans antialiased relative overflow-hidden">
       <UserGuideModal isOpen={isGuideOpen} onClose={handleCloseGuide} />
 
       <EmergencyProtocolModal
@@ -207,13 +209,13 @@ export default function DashboardContainer({ session, onLogout }) {
                   onClick={() => navigateTo(key)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
                     isActive
-                      ? 'bg-white text-[#5C0612] font-semibold shadow-sm'
+                      ? 'bg-white text-[#5C0612] dark:bg-[#D4AF37] dark:text-[#3B030B] font-semibold shadow-sm'
                       : 'text-stone-200 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   <Icon
                     className={`w-4 h-4 shrink-0 ${
-                      isActive ? 'text-[#5C0612]' : 'text-[#D4AF37]/85'
+                      isActive ? 'text-[#5C0612] dark:text-[#3B030B]' : 'text-[#D4AF37]/85'
                     }`}
                   />
                   <span className="truncate">{label}</span>
@@ -250,7 +252,9 @@ export default function DashboardContainer({ session, onLogout }) {
         </div>
 
         {/* User Profile Footer */}
-        <div className="border-t border-white/10 p-4 flex flex-col gap-3 shrink-0 bg-black/10">
+        <div className="border-t border-white/10 p-4 flex flex-col gap-3 shrink-0 bg-black/15">
+          <ThemeToggle variant="sidebar" />
+
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-[#D4AF37] text-[#5C0612] font-bold flex items-center justify-center text-xs shrink-0">
               {initials}
@@ -299,6 +303,8 @@ export default function DashboardContainer({ session, onLogout }) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <ThemeToggle variant="compact" />
+
             <button
               type="button"
               onClick={() => setIsEmergencyOpen(true)}
@@ -326,98 +332,101 @@ export default function DashboardContainer({ session, onLogout }) {
           </div>
         </header>
 
-        {/* Active View Surface */}
-        <div className="flex-1 relative min-h-0 bg-slate-50 overflow-y-auto">
-          {currentTab === 'newsfeed' && (
-            <div className="w-full lg:h-full p-3 sm:p-5 md:p-7">
-              <NewsfeedView session={session} />
-            </div>
-          )}
+        {/* Active View Surface with Ambient Page Backdrop */}
+        <div className="flex-1 relative min-h-0 bg-[#F3EFE9] dark:bg-[#0E0C14] overflow-hidden">
+          <PageBackdrop variant={currentTab} />
+          <div className="relative z-10 h-full overflow-y-auto">
+            {currentTab === 'newsfeed' && (
+              <div className="w-full lg:h-full p-3 sm:p-5 md:p-7">
+                <NewsfeedView session={session} />
+              </div>
+            )}
 
-          {currentTab === 'campus-map' && (
-            <div className="w-full p-3 sm:p-5 md:p-7">
-              <Suspense fallback={<TabSpinner />}>
-                <CampusMap
-                  mode="explorer"
-                  onReportAtZone={(zoneName) => {
-                    setPrefilledSightingZone(zoneName);
-                    navigateTo('report');
-                  }}
-                  onInspectPet={(petId) => {
-                    setCurrentTab('scanner');
-                    setActivePetId(petId);
-                  }}
-                />
-              </Suspense>
-            </div>
-          )}
-
-          {currentTab === 'pet-listings' && (
-            <div className="w-full p-3 sm:p-5 md:p-7">
-              <div className="max-w-7xl mx-auto pb-6">
+            {currentTab === 'campus-map' && (
+              <div className="w-full p-3 sm:p-5 md:p-7">
                 <Suspense fallback={<TabSpinner />}>
-                  <PetListings
-                    pets={pets}
-                    loadingPets={loadingPets}
-                    loadError={petsError}
-                    onRefresh={fetchAllPets}
-                    readOnly
+                  <CampusMap
+                    mode="explorer"
+                    onReportAtZone={(zoneName) => {
+                      setPrefilledSightingZone(zoneName);
+                      navigateTo('report');
+                    }}
+                    onInspectPet={(petId) => {
+                      setCurrentTab('scanner');
+                      setActivePetId(petId);
+                    }}
                   />
                 </Suspense>
               </div>
-            </div>
-          )}
+            )}
 
-          {currentTab === 'scanner' && (
-            <div className="w-full p-3 sm:p-5 md:p-7">
-              <Suspense fallback={<TabSpinner />}>
-                {!activePetId ? (
-                  <QRScannerView onProfileIdentified={(id) => setActivePetId(id)} />
-                ) : (
-                  <PetProfileView
-                    petId={activePetId}
-                    onBackToScanner={() => setActivePetId(null)}
+            {currentTab === 'pet-listings' && (
+              <div className="w-full p-3 sm:p-5 md:p-7">
+                <div className="max-w-7xl mx-auto pb-6">
+                  <Suspense fallback={<TabSpinner />}>
+                    <PetListings
+                      pets={pets}
+                      loadingPets={loadingPets}
+                      loadError={petsError}
+                      onRefresh={fetchAllPets}
+                      readOnly
+                    />
+                  </Suspense>
+                </div>
+              </div>
+            )}
+
+            {currentTab === 'scanner' && (
+              <div className="w-full p-3 sm:p-5 md:p-7">
+                <Suspense fallback={<TabSpinner />}>
+                  {!activePetId ? (
+                    <QRScannerView onProfileIdentified={(id) => setActivePetId(id)} />
+                  ) : (
+                    <PetProfileView
+                      petId={activePetId}
+                      onBackToScanner={() => setActivePetId(null)}
+                    />
+                  )}
+                </Suspense>
+              </div>
+            )}
+
+            {currentTab === 'report' && (
+              <div className="w-full p-3 sm:p-5 md:p-7">
+                <Suspense fallback={<TabSpinner />}>
+                  <ReportSightingView
+                    key={prefilledSightingZone || 'default-zone'}
+                    session={session}
+                    initialZone={prefilledSightingZone}
                   />
-                )}
-              </Suspense>
-            </div>
-          )}
+                </Suspense>
+              </div>
+            )}
 
-          {currentTab === 'report' && (
-            <div className="w-full p-3 sm:p-5 md:p-7">
-              <Suspense fallback={<TabSpinner />}>
-                <ReportSightingView
-                  key={prefilledSightingZone || 'default-zone'}
-                  session={session}
-                  initialZone={prefilledSightingZone}
-                />
-              </Suspense>
-            </div>
-          )}
+            {currentTab === 'adoption' && (
+              <div className="w-full p-3 sm:p-5 md:p-7">
+                <Suspense fallback={<TabSpinner />}>
+                  <AdoptionGallery session={session} />
+                </Suspense>
+              </div>
+            )}
 
-          {currentTab === 'adoption' && (
-            <div className="w-full p-3 sm:p-5 md:p-7">
-              <Suspense fallback={<TabSpinner />}>
-                <AdoptionGallery session={session} />
-              </Suspense>
-            </div>
-          )}
+            {currentTab === 'support' && (
+              <div className="w-full p-3 sm:p-5 md:p-7">
+                <Suspense fallback={<TabSpinner />}>
+                  <SupportAndVolunteers session={session} />
+                </Suspense>
+              </div>
+            )}
 
-          {currentTab === 'support' && (
-            <div className="w-full p-3 sm:p-5 md:p-7">
-              <Suspense fallback={<TabSpinner />}>
-                <SupportAndVolunteers session={session} />
-              </Suspense>
-            </div>
-          )}
-
-          {currentTab === 'resources' && (
-            <div className="w-full p-3 sm:p-5 md:p-7">
-              <Suspense fallback={<TabSpinner />}>
-                <SupplyLogistics />
-              </Suspense>
-            </div>
-          )}
+            {currentTab === 'resources' && (
+              <div className="w-full p-3 sm:p-5 md:p-7">
+                <Suspense fallback={<TabSpinner />}>
+                  <SupplyLogistics />
+                </Suspense>
+              </div>
+            )}
+          </div>
         </div>
       </main>
 

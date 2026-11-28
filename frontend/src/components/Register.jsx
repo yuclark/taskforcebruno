@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { ShieldCheck, PawPrint, BellRing, Eye, EyeOff, Check } from 'lucide-react';
+import PageBackdrop from './PageBackdrop';
+import ThemeToggle from './ThemeToggle';
 import { apiPost } from '../lib/api';
 import { EMAIL_PATTERN, ID_PATTERN, formatStudentIdInput } from '../lib/auth';
 
@@ -130,7 +132,7 @@ export default function Register({ togglePage, onRegisterSuccess }) {
   };
 
   return (
-    <div className="min-h-dvh flex flex-col md:flex-row-reverse bg-slate-50 text-slate-800">
+    <div className="min-h-dvh flex flex-col md:flex-row-reverse bg-[#F3EFE9] dark:bg-[#0E0C14] text-slate-800 dark:text-slate-100">
       {/* Desktop Right Branding Column */}
       <div className="hidden md:flex md:w-1/2 bg-gradient-to-bl from-[#6D0A19] via-[#5C0612] to-[#38030A] p-10 lg:p-16 flex-col justify-between relative overflow-hidden border-l-4 border-[#D4AF37]">
         <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#D4AF37]/10 blur-3xl pointer-events-none" />
@@ -203,25 +205,32 @@ export default function Register({ togglePage, onRegisterSuccess }) {
       </div>
 
       {/* Mobile Compact Maroon Top Bar */}
-      <div className="md:hidden bg-gradient-to-r from-[#6D0A19] to-[#4A050F] text-white px-5 py-4 border-b-2 border-[#D4AF37] flex items-center gap-3">
-        <img
-          src="/logo.png"
-          alt="Wildcat Welfare Portal Logo"
-          className="w-11 h-11 object-contain drop-shadow-md select-none shrink-0"
-        />
-        <div className="min-w-0">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#D4AF37] block">
-            CIT-U Wildcat Welfare Portal
-          </span>
-          <h1 className="text-lg font-extrabold tracking-tight leading-tight">
-            Create Your Account
-          </h1>
+      <div className="md:hidden bg-gradient-to-r from-[#6D0A19] to-[#4A050F] text-white px-5 py-4 border-b-2 border-[#D4AF37] flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <img
+            src="/logo.png"
+            alt="Wildcat Welfare Portal Logo"
+            className="w-11 h-11 object-contain drop-shadow-md select-none shrink-0"
+          />
+          <div className="min-w-0">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#D4AF37] block">
+              CIT-U Wildcat Welfare Portal
+            </span>
+            <h1 className="text-lg font-extrabold tracking-tight leading-tight">
+              Create Your Account
+            </h1>
+          </div>
         </div>
+        <ThemeToggle variant="on-maroon" />
       </div>
 
       {/* Registration Form Column */}
-      <div className="flex-1 flex items-center justify-center p-4 sm:p-8 md:p-12 pb-12">
-        <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-lg shadow-slate-200/70 border border-slate-200/80">
+      <div className="flex-1 relative overflow-hidden bg-[#F3EFE9] dark:bg-[#0E0C14] flex items-center justify-center p-4 sm:p-8 md:p-12 pb-12">
+        <PageBackdrop variant="auth" />
+        <div className="hidden md:block absolute top-5 left-5 z-20">
+          <ThemeToggle variant="compact" />
+        </div>
+        <div className="relative z-10 w-full max-w-md bg-white/95 dark:bg-[#191522]/95 backdrop-blur-xs p-6 sm:p-8 rounded-2xl shadow-lg shadow-slate-200/70 dark:shadow-black/50 border border-slate-200/80 dark:border-[#2D273B]">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Create an Account</h2>
             <p className="text-xs text-slate-500 mt-1">

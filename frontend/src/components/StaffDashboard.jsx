@@ -21,6 +21,8 @@ import {
   X,
 } from 'lucide-react';
 import EmergencyProtocolModal from './EmergencyProtocolModal';
+import PageBackdrop from './PageBackdrop';
+import ThemeToggle from './ThemeToggle';
 import { apiGet } from '../lib/api';
 import { getUserDisplayName, getUserInitials } from '../lib/auth';
 import { downloadCsv } from '../lib/csv';
@@ -48,6 +50,18 @@ const STAFF_NAV_ITEMS = [
 ];
 
 const VALID_MENUS = new Set(STAFF_NAV_ITEMS.map((i) => i.key));
+
+const STAFF_BACKDROP_MAP = {
+  'Pet Listings': 'pet-listings',
+  'Campus Map': 'campus-map',
+  'Pending Applications': 'applications',
+  'Sighting Reports': 'sightings',
+  'Medical Logs': 'medical',
+  'Add New Pet': 'add-pet',
+  'Inventory Control': 'inventory',
+  'Community Newsfeed': 'newsfeed',
+  'Broadcast Bulletin': 'broadcast',
+};
 
 function StaffSpinner() {
   return (
@@ -364,7 +378,7 @@ export default function StaffDashboard({ session, onLogout }) {
       : 0;
 
   return (
-    <div className="h-dvh flex bg-slate-50 text-slate-800 font-sans antialiased relative overflow-hidden">
+    <div className="h-dvh flex bg-[#F3EFE9] dark:bg-[#0E0C14] text-slate-800 dark:text-slate-100 font-sans antialiased relative overflow-hidden">
       {/* Mobile Drawer Backdrop */}
       {isMobileOpen && (
         <div
@@ -422,14 +436,14 @@ export default function StaffDashboard({ session, onLogout }) {
                   onClick={() => handleMenuChange(key)}
                   className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
                     isActive
-                      ? 'bg-white text-[#5C0612] shadow-sm font-semibold'
+                      ? 'bg-white text-[#5C0612] dark:bg-[#D4AF37] dark:text-[#3B030B] shadow-sm font-semibold'
                       : 'text-stone-200 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   <span className="flex items-center gap-3 min-w-0">
                     <Icon
                       className={`w-4 h-4 shrink-0 ${
-                        isActive ? 'text-[#5C0612]' : 'text-[#D4AF37]/85'
+                        isActive ? 'text-[#5C0612] dark:text-[#3B030B]' : 'text-[#D4AF37]/85'
                       }`}
                     />
                     <span className="truncate">{label}</span>
@@ -468,7 +482,9 @@ export default function StaffDashboard({ session, onLogout }) {
           </nav>
         </div>
 
-        <div className="border-t border-white/10 p-4 flex flex-col gap-3 shrink-0 bg-black/10">
+        <div className="border-t border-white/10 p-4 flex flex-col gap-3 shrink-0 bg-black/15">
+          <ThemeToggle variant="sidebar" />
+
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-[#D4AF37] text-[#5C0612] font-bold flex items-center justify-center text-xs shrink-0">
               {initials}
@@ -520,6 +536,8 @@ export default function StaffDashboard({ session, onLogout }) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <ThemeToggle variant="compact" />
+
             <button
               type="button"
               onClick={() => setShowKpiStrip((prev) => !prev)}
@@ -558,7 +576,9 @@ export default function StaffDashboard({ session, onLogout }) {
           }}
         />
 
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-7 space-y-5">
+        <div className="flex-1 relative min-h-0 bg-[#F3EFE9] dark:bg-[#0E0C14] overflow-hidden">
+          <PageBackdrop variant={STAFF_BACKDROP_MAP[activeMenu] || 'pet-listings'} />
+          <div className="relative z-10 h-full overflow-y-auto p-3 sm:p-5 md:p-7 space-y-5">
           {/* Collapsible Live MDC Operations KPI & RA 9482 Export Strip */}
           {showKpiStrip && summary && (
             <section className="max-w-7xl mx-auto bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-3 animate-fade-in">
@@ -706,6 +726,7 @@ export default function StaffDashboard({ session, onLogout }) {
             )}
             {activeMenu === 'Broadcast Bulletin' && <PostAnnouncement session={session} />}
           </Suspense>
+          </div>
         </div>
       </main>
 

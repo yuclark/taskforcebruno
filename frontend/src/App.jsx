@@ -38,8 +38,8 @@ function getInitialPublicPetId() {
 
 function PageLoadingFallback() {
   return (
-    <div className="min-h-dvh bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-500">
-      <div className="w-9 h-9 border-3 border-slate-200 border-t-[#5C0612] rounded-full animate-spin mb-3" />
+    <div className="min-h-dvh bg-[#F3EFE9] dark:bg-[#0E0C14] flex flex-col items-center justify-center p-6 text-slate-500 dark:text-slate-400">
+      <div className="w-9 h-9 border-3 border-slate-200 dark:border-slate-700 border-t-[#5C0612] dark:border-t-[#D4AF37] rounded-full animate-spin mb-3" />
       <p className="text-xs font-medium">Loading Wildcat Welfare Portal...</p>
     </div>
   );
@@ -377,7 +377,7 @@ export default function App() {
 
       {/* Core Portal Views */}
       {!session ? (
-        <div className="min-h-dvh bg-slate-50 font-sans antialiased">
+        <div className="min-h-dvh bg-[#F3EFE9] dark:bg-[#0E0C14] font-sans antialiased">
           {isLogin ? (
             <Login
               onLoginSuccess={(s) => handleLoginSuccess(s)}

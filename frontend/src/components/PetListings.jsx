@@ -1176,7 +1176,7 @@ export default function PetListings({
             onClick={(e) => e.stopPropagation()}
             className="bg-white border border-slate-200 shadow-2xl rounded-3xl max-w-sm w-full max-h-[92dvh] overflow-y-auto p-5 sm:p-6 text-center space-y-4 animate-scale-up"
           >
-            <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white">
+            <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white tfb-keep-light">
               <img
                 src={qrTagModal.badgeDataUrl || qrTagModal.qrDataUrl}
                 alt={`Collar QR tag for ${qrTagModal.pet.name}`}

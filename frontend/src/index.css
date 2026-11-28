@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (html.dark &);
+
 @theme {
   --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -9,11 +11,32 @@
   html {
     -webkit-tap-highlight-color: transparent;
     scroll-behavior: smooth;
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
   }
 
   body {
-    @apply font-sans bg-slate-50 text-slate-900 antialiased m-0 p-0;
+    @apply font-sans antialiased m-0 p-0;
+    background-color: #F3EFE9;
+    color: #1E293B;
     overflow-x: hidden;
+  }
+
+  html.dark body {
+    background-color: #0E0C14;
+    color: #EDE9F5;
+  }
+
+  /* Smooth theme transition only during active toggle */
+  html.theme-transition *,
+  html.theme-transition *::before,
+  html.theme-transition *::after {
+    transition-property: background-color, border-color, color, fill, stroke !important;
+    transition-duration: 200ms !important;
+    transition-timing-function: ease-out !important;
   }
 
   button:not(:disabled),
@@ -28,6 +51,382 @@
   textarea:focus-visible {
     outline: 2px solid #5C0612;
     outline-offset: 2px;
+  }
+
+  html.dark button:focus-visible,
+  html.dark a:focus-visible,
+  html.dark input:focus-visible,
+  html.dark select:focus-visible,
+  html.dark textarea:focus-visible {
+    outline-color: #D4AF37;
+  }
+
+  /* Native dropdown option readability in dark mode */
+  html.dark select,
+  html.dark option {
+    background-color: #1D1827;
+    color: #F3F0F9;
+  }
+
+  /* Subtle custom scrollbars across desktop browsers */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(92, 6, 18, 0.18);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(92, 6, 18, 0.34);
+  }
+
+  html.dark ::-webkit-scrollbar-thumb {
+    background: rgba(212, 175, 55, 0.22);
+  }
+
+  html.dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(212, 175, 55, 0.42);
+  }
+}
+
+/* ============================================================================
+   Comprehensive Dark Mode Surface & Semantic Palette Layer
+   Uses `:where(...)` so every explicit `dark:*` utility (html.dark & -> 0,2,1)
+   always takes priority, while ensuring zero unstyled white flashes across all
+   26 portal components, tables, forms, modals, and badges.
+   ============================================================================ */
+@layer utilities {
+  /* Light mode softening: slightly warm card glass over the ambient backdrop */
+  :root:not(.dark) :where(.tfb-surface-canvas) {
+    background-color: #F3EFE9;
+  }
+
+  /* Primary elevated surfaces */
+  .dark :where(.bg-white:not(.tfb-keep-light)) {
+    background-color: rgba(25, 21, 34, 0.94);
+  }
+  .dark :where(.bg-white\/95:not(.tfb-keep-light)) {
+    background-color: rgba(22, 18, 30, 0.95);
+  }
+  .dark :where(.bg-white\/90:not(.tfb-keep-light)) {
+    background-color: rgba(25, 21, 34, 0.9);
+  }
+  .dark :where(.bg-white\/60:not(.tfb-keep-light)) {
+    background-color: rgba(34, 29, 46, 0.65);
+  }
+
+  /* Secondary / nested muted surfaces */
+  .dark :where(.bg-slate-50:not(.tfb-keep-light)) {
+    background-color: #120F1A;
+  }
+  .dark :where(.bg-slate-50\/90:not(.tfb-keep-light)) {
+    background-color: rgba(18, 15, 26, 0.92);
+  }
+  .dark :where(.bg-slate-50\/80:not(.tfb-keep-light)) {
+    background-color: rgba(22, 18, 31, 0.85);
+  }
+  .dark :where(.bg-slate-50\/70:not(.tfb-keep-light)) {
+    background-color: rgba(24, 20, 34, 0.78);
+  }
+  .dark :where(.bg-slate-50\/60:not(.tfb-keep-light)) {
+    background-color: rgba(24, 20, 34, 0.72);
+  }
+  .dark :where(.bg-slate-50\/50:not(.tfb-keep-light)) {
+    background-color: rgba(24, 20, 34, 0.6);
+  }
+  .dark :where(.bg-slate-100:not(.tfb-keep-light)) {
+    background-color: #211C2D;
+  }
+  .dark :where(.bg-slate-100\/70:not(.tfb-keep-light)) {
+    background-color: rgba(33, 28, 45, 0.8);
+  }
+  .dark :where(.bg-slate-200:not(.tfb-keep-light)) {
+    background-color: #2D263C;
+  }
+  .dark :where(.bg-slate-200\/70:not(.tfb-keep-light)) {
+    background-color: rgba(45, 38, 60, 0.8);
+  }
+
+  /* Interactive hover & focus surface transitions */
+  .dark :where(.hover\:bg-slate-50):hover,
+  .dark :where(.hover\:bg-slate-50\/80):hover,
+  .dark :where(.hover\:bg-slate-50\/70):hover,
+  .dark :where(.hover\:bg-slate-50\/50):hover {
+    background-color: #231D30;
+  }
+  .dark :where(.hover\:bg-slate-100):hover,
+  .dark :where(.hover\:bg-slate-100\/60):hover {
+    background-color: #2B243B;
+  }
+  .dark :where(.hover\:bg-slate-200):hover {
+    background-color: #362E49;
+  }
+  .dark :where(.hover\:bg-white):hover,
+  .dark :where(.hover\:bg-white\/60):hover {
+    background-color: #262035;
+  }
+  .dark :where(.focus\:bg-white):focus,
+  .dark :where(.focus-within\:bg-white):focus-within {
+    background-color: #1D1829;
+  }
+
+  /* Borders & dividers */
+  .dark :where(.border-slate-100:not(.tfb-keep-light)) {
+    border-color: rgba(255, 255, 255, 0.07);
+  }
+  .dark :where(.border-slate-200:not(.tfb-keep-light)),
+  .dark :where(.border-slate-200\/90:not(.tfb-keep-light)),
+  .dark :where(.border-slate-200\/80:not(.tfb-keep-light)),
+  .dark :where(.border-slate-200\/70:not(.tfb-keep-light)),
+  .dark :where(.border-slate-200\/60:not(.tfb-keep-light)) {
+    border-color: #2D273B;
+  }
+  .dark :where(.border-slate-300:not(.tfb-keep-light)),
+  .dark :where(.border-slate-300\/80:not(.tfb-keep-light)) {
+    border-color: #3C344E;
+  }
+  .dark :where(.divide-slate-100 > :not(:last-child)) {
+    border-color: rgba(255, 255, 255, 0.07);
+  }
+  .dark :where(.divide-slate-200 > :not(:last-child)) {
+    border-color: #2D273B;
+  }
+
+  /* Typography hierarchy on dark surfaces */
+  .dark :where(.text-slate-900:not(.tfb-keep-light)) {
+    color: #F5F2FA;
+  }
+  .dark :where(.text-slate-800:not(.tfb-keep-light)) {
+    color: #E4DFEE;
+  }
+  .dark :where(.text-slate-700:not(.tfb-keep-light)) {
+    color: #CFC8DC;
+  }
+  .dark :where(.text-slate-600:not(.tfb-keep-light)) {
+    color: #B2A9C3;
+  }
+  .dark :where(.text-slate-500:not(.tfb-keep-light)) {
+    color: #9A90AC;
+  }
+  .dark :where(.text-slate-400:not(.tfb-keep-light)) {
+    color: #847B97;
+  }
+  .dark :where(.placeholder-slate-400)::placeholder {
+    color: #776E8A;
+  }
+  .dark :where(.hover\:text-slate-900):hover,
+  .dark :where(.hover\:text-slate-800):hover,
+  .dark :where(.hover\:text-slate-700):hover {
+    color: #FFFFFF;
+  }
+
+  /* Brand Maroon text & subtle tint badges -> high-contrast warm gold/rose in dark mode */
+  .dark :where(.text-\[\#5C0612\]:not(.tfb-keep-light):not(.bg-\[\#D4AF37\])) {
+    color: #F1C967;
+  }
+  .dark :where(.bg-\[\#D4AF37\]) {
+    color: #3B030B;
+  }
+  .dark :where(.bg-\[\#D4AF37\] .text-\[\#5C0612\]) {
+    color: #3B030B;
+  }
+  .dark :where(.hover\:text-\[\#5C0612\]):hover {
+    color: #F7D888;
+  }
+  .dark :where(.bg-\[\#5C0612\]\/10) {
+    background-color: rgba(212, 175, 55, 0.14);
+  }
+  .dark :where(.bg-\[\#5C0612\]\/5) {
+    background-color: rgba(155, 22, 42, 0.22);
+  }
+  .dark :where(.border-\[\#5C0612\]\/20),
+  .dark :where(.border-\[\#5C0612\]\/25),
+  .dark :where(.border-\[\#5C0612\]\/15) {
+    border-color: rgba(212, 175, 55, 0.3);
+  }
+
+  /* Semantic soft status surfaces (Rose, Amber, Emerald, Blue, Indigo, Purple, Orange, Sky) */
+  .dark :where(.bg-rose-50),
+  .dark :where(.bg-rose-50\/80),
+  .dark :where(.bg-rose-50\/70),
+  .dark :where(.bg-rose-50\/50),
+  .dark :where(.bg-rose-50\/40),
+  .dark :where(.bg-rose-50\/30),
+  .dark :where(.bg-rose-50\/25),
+  .dark :where(.bg-rose-50\/20) {
+    background-color: rgba(136, 19, 55, 0.26);
+  }
+  .dark :where(.bg-rose-100),
+  .dark :where(.bg-rose-100\/80) {
+    background-color: rgba(159, 18, 57, 0.34);
+  }
+  .dark :where(.bg-rose-200),
+  .dark :where(.bg-rose-200\/70) {
+    background-color: rgba(190, 18, 60, 0.42);
+  }
+  .dark :where(.hover\:bg-rose-100):hover,
+  .dark :where(.hover\:bg-rose-50):hover {
+    background-color: rgba(159, 18, 57, 0.42);
+  }
+  .dark :where(.border-rose-200),
+  .dark :where(.border-rose-200\/80),
+  .dark :where(.border-rose-300),
+  .dark :where(.border-rose-400) {
+    border-color: rgba(244, 63, 94, 0.38);
+  }
+  .dark :where(.ring-rose-100) {
+    --tw-ring-color: rgba(244, 63, 94, 0.25);
+  }
+  .dark :where(.text-rose-950),
+  .dark :where(.text-rose-900),
+  .dark :where(.text-rose-800),
+  .dark :where(.text-rose-700) {
+    color: #FDA4AF;
+  }
+  .dark :where(.text-rose-600) {
+    color: #FB7185;
+  }
+
+  .dark :where(.bg-amber-50),
+  .dark :where(.bg-amber-50\/80),
+  .dark :where(.bg-amber-50\/70),
+  .dark :where(.bg-amber-50\/60),
+  .dark :where(.bg-amber-50\/50),
+  .dark :where(.bg-amber-50\/40) {
+    background-color: rgba(146, 64, 14, 0.22);
+  }
+  .dark :where(.bg-amber-100),
+  .dark :where(.hover\:bg-amber-100):hover,
+  .dark :where(.hover\:bg-amber-100\/60):hover,
+  .dark :where(.hover\:bg-amber-50):hover {
+    background-color: rgba(180, 83, 9, 0.3);
+  }
+  .dark :where(.border-amber-200),
+  .dark :where(.border-amber-200\/80),
+  .dark :where(.border-amber-200\/70),
+  .dark :where(.border-amber-200\/60),
+  .dark :where(.border-amber-300) {
+    border-color: rgba(245, 158, 11, 0.35);
+  }
+  .dark :where(.text-amber-950),
+  .dark :where(.text-amber-900),
+  .dark :where(.text-amber-800),
+  .dark :where(.text-amber-700) {
+    color: #FCD34D;
+  }
+
+  .dark :where(.bg-emerald-50),
+  .dark :where(.bg-emerald-50\/70) {
+    background-color: rgba(6, 78, 59, 0.28);
+  }
+  .dark :where(.bg-emerald-100),
+  .dark :where(.hover\:bg-emerald-100):hover {
+    background-color: rgba(6, 95, 70, 0.36);
+  }
+  .dark :where(.border-emerald-200),
+  .dark :where(.border-emerald-200\/70) {
+    border-color: rgba(16, 185, 129, 0.35);
+  }
+  .dark :where(.text-emerald-950),
+  .dark :where(.text-emerald-900),
+  .dark :where(.text-emerald-800),
+  .dark :where(.text-emerald-700) {
+    color: #6EE7B7;
+  }
+  .dark :where(.text-emerald-600) {
+    color: #34D399;
+  }
+
+  .dark :where(.bg-blue-50),
+  .dark :where(.bg-sky-50) {
+    background-color: rgba(30, 58, 138, 0.28);
+  }
+  .dark :where(.bg-blue-100),
+  .dark :where(.bg-sky-100) {
+    background-color: rgba(30, 64, 175, 0.36);
+  }
+  .dark :where(.border-blue-200),
+  .dark :where(.border-blue-200\/70),
+  .dark :where(.border-sky-200) {
+    border-color: rgba(59, 130, 246, 0.35);
+  }
+  .dark :where(.text-blue-900),
+  .dark :where(.text-blue-800),
+  .dark :where(.text-blue-700),
+  .dark :where(.text-sky-600) {
+    color: #93C5FD;
+  }
+
+  .dark :where(.bg-indigo-50),
+  .dark :where(.bg-indigo-50\/70) {
+    background-color: rgba(49, 46, 129, 0.3);
+  }
+  .dark :where(.bg-indigo-100) {
+    background-color: rgba(55, 48, 163, 0.38);
+  }
+  .dark :where(.border-indigo-200),
+  .dark :where(.border-indigo-200\/70) {
+    border-color: rgba(129, 140, 248, 0.35);
+  }
+  .dark :where(.text-indigo-900),
+  .dark :where(.text-indigo-800),
+  .dark :where(.text-indigo-700) {
+    color: #A5B4FC;
+  }
+
+  .dark :where(.bg-purple-50),
+  .dark :where(.bg-purple-50\/70),
+  .dark :where(.bg-purple-50\/40) {
+    background-color: rgba(88, 28, 135, 0.3);
+  }
+  .dark :where(.bg-purple-100),
+  .dark :where(.bg-purple-200) {
+    background-color: rgba(107, 33, 168, 0.38);
+  }
+  .dark :where(.border-purple-200),
+  .dark :where(.border-purple-200\/60) {
+    border-color: rgba(192, 132, 252, 0.35);
+  }
+  .dark :where(.text-purple-900),
+  .dark :where(.text-purple-800),
+  .dark :where(.text-purple-700) {
+    color: #D8B4FE;
+  }
+
+  .dark :where(.bg-orange-50) {
+    background-color: rgba(154, 52, 18, 0.28);
+  }
+  .dark :where(.border-orange-200) {
+    border-color: rgba(251, 146, 60, 0.35);
+  }
+  .dark :where(.text-orange-900),
+  .dark :where(.text-orange-800) {
+    color: #FDBA74;
+  }
+
+  /* File input button styling in dark mode */
+  .dark input[type="file"]::file-selector-button {
+    background-color: #2A2338;
+    color: #EDE9F5;
+  }
+  .dark input[type="file"]::file-selector-button:hover {
+    background-color: #362D48;
+  }
+
+  /* Soften light-mode box shadows in dark mode */
+  .dark :where(.shadow-slate-200\/70) {
+    --tw-shadow-color: rgba(0, 0, 0, 0.45);
+  }
+  .dark :where(.shadow-rose-100),
+  .dark :where(.shadow-rose-200) {
+    --tw-shadow-color: rgba(190, 18, 60, 0.25);
   }
 }
 

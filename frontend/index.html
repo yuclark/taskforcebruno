@@ -3,7 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#5C0612" />
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('tfb_theme');
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var isDark = saved === 'dark' || ((!saved || saved === 'system') && prefersDark);
+          var root = document.documentElement;
+          root.classList.toggle('dark', isDark);
+          root.dataset.theme = isDark ? 'dark' : 'light';
+          root.style.colorScheme = isDark ? 'dark' : 'light';
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', isDark ? '#140C12' : '#5C0612');
+        } catch (e) {}
+      })();
+    </script>
     <meta
       name="description"
       content="Wildcat Welfare Portal by Task Force Bruno — campus animal identification, veterinary health tracking, adoption placement, and community sighting triage for CIT-U."
